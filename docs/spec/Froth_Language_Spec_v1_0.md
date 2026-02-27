@@ -1,7 +1,7 @@
 # Froth Language Specification
 
 **Status:** Candidate (pre-freeze)  
-**Version:** 0.9 (2026-02-26)  
+**Version:** 1.0 (2026-02-27)  
 **Scope:** This document specifies the *core* semantics of Froth (FROTH-Core) and a small set of optional, strictly layered profiles intended to remain stable for decades.  
 **Non-goals:** Garbage collection; implicit allocation in hot paths; a large mandatory standard library.
 
@@ -268,7 +268,7 @@ FROTH-Named (Section 8) extends this sugar with binding stack-effect declaration
 
 A Froth value is one of:
 
-- **Cell**: a machine word-sized signed integer (implementation-defined width, typically 16/32/64).
+- **Number**: a machine word-sized signed integer (implementation-defined width, typically 16/32/64).
 - **Object reference**: an opaque reference to an immutable heap object. FROTH-Core requires:
   - QuoteRef
   - SlotRef
@@ -447,7 +447,7 @@ If `s.impl` is unbound/null: `throw ERR.UNDEF`.
 **Stack:** `( slot in out -- )`
 
 - `slot` MUST be SlotRef or `throw ERR.TYPE`.
-- `in` and `out` MUST be non-negative integer cells or `throw ERR.TYPE`.
+- `in` and `out` MUST be non-negative numbers or `throw ERR.TYPE`.
 - Set `slot.in_arity := in`, `slot.out_arity := out`.
 
 `arity!` does not change runtime execution. It exists to support FROTH-Named compilation and tooling.
@@ -546,7 +546,7 @@ This design keeps FROTH-Core simple (no required global static effect system) wh
 **Stack:** `( q i -- token )`
 
 - `q` MUST be QuoteRef or `throw ERR.TYPE`.
-- `i` MUST be an integer cell or `throw ERR.TYPE`.
+- `i` MUST be a number or `throw ERR.TYPE`.
 - If `i` is out of bounds: `throw ERR.BOUNDS`.
 - Push the i-th token as a value suitable for use with `call`/execution:
   - literal tokens are returned as their literal value
@@ -574,7 +574,7 @@ This design keeps FROTH-Core simple (no required global static effect system) wh
 
 **Stack:** `( v0 v1 ... v(n-1) n -- q )`
 
-- `n` MUST be a non-negative integer cell (on top of DS), else `throw ERR.TYPE`.
+- `n` MUST be a non-negative number (on top of DS), else `throw ERR.TYPE`.
 - DS must contain at least `n` additional values beneath `n`, else `throw ERR.STACK`.
 - Construct a QuoteRef of length `n` whose tokens are literal tokens containing the values `v0 ... v(n-1)` in that order.
 - Push the new QuoteRef.
@@ -628,7 +628,7 @@ push q
 
 **Stack:** `( n pattern -- )`
 
-- `n` MUST be a non-negative integer cell.
+- `n` MUST be a non-negative number.
 - `pattern` MUST be a PatternRef or `throw ERR.TYPE`.
 
 Let `k = len(pattern)` (pattern length). Let `pattern[j]` be the j-th index (0-based).
@@ -689,7 +689,7 @@ Examples (library-defined):
 
 ### Error values
 
-Errors are non-zero integer cells (`e != 0`). FROTH-Core reserves:
+Errors are non-zero numbers (`e != 0`). FROTH-Core reserves:
 
 - `1`  ERR.STACK    (data stack under/overflow)
 - `2`  ERR.RSTACK   (return stack under/overflow)
@@ -771,7 +771,7 @@ FROTH-Base defines a minimal primitive vocabulary required for a practical REPL 
 
 ### Integer arithmetic
 
-All arithmetic operates on **cell** integers with wraparound semantics (two's complement modulo 2^W), where W is cell width.
+All arithmetic operates on **numbers** with wraparound semantics (two's complement modulo 2^W), where W is cell width.
 
 - `+`   `( a b -- sum )`
 - `-`   `( a b -- diff )`
@@ -781,7 +781,7 @@ All arithmetic operates on **cell** integers with wraparound semantics (two's co
 
 ### Comparisons
 
-Comparisons push a **flag** cell. Flag convention (normative):  
+Comparisons push a **flag** (a number). Flag convention (normative):  
 - false = `0`  
 - true  = `-1` (all bits set), matching standard Forth idiom.
 
@@ -987,7 +987,7 @@ A FROTH-Checked implementation maintains a parallel **kind stack (KS)** aligned 
 
 Minimum required KindIDs:
 
-- `K.CELL`
+- `K.NUMBER`
 - `K.QUOTE`
 - `K.SLOT`
 - `K.PATTERN`
@@ -996,7 +996,7 @@ Minimum required KindIDs:
 
 Propagation rules (minimum):
 
-- pushing a literal cell -> push `K.CELL`
+- pushing a literal number -> push `K.NUMBER`
 - pushing a QuoteRef -> push `K.QUOTE`
 - pushing a SlotRef -> push `K.SLOT`
 - pushing a PatternRef -> push `K.PATTERN`
@@ -1033,7 +1033,7 @@ A FROTH-Checked implementation MAY provide `k[ ... ]` which reads a list of kind
 
 Minimum kind names required:
 
-- `cell`, `quote`, `slot`, `pattern`, `any`
+- `number`, `quote`, `slot`, `pattern`, `any`
 
 If user-defined kinds exist, `k[ ... ]` SHOULD accept identifiers that name registered kinds (created via `kind`). Unrecognized kind names MUST raise `ERR.SIG`.
 
@@ -1071,7 +1071,7 @@ A typical pattern is to attach only **arity** and a few coarse kinds:
 
 ```froth
 \ ( a b -- sum )
-' + k[cell cell -- cell] sig
+' + k[number number -- number] sig
 ```
 
 In checked builds, calling `+` with a quotation on top would `throw ERR.TYPE` instead of producing silent corruption.
@@ -1086,7 +1086,7 @@ FROTH-Region provides a deterministic mechanism to reclaim heap allocations with
 
 **Stack:** `( -- m )`
 
-Push a **mark** `m` representing the current heap watermark (an opaque cell).
+Push a **mark** `m` representing the current heap watermark (an opaque number).
 
 ### `release`
 
@@ -1173,7 +1173,7 @@ If FROTH-String-Lite is enabled, the following words MUST be provided:
 
 - `s@ ( s i -- byte )`  
   Read the byte at index `i` (0-based). If `i` is out of range, MUST `throw ERR.BOUNDS`.  
-  The returned `byte` is a cell in `0..255`.
+  The returned `byte` is a number in `0..255`.
 
 - `s.= ( s1 s2 -- flag )`  
   Push Froth boolean true iff the two strings have identical byte sequences. (`true = -1`, `false = 0` per FROTH-Base.)
@@ -1215,7 +1215,7 @@ If `FROTH-Checked` is enabled alongside `FROTH-String-Lite`:
 - String literals MUST push a value tagged as `K.STRING`.
 - `s.emit`, `s.len`, `s@`, and `s.=` SHOULD have contracts that require `K.STRING` inputs.
 
-This moves common mistakes (passing a cell where a string is expected) from “weird behavior later” to an immediate, local `ERR.TYPE`.
+This moves common mistakes (passing a number where a string is expected) from “weird behavior later” to an immediate, local `ERR.TYPE`.
 
 ### What String-Lite deliberately excludes (and why)
 
@@ -1243,7 +1243,7 @@ If FROTH-String is enabled, the implementation MUST provide:
 
 - `s.pack` is an **allocator**. Its purpose is to bridge from FFI / buffers into an immutable StringRef.
 - In `FROTH-Region-Strict` mode, `s.pack` MUST throw `ERR.REGION` unless a region is active (fail-fast).
-- `addr` is a raw address (cell) and is inherently unsafe. This is acceptable because it is explicit and is primarily used at system boundaries.
+- `addr` is a raw address (number) and is inherently unsafe. This is acceptable because it is explicit and is primarily used at system boundaries.
 
 ### Guidance: PAD-style formatting (informative)
 

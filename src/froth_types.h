@@ -36,18 +36,22 @@
   #error "Invalid value for FROTH_CELL_SIZE_BITS. Please define it to 8, 16, 32, or 64."
 #endif
 
-// Check that the size of froth_cell_t actually matches FROTH_CELL_SIZE_BITS
+#define FROTH_FALSE ((froth_cell_t)0)
+#define FROTH_TRUE  ((froth_cell_t)-1)
+
+// Sanity check that the size of froth_cell_t actually matches FROTH_CELL_SIZE_BITS
 _Static_assert(sizeof(froth_cell_t) * 8 == FROTH_CELL_SIZE_BITS, "FROTH_CELL_SIZE_BITS does not match the size of froth_cell_t");
 
 typedef enum {
   FROTH_OK = 0,
   FROTH_ERROR_STACK_OVERFLOW,
   FROTH_ERROR_STACK_UNDERFLOW,
-  FROTH_ERROR_CELL_VALUE_OVERFLOW,
+  FROTH_ERROR_VALUE_OVERFLOW,
+  FROTH_ERROR_IO,
 } froth_error_t;
 
 typedef enum {
-  FROTH_CELL = 0,
+  FROTH_NUMBER = 0,
   FROTH_QUOTE = 1,
   FROTH_SLOT = 2,
   FROTH_PATTERN = 3,
@@ -55,23 +59,28 @@ typedef enum {
   FROTH_CONTRACT = 5,
 } froth_cell_tag_t;
 
+
+/* TAGGED CELL ENCODING
+ * Froth uses 3-bit LSB tagging for its cells.
+ * The lower 3 bits encode the type tag, the remaining bits carry the payload.
+ * Tag 0 (Number) leaves tag bits clear so addition/subtraction work without untagging.
+ * See ADR-004 and ADR-005.
+ */
+
 #define FROTH_GET_CELL_TAG(val) ((val) & 0x7)
 #define FROTH_STRIP_CELL_TAG(val) ((val) >> 3)
 #define FROTH_PACK_CELL_TAG(val, tag) (((val) << 3) | (tag))
-#define FROTH_CELL_IS_CELL(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_CELL))
+#define FROTH_CELL_IS_NUMBER(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_NUMBER))
 #define FROTH_CELL_IS_QUOTE(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_QUOTE))
 #define FROTH_CELL_IS_SLOT(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_SLOT))
 #define FROTH_CELL_IS_PATTERN(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_PATTERN))
 #define FROTH_CELL_IS_STRING(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_STRING))
 #define FROTH_CELL_IS_CONTRACT(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_CONTRACT))
 
-
 static inline froth_error_t froth_make_cell(froth_cell_t value, froth_cell_tag_t tag, froth_cell_t* return_value) {
-  // Check that the value can fit in the number of bits available for the cell
-  // This is necessary because we use the lower 3 bits for the tag, so we need to make sure that the value can fit in the remaining bits
   froth_cell_t max_value = ((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3)) - 1;
   froth_cell_t min_value = -((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3));
-  if (!(value >= min_value && value <= max_value)) { return FROTH_ERROR_CELL_VALUE_OVERFLOW; }
+  if (!(value >= min_value && value <= max_value)) { return FROTH_ERROR_VALUE_OVERFLOW; }
   *return_value = FROTH_PACK_CELL_TAG(value, tag);
   return FROTH_OK;
 }

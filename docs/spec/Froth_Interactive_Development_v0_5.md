@@ -205,7 +205,7 @@ A Direct Mode evaluation SHOULD conclude by printing the data stack in a consist
 
 - `[v0 v1 ... vN]` where v0 is bottom, vN is top.
 
-Implementations SHOULD format non-cell objects compactly:
+Implementations SHOULD format non-number values compactly:
 
 - `<q:N>` quotation reference
 - `<s:name>` slot reference

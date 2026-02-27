@@ -8,7 +8,7 @@ target_sources(Froth
   PRIVATE
     src/main.c
     src/froth_stack.c
-    # platform_posix.c
+    src/platform_posix.c
 )
 
 set_property(TARGET Froth PROPERTY C_STANDARD 11)
