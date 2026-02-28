@@ -1,5 +1,6 @@
 #include "froth_types.h"
 #include "froth_stack.h"
+#include "froth_heap.h"
 #include <stdio.h>
 
 int main() {
