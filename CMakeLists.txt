@@ -11,6 +11,7 @@ target_sources(Froth
     src/platform_posix.c
     src/froth_heap.c
     src/froth_slot_table.c
+    src/froth_reader.c
 )
 
 set_property(TARGET Froth PROPERTY C_STANDARD 11)
