@@ -61,6 +61,7 @@ typedef enum {
   FROTH_PATTERN = 3,
   FROTH_STRING = 4,
   FROTH_CONTRACT = 5,
+  FROTH_CALL = 6,    // internal: invoke SlotRef (only inside quotation bodies, see ADR-009)
 } froth_cell_tag_t;
 
 
@@ -68,7 +69,18 @@ typedef enum {
  * Froth uses 3-bit LSB tagging for its cells.
  * The lower 3 bits encode the type tag, the remaining bits carry the payload.
  * Tag 0 (Number) leaves tag bits clear so addition/subtraction work without untagging.
- * See ADR-004 and ADR-005.
+ *
+ * Tag table:
+ *   0 = Number       (user-visible value)
+ *   1 = QuoteRef     (user-visible value)
+ *   2 = SlotRef      (user-visible value — literal, pushed onto DS)
+ *   3 = PatternRef   (user-visible value)
+ *   4 = StringRef    (user-visible value)
+ *   5 = ContractRef  (user-visible value)
+ *   6 = Call          (internal — invoke SlotRef, only inside quotation bodies)
+ *   7 = (reserved)
+ *
+ * See ADR-004, ADR-005, ADR-009.
  */
 
 #define FROTH_GET_CELL_TAG(val) ((val) & 0x7)
@@ -80,6 +92,7 @@ typedef enum {
 #define FROTH_CELL_IS_PATTERN(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_PATTERN))
 #define FROTH_CELL_IS_STRING(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_STRING))
 #define FROTH_CELL_IS_CONTRACT(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_CONTRACT))
+#define FROTH_CELL_IS_CALL(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_CALL))
 
 static inline froth_error_t froth_make_cell(froth_cell_t value, froth_cell_tag_t tag, froth_cell_t* return_value) {
   froth_cell_t max_value = ((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3)) - 1;
