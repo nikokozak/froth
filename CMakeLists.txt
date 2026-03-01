@@ -13,6 +13,7 @@ target_sources(Froth
     src/froth_slot_table.c
     src/froth_reader.c
     src/froth_evaluator.c
+    src/froth_repl.c
 )
 
 set_property(TARGET Froth PROPERTY C_STANDARD 11)
@@ -24,6 +25,7 @@ set(FROTH_RS_CAPACITY 256 CACHE STRING "Return Stack (RS) Capacity in number of 
 set(FROTH_CS_CAPACITY 256 CACHE STRING "Control Stack (CS) Capacity in number of cells.")
 set(FROTH_HEAP_SIZE 4096 CACHE STRING "Heap size in number of bytes.")
 set(FROTH_SLOT_TABLE_SIZE 128 CACHE STRING "Maximum number of slots.")
+set(FROTH_LINE_BUFFER_SIZE 1024 CACHE STRING "Input line buffer for REPL in number of bytes.")
 
 target_compile_definitions(Froth PRIVATE FROTH_CELL_SIZE_BITS=${FROTH_CELL_SIZE_BITS})
 target_compile_definitions(Froth PRIVATE FROTH_DS_CAPACITY=${FROTH_DS_CAPACITY})
@@ -31,3 +33,4 @@ target_compile_definitions(Froth PRIVATE FROTH_RS_CAPACITY=${FROTH_RS_CAPACITY})
 target_compile_definitions(Froth PRIVATE FROTH_CS_CAPACITY=${FROTH_CS_CAPACITY})
 target_compile_definitions(Froth PRIVATE FROTH_HEAP_SIZE=${FROTH_HEAP_SIZE})
 target_compile_definitions(Froth PRIVATE FROTH_SLOT_TABLE_SIZE=${FROTH_SLOT_TABLE_SIZE})
+target_compile_definitions(Froth PRIVATE FROTH_LINE_BUFFER_SIZE=${FROTH_LINE_BUFFER_SIZE})
