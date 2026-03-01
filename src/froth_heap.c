@@ -1,4 +1,5 @@
 #include "froth_heap.h"
+#include <stddef.h>
 
 static uint8_t heap_memory[FROTH_HEAP_SIZE];
 
@@ -19,20 +20,18 @@ froth_error_t froth_heap_allocate_bytes(froth_cell_u_t size, froth_heap_t* heap,
   return FROTH_OK;
 }
 
-froth_error_t froth_heap_allocate_cells(froth_cell_u_t size, froth_heap_t* heap, froth_cell_u_t* assigned_heap_location) {
+froth_error_t froth_heap_allocate_cells(froth_cell_u_t count, froth_heap_t* heap, froth_cell_t** cells_out, froth_cell_u_t* byte_offset_out) {
   // Align the pointer to the next multiple of sizeof(froth_cell_t)
-  froth_cell_u_t aligned_pointer = (heap->pointer + (sizeof(froth_cell_t) - 1)) & ~((sizeof(froth_cell_t) - 1)); 
+  froth_cell_u_t aligned_pointer = (heap->pointer + (sizeof(froth_cell_t) - 1)) & ~((sizeof(froth_cell_t) - 1));
 
-  if (aligned_pointer + size * sizeof(froth_cell_t) > FROTH_HEAP_SIZE) { // Not enough space in the heap
+  if (aligned_pointer + count * sizeof(froth_cell_t) > FROTH_HEAP_SIZE) {
     return FROTH_ERROR_HEAP_OUT_OF_MEMORY;
   }
 
-  froth_cell_u_t size_in_bytes = size * sizeof(froth_cell_t);
+  heap->pointer = aligned_pointer + count * sizeof(froth_cell_t);
 
-  froth_cell_u_t start_pointer = aligned_pointer;
-  heap->pointer = aligned_pointer + size_in_bytes; // Move the pointer
-
-  *assigned_heap_location = start_pointer;
+  *cells_out = (froth_cell_t*)&heap->data[aligned_pointer];
+  if (byte_offset_out != NULL) { *byte_offset_out = aligned_pointer; }
   return FROTH_OK;
 }
 
