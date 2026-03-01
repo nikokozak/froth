@@ -7,7 +7,7 @@
   #error "FROTH_CELL_SIZE_BITS is not defined. Please define it to 8, 16, 32, or 64."
 #endif
 
-/* Check for word size flag -DFROTH_CELL_SIZE_BITS=8,16,32,64\e
+/* Check for word size flag -DFROTH_CELL_SIZE_BITS=8,16,32,64
  * This allows us to determine the size of froth_cell_t and froth_cell_u_t,
  * which is necessary for cross-compilation. */
 #if FROTH_CELL_SIZE_BITS == 8
@@ -65,7 +65,6 @@ typedef enum {
   FROTH_CONTRACT = 5,
   FROTH_CALL = 6,    // internal: invoke SlotRef (only inside quotation bodies, see ADR-009)
 } froth_cell_tag_t;
-
 
 /* TAGGED CELL ENCODING
  * Froth uses 3-bit LSB tagging for its cells.

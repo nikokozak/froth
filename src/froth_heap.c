@@ -34,5 +34,3 @@ froth_error_t froth_heap_allocate_cells(froth_cell_u_t count, froth_heap_t* heap
   if (byte_offset_out != NULL) { *byte_offset_out = aligned_pointer; }
   return FROTH_OK;
 }
-
-

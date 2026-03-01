@@ -10,7 +10,7 @@ typedef struct {
   froth_cell_u_t pointer;
 } froth_heap_t;
 
-froth_heap_t froth_heap;
+extern froth_heap_t froth_heap;
 
 /* Return a froth_cell_t pointer into the heap at the given byte offset.
  * Useful when you have a raw byte offset (e.g. from a tagged QuoteRef payload)

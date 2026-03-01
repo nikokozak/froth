@@ -1,6 +1,5 @@
 #include "froth_reader.h"
 #include <string.h>
-#include <stdlib.h>
 
 /* Character classification helpers */
 

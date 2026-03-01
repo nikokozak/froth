@@ -12,10 +12,7 @@
   #error "FROTH_CS_CAPACITY is not defined. Please define it to the desired capacity of the call stack."
 #endif
 
-/* Stack interface structure.
- * This is a simple array 
- * implementation. */ 
-
+/* Stack: simple fixed-capacity array with a top-of-stack pointer. */
 typedef struct froth_stack_t {
   froth_cell_u_t pointer; // Points to the *next free cell*
   froth_cell_u_t capacity; // Essentially the size of the data array
