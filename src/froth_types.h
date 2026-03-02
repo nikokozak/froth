@@ -61,10 +61,15 @@ typedef enum {
   FROTH_ERROR_UNTERMINATED_QUOTATION,
   FROTH_ERROR_UNRECOGNIZED_CELL_TYPE,
   FROTH_ERROR_ARGUMENT_TYPE_MISMATCH,
+  FROTH_ERROR_DIVISION_BY_ZERO,
 } froth_error_t;
 
 /* Early-return on error. Only works in functions returning froth_error_t. */
 #define FROTH_TRY(expr) do { froth_error_t _err = (expr); if (_err != FROTH_OK) return _err; } while(0)
+
+/* Convenience macro for turning a value into a Froth bool (0 - false, -1 - true (anything other than zero)) */
+#define FROTH_BOOLIFY(val) ((val) ? FROTH_TRUE : FROTH_FALSE)
+
 
 typedef enum {
   FROTH_NUMBER = 0,
@@ -104,6 +109,19 @@ typedef enum {
 #define FROTH_CELL_IS_STRING(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_STRING))
 #define FROTH_CELL_IS_CONTRACT(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_CONTRACT))
 #define FROTH_CELL_IS_CALL(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_CALL))
+
+/* Wrap a raw arithmetic result to payload range with two's-complement semantics.
+ * Operates in unsigned space to avoid C signed-overflow UB, then truncates to
+ * payload width (FROTH_CELL_SIZE_BITS - 3) and sign-extends back. */
+static inline froth_cell_t froth_wrap_payload(froth_cell_u_t raw) {
+  const int pbits = FROTH_CELL_SIZE_BITS - 3;
+  const froth_cell_u_t pmask = ((froth_cell_u_t)1 << pbits) - 1;
+  raw &= pmask;
+  if (raw & ((froth_cell_u_t)1 << (pbits - 1))) {
+    raw |= ~pmask;
+  }
+  return (froth_cell_t)raw;
+}
 
 static inline froth_error_t froth_make_cell(froth_cell_t value, froth_cell_tag_t tag, froth_cell_t* return_value) {
   froth_cell_t max_value = ((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3)) - 1;
