@@ -1,6 +1,6 @@
 #include "froth_repl.h"
+#include "froth_vm.h"
 #include "froth_evaluator.h"
-#include "froth_heap.h"
 #include "froth_slot_table.h"
 #include "platform.h"
 #include <stdio.h>
@@ -12,8 +12,7 @@ static const char* repl_prompt = "froth> ";
 /* Emit a null-terminated string through the platform layer. */
 static froth_error_t emit_string(const char* str) {
   for (const char* p = str; *p != '\0'; p++) {
-    froth_error_t err = platform_emit((uint8_t)*p);
-    if (err != FROTH_OK) { return err; }
+    FROTH_TRY(platform_emit((uint8_t)*p));
   }
   return FROTH_OK;
 }
@@ -36,10 +35,14 @@ static const char* error_name(froth_error_t err) {
     case FROTH_ERROR_IO:                  return "i/o error";
     case FROTH_ERROR_HEAP_OUT_OF_MEMORY:  return "heap out of memory";
     case FROTH_ERROR_SLOT_NAME_NOT_FOUND: return "slot name not found";
+    case FROTH_ERROR_SLOT_IMPL_NOT_FOUND: return "undefined word";
+    case FROTH_ERROR_SLOT_PRIM_NOT_FOUND: return "undefined word";
     case FROTH_ERROR_SLOT_TABLE_FULL:     return "slot table full";
     case FROTH_ERROR_SLOT_INDEX_EMPTY:    return "slot index empty";
     case FROTH_ERROR_TOKEN_TOO_LONG:      return "token too long";
     case FROTH_ERROR_UNTERMINATED_QUOTATION: return "unterminated quotation";
+    case FROTH_ERROR_UNRECOGNIZED_CELL_TYPE: return "unrecognized cell type";
+    case FROTH_ERROR_ARGUMENT_TYPE_MISMATCH: return "type mismatch";
     default:                              return "unknown error";
   }
 }
@@ -81,9 +84,9 @@ static froth_error_t froth_repl_read_line(char* output_buffer) {
  *   Str:0     — string ref
  *   Con:0     — contract ref */
 static froth_error_t emit_cell(froth_cell_t cell) {
-  froth_cell_t payload = FROTH_STRIP_CELL_TAG(cell);
+  froth_cell_t payload = FROTH_CELL_STRIP_TAG(cell);
 
-  switch (FROTH_GET_CELL_TAG(cell)) {
+  switch (FROTH_CELL_GET_TAG(cell)) {
     case FROTH_NUMBER:
       return emit_string(format_number(payload));
 
@@ -130,49 +133,37 @@ static froth_error_t emit_cell(froth_cell_t cell) {
 
 /* Print the data stack contents in the format: [42 Q:16 S:foo] */
 static froth_error_t froth_repl_print_stack(froth_stack_t* stack) {
-  froth_error_t err;
   froth_cell_u_t depth = froth_stack_depth(stack);
 
-  err = emit_string("[");
-  if (err != FROTH_OK) { return err; }
+  FROTH_TRY(emit_string("["));
 
   for (froth_cell_u_t i = 0; i < depth; i++) {
-    if (i > 0) {
-      err = platform_emit((uint8_t)' ');
-      if (err != FROTH_OK) { return err; }
-    }
-
-    err = emit_cell(stack->data[i]);
-    if (err != FROTH_OK) { return err; }
+    if (i > 0) { FROTH_TRY(platform_emit((uint8_t)' ')); }
+    FROTH_TRY(emit_cell(stack->data[i]));
   }
 
-  err = emit_string("]\n");
-  if (err != FROTH_OK) { return err; }
-
+  FROTH_TRY(emit_string("]\n"));
   return FROTH_OK;
 }
 
-froth_error_t froth_repl_start(void) {
+froth_error_t froth_repl_start(froth_vm_t* vm) {
   froth_error_t err;
   while (true) {
-    err = froth_repl_print_prompt();
-    if (err != FROTH_OK) { return err; }
+    FROTH_TRY(froth_repl_print_prompt());
 
     err = froth_repl_read_line(repl_buffer);
     if (err != FROTH_OK) { return FROTH_OK; } // EOF or I/O — exit cleanly
 
-    if (is_blank(repl_buffer)) { continue; } // Skip empty input
+    if (is_blank(repl_buffer)) { continue; }
 
-    err = froth_evaluate_input(repl_buffer, &froth_ds_stack, &froth_heap);
-
+    err = froth_evaluate_input(repl_buffer, vm);
     if (err != FROTH_OK) {
       emit_string("error: ");
       emit_string(error_name(err));
       emit_string("\n");
-      continue; // Don't bail out — let the user keep going
+      continue;
     }
 
-    err = froth_repl_print_stack(&froth_ds_stack);
-    if (err != FROTH_OK) { return err; }
+    FROTH_TRY(froth_repl_print_stack(&vm->ds));
   }
 }

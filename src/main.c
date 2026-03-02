@@ -1,14 +1,9 @@
-#include "froth_types.h"
-#include "froth_stack.h"
-#include "froth_heap.h"
-#include "froth_slot_table.h"
-#include "froth_evaluator.h"
+#include "froth_vm.h"
 #include "froth_repl.h"
-#include <stdio.h>
+#include "froth_primitives.h"
 
 int main() {
-
-  froth_repl_start();
+  froth_primitives_register(&froth_vm);
+  froth_repl_start(&froth_vm);
   return 0;
-
 }

@@ -19,9 +19,6 @@ typedef struct froth_stack_t {
   froth_cell_t* data; // An array that holds our cells
 } froth_stack_t;
 
-extern froth_stack_t froth_ds_stack;
-extern froth_stack_t froth_rs_stack;
-extern froth_stack_t froth_cs_stack;
 
 froth_error_t froth_stack_push(froth_stack_t* stack, froth_cell_t value);
 froth_error_t froth_stack_pop(froth_stack_t* stack, froth_cell_t* return_value);

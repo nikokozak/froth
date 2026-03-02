@@ -42,6 +42,9 @@
 // Sanity check that the size of froth_cell_t actually matches FROTH_CELL_SIZE_BITS
 _Static_assert(sizeof(froth_cell_t) * 8 == FROTH_CELL_SIZE_BITS, "FROTH_CELL_SIZE_BITS does not match the size of froth_cell_t");
 
+/* Forward declaration — full definition in froth_vm.h */
+typedef struct froth_vm_t froth_vm_t;
+
 typedef enum {
   FROTH_OK = 0,
   FROTH_ERROR_STACK_OVERFLOW,
@@ -50,11 +53,18 @@ typedef enum {
   FROTH_ERROR_IO,
   FROTH_ERROR_HEAP_OUT_OF_MEMORY,
   FROTH_ERROR_SLOT_NAME_NOT_FOUND,
+  FROTH_ERROR_SLOT_IMPL_NOT_FOUND,
+  FROTH_ERROR_SLOT_PRIM_NOT_FOUND,
   FROTH_ERROR_SLOT_TABLE_FULL,
   FROTH_ERROR_SLOT_INDEX_EMPTY,
   FROTH_ERROR_TOKEN_TOO_LONG,
   FROTH_ERROR_UNTERMINATED_QUOTATION,
+  FROTH_ERROR_UNRECOGNIZED_CELL_TYPE,
+  FROTH_ERROR_ARGUMENT_TYPE_MISMATCH,
 } froth_error_t;
+
+/* Early-return on error. Only works in functions returning froth_error_t. */
+#define FROTH_TRY(expr) do { froth_error_t _err = (expr); if (_err != FROTH_OK) return _err; } while(0)
 
 typedef enum {
   FROTH_NUMBER = 0,
@@ -84,22 +94,22 @@ typedef enum {
  * See ADR-004, ADR-005, ADR-009.
  */
 
-#define FROTH_GET_CELL_TAG(val) ((val) & 0x7)
-#define FROTH_STRIP_CELL_TAG(val) ((val) >> 3)
-#define FROTH_PACK_CELL_TAG(val, tag) (((val) << 3) | (tag))
-#define FROTH_CELL_IS_NUMBER(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_NUMBER))
-#define FROTH_CELL_IS_QUOTE(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_QUOTE))
-#define FROTH_CELL_IS_SLOT(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_SLOT))
-#define FROTH_CELL_IS_PATTERN(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_PATTERN))
-#define FROTH_CELL_IS_STRING(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_STRING))
-#define FROTH_CELL_IS_CONTRACT(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_CONTRACT))
-#define FROTH_CELL_IS_CALL(val) ((FROTH_GET_CELL_TAG((val)) == FROTH_CALL))
+#define FROTH_CELL_GET_TAG(val) ((val) & 0x7)
+#define FROTH_CELL_STRIP_TAG(val) ((val) >> 3)
+#define FROTH_CELL_PACK_TAG(val, tag) (((val) << 3) | (tag))
+#define FROTH_CELL_IS_NUMBER(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_NUMBER))
+#define FROTH_CELL_IS_QUOTE(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_QUOTE))
+#define FROTH_CELL_IS_SLOT(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_SLOT))
+#define FROTH_CELL_IS_PATTERN(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_PATTERN))
+#define FROTH_CELL_IS_STRING(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_STRING))
+#define FROTH_CELL_IS_CONTRACT(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_CONTRACT))
+#define FROTH_CELL_IS_CALL(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_CALL))
 
 static inline froth_error_t froth_make_cell(froth_cell_t value, froth_cell_tag_t tag, froth_cell_t* return_value) {
   froth_cell_t max_value = ((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3)) - 1;
   froth_cell_t min_value = -((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3));
   if (!(value >= min_value && value <= max_value)) { return FROTH_ERROR_VALUE_OVERFLOW; }
-  *return_value = FROTH_PACK_CELL_TAG(value, tag);
+  *return_value = FROTH_CELL_PACK_TAG(value, tag);
   return FROTH_OK;
 }
 

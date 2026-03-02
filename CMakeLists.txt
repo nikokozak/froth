@@ -14,6 +14,9 @@ target_sources(Froth
     src/froth_reader.c
     src/froth_evaluator.c
     src/froth_repl.c
+    src/froth_vm.c
+    src/froth_executor.c
+    src/froth_primitives.c
 )
 
 set_property(TARGET Froth PROPERTY C_STANDARD 11)

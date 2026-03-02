@@ -39,12 +39,14 @@ froth_error_t froth_slot_create(const char* name, froth_heap_t* heap, froth_cell
 froth_error_t froth_slot_get_impl(froth_cell_u_t slot_index, froth_cell_t* impl) {
   if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_SLOT_INDEX_EMPTY; }
   *impl = slot_table[slot_index].impl;
+  if (*impl == 0) { return FROTH_ERROR_SLOT_IMPL_NOT_FOUND; }
   return FROTH_OK;
 }
 
 froth_error_t froth_slot_get_prim(froth_cell_u_t slot_index, froth_primitive_fn_t* prim) {
   if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_SLOT_INDEX_EMPTY; }
   *prim = slot_table[slot_index].prim;
+  if (*prim == NULL) { return FROTH_ERROR_SLOT_PRIM_NOT_FOUND; }
   return FROTH_OK;
 }
 

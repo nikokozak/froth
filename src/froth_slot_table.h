@@ -7,7 +7,7 @@
   #error "FROTH_SLOT_TABLE_SIZE is not defined. Please define it to the desired size of the slot table."
 #endif
 
-typedef froth_error_t (*froth_primitive_fn_t)(void);
+typedef froth_error_t (*froth_primitive_fn_t)(froth_vm_t* vm);
 
 typedef struct {
   const char* name;
