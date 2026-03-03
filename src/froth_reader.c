@@ -39,6 +39,17 @@ static void skip_whitespace_and_comments(froth_reader_t* reader) {
   }
 }
 
+/* Peek into the next character without advancing the reader. peek(0) returns the current character, peek(1)
+ * returns the next character, etc. Returns '\0' if peeking past the end of input. */
+static char froth_reader_peek(froth_reader_t* reader, froth_cell_u_t peek_ahead) {
+  for (int i = 0; i <= peek_ahead; i++) {
+     if (reader->input[reader->position + i] == '\0') {
+       return '\0';
+     }
+  }
+  return reader->input[reader->position + peek_ahead];
+}
+
 /* Read a contiguous word (non-whitespace, non-delimiter characters) into
  * the provided buffer. Returns FROTH_ERROR_TOKEN_TOO_LONG if the word
  * exceeds max_len - 1 characters. The buffer is always null-terminated. */
@@ -102,6 +113,12 @@ froth_error_t froth_reader_next_token(froth_reader_t* reader, froth_token_t* tok
   if (c == '[') {
     token->type = FROTH_TOKEN_OPEN_BRACKET;
     reader->position++;
+    return FROTH_OK;
+  }
+
+  if (c == 'p' && froth_reader_peek(reader, 1) == '[') {
+    token->type = FROTH_TOKEN_OPEN_PAT;
+    reader->position += 2; // skip both 'p' and '['
     return FROTH_OK;
   }
 

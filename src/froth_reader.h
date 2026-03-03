@@ -10,6 +10,7 @@ typedef enum {
   FROTH_TOKEN_TICK_IDENTIFIER,  // A tick-quoted name (e.g. "'foo") — pushes a SlotRef
   FROTH_TOKEN_OPEN_BRACKET,     // "[" — begins a quotation
   FROTH_TOKEN_CLOSE_BRACKET,    // "]" — ends a quotation
+  FROTH_TOKEN_OPEN_PAT,         // "p[" - starts a pattern body
   FROTH_TOKEN_EOF,              // No more tokens in the input
 } froth_token_type_t;
 

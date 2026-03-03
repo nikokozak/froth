@@ -1,6 +1,6 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-02*
+*Last reviewed: 2026-03-03*
 *Source: Froth Implementation Roadmap v0.3 (Feb 25 → End of Spring Break)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
@@ -41,7 +41,8 @@
 - [x] **Proof**: interactive math works; echo loop deferred until `while` (Mar 3)
 
 ### Mar 2–3 (Mon–Tue) — perm + pat + canonical shuffles (originally Mar 2)
-- [ ] PatternRef encoding from `p[ ... ]` and/or `pat`
+- [x] PatternRef encoding from `p[ ... ]` (ADR-013: byte-packed heap layout)
+- [ ] `pat` primitive (quotation → PatternRef)
 - [ ] `perm` correctly rewires top n DS items
 - [ ] Define `dup swap drop over` in Froth as library words
 - [ ] **Proof**: perm test suite passes (swap, over, nip, rot)

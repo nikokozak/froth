@@ -62,6 +62,8 @@ typedef enum {
   FROTH_ERROR_UNRECOGNIZED_CELL_TYPE,
   FROTH_ERROR_ARGUMENT_TYPE_MISMATCH,
   FROTH_ERROR_DIVISION_BY_ZERO,
+  FROTH_ERROR_PATTERN_SYNTAX,
+  FROTH_ERROR_PATTERN_TOO_LARGE
 } froth_error_t;
 
 /* Early-return on error. Only works in functions returning froth_error_t. */

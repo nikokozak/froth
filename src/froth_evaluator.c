@@ -50,11 +50,12 @@ static froth_cell_u_t count_quote_body(froth_reader_t* reader) {
 
   while (froth_reader_next_token(reader, &token) == FROTH_OK && token.type != FROTH_TOKEN_EOF && token.type != FROTH_TOKEN_CLOSE_BRACKET) {
     count++;
-    if (token.type == FROTH_TOKEN_OPEN_BRACKET) {
+    if (token.type == FROTH_TOKEN_OPEN_BRACKET || token.type == FROTH_TOKEN_OPEN_PAT) {
       // Skip to matching "]" by tracking depth
       froth_cell_u_t depth = 1;
       while (depth > 0 && froth_reader_next_token(reader, &token) == FROTH_OK && token.type != FROTH_TOKEN_EOF) {
-        if (token.type == FROTH_TOKEN_OPEN_BRACKET) { depth++; }
+        if (token.type == FROTH_TOKEN_OPEN_BRACKET)  { depth++; }
+        if (token.type == FROTH_TOKEN_OPEN_PAT)      { depth++; } // Also skip pattern bodies
         if (token.type == FROTH_TOKEN_CLOSE_BRACKET) { depth--; }
       }
     }
@@ -62,6 +63,78 @@ static froth_cell_u_t count_quote_body(froth_reader_t* reader) {
 
   *reader = saved;
   return count;
+}
+
+static froth_error_t count_and_typecheck_pattern_body(froth_reader_t* reader, froth_cell_u_t* out_count) {
+  froth_reader_t saved = *reader;
+  froth_cell_u_t count = 0;
+  froth_token_t token;
+
+  // First count the pattern body
+  while (froth_reader_next_token(reader, &token) == FROTH_OK && token.type != FROTH_TOKEN_EOF && token.type != FROTH_TOKEN_CLOSE_BRACKET) {
+
+    switch (token.type) {
+      case FROTH_TOKEN_IDENTIFIER:
+        if (!(token.name[1] == '\0' && token.name[0] >= 'a' && token.name[0] <= 'z')) {
+          *reader = saved;
+          return FROTH_ERROR_PATTERN_SYNTAX;
+        } 
+        break;
+      case FROTH_TOKEN_NUMBER:
+        if (token.number > 255 || token.number < 0) {
+          *reader = saved;
+          return FROTH_ERROR_PATTERN_SYNTAX; // Only allow numbers that fit in a byte
+        }
+        break; // Numbers are fine
+      default:
+        *reader = saved;
+        return FROTH_ERROR_PATTERN_SYNTAX; // Other token types not allowed in pattern body
+    }
+
+    count++;
+  }
+
+  if (count > FROTH_MAX_PERM_PATTERN_SIZE) {
+    *reader = saved;
+    return FROTH_ERROR_PATTERN_TOO_LARGE;
+  }
+
+  *reader = saved;
+  *out_count = count;
+  return FROTH_OK;
+}
+
+static froth_error_t froth_evaluator_handle_open_pat(froth_reader_t* reader, froth_vm_t* vm, froth_cell_t* output_cell) {
+  froth_token_t token;
+  froth_cell_u_t heap_offset;
+  
+  // Count pattern length
+  froth_cell_u_t body_count;
+  FROTH_TRY(count_and_typecheck_pattern_body(reader, &body_count));
+
+  FROTH_TRY(froth_heap_allocate_bytes(1 + body_count, &vm->heap, &heap_offset)); // Allocate 1 byte for pattern length
+  vm->heap.data[heap_offset] = (char)body_count; // Store pattern length in heap
+  
+  froth_cell_u_t heap_location = heap_offset + 1; // Start writing pattern body immediately after length cell
+  while (froth_reader_next_token(reader, &token) == FROTH_OK && token.type != FROTH_TOKEN_EOF && token.type != FROTH_TOKEN_CLOSE_BRACKET) {
+    if (token.type == FROTH_TOKEN_IDENTIFIER) {
+
+      char var_name = token.name[0];
+      char index = var_name - 0x61; // Convert 'a'-'z' to 0-25
+      vm->heap.data[heap_location] = index; // Store variable name in heap
+      
+    } else if (token.type == FROTH_TOKEN_NUMBER) {
+
+      vm->heap.data[heap_location] = (char)(token.number & 0xFF); // Store least significant byte of number in heap\e
+      
+    }
+    heap_location++; // Increment heap location for next pattern element
+  }
+
+  FROTH_TRY(froth_make_cell(heap_offset, FROTH_PATTERN, output_cell)); // Create pattern cell with heap offset as payload
+
+  return FROTH_OK;
+
 }
 
 /* Build a quotation from the token stream. Called after "[" has been consumed.
@@ -114,6 +187,14 @@ static froth_error_t froth_evaluator_handle_open_bracket(froth_reader_t* reader,
         break;
       }
 
+      case FROTH_TOKEN_OPEN_PAT: {
+        froth_cell_t pattern_cell;
+        FROTH_TRY(froth_evaluator_handle_open_pat(reader, vm, &pattern_cell));
+        block[1 + body_index] = pattern_cell;
+        body_index++;
+        break;
+      }
+
       default:
         break;
     }
@@ -152,6 +233,12 @@ froth_error_t froth_evaluate_input(char* input, froth_vm_t* vm) {
         froth_cell_t slot_ref_cell;
         FROTH_TRY(froth_evaluator_handle_tick_identifier(token, vm, &slot_ref_cell));
         FROTH_TRY(froth_stack_push(&vm->ds, slot_ref_cell));
+        break;
+      }
+      case FROTH_TOKEN_OPEN_PAT: {
+        froth_cell_t pattern_cell;
+        FROTH_TRY(froth_evaluator_handle_open_pat(&reader, vm, &pattern_cell));
+        FROTH_TRY(froth_stack_push(&vm->ds, pattern_cell));
         break;
       }
       default:

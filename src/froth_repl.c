@@ -43,6 +43,9 @@ static const char* error_name(froth_error_t err) {
     case FROTH_ERROR_UNTERMINATED_QUOTATION: return "unterminated quotation";
     case FROTH_ERROR_UNRECOGNIZED_CELL_TYPE: return "unrecognized cell type";
     case FROTH_ERROR_ARGUMENT_TYPE_MISMATCH: return "type mismatch";
+    case FROTH_ERROR_DIVISION_BY_ZERO:    return "division by zero";
+    case FROTH_ERROR_PATTERN_SYNTAX:      return "invalid pattern";
+    case FROTH_ERROR_PATTERN_TOO_LARGE:   return "pattern too large";
     default:                              return "unknown error";
   }
 }

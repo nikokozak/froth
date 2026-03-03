@@ -2,6 +2,10 @@
 #include "froth_types.h"
 #include "froth_slot_table.h"
 
+#ifndef FROTH_MAX_PERM_PATTERN_SIZE
+  #define FROTH_MAX_PERM_PATTERN_SIZE 8
+#endif
+
 typedef struct {
   const char* name;
   froth_error_t (*prim_word)(froth_vm_t* froth_vm);
