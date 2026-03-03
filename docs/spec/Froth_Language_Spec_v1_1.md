@@ -1,7 +1,7 @@
 # Froth Language Specification
 
 **Status:** Candidate (pre-freeze)  
-**Version:** 1.0 (2026-02-27)  
+**Version:** 1.1 (2026-03-02)  
 **Scope:** This document specifies the *core* semantics of Froth (FROTH-Core) and a small set of optional, strictly layered profiles intended to remain stable for decades.  
 **Non-goals:** Garbage collection; implicit allocation in hot paths; a large mandatory standard library.
 
@@ -243,8 +243,17 @@ Outside quotations (at top-level), identifiers are executed immediately (Section
 
 ### Pattern literal: `p[ ... ]`
 
-`p[ ... ]` reads a list of **non-negative integers** and produces a **PatternRef** (validated, compact pattern object).  
-If any element is not a non-negative integer, reading `p[ ... ]` MUST signal `ERR.PATTERN` (Section 6).
+`p[ ... ]` reads a list of pattern elements and produces a **PatternRef** (validated, compact pattern object).
+If any element is invalid, reading `p[ ... ]` MUST signal `ERR.PATTERN` (Section 6).
+
+Pattern elements may be:
+
+- **Letters**: `a`, `b`, `c`, `d`, ... where `a` = index 0 (TOS), `b` = index 1 (next below TOS), etc.
+- **Non-negative integers**: `0` = TOS, `1` = next below TOS, etc.
+
+Letters and integers may be freely mixed within a single pattern.
+
+**Reading direction (TOS-right):** the pattern reads left-to-right as bottom-to-top of the output stack. The **rightmost** element becomes the new TOS. This matches how Froth displays stacks everywhere else in the language (REPL output, stack comments, documentation).
 
 Pattern semantics are defined by `perm` (Section 5.11).
 
@@ -617,12 +626,13 @@ push q
 - All tokens in `q` MUST be non-negative integer literal cells, else `throw ERR.PATTERN`.
 - Produce a compact PatternRef with those indices and push it.
 
-
+The quotation uses the same TOS-right reading convention as `p[ ... ]`: the leftmost element specifies the deepest output position, the rightmost specifies the new TOS. Index 0 = TOS of the input window.
 
 > **Informative note**
 >
 > `p[ ... ]` is the human-friendly way to write a pattern. `pat` exists so that an implementation can validate and compile
 > patterns into a compact representation once, rather than re-validating a quotation-of-indices on every `perm`.
+> Letter-based `p[...]` is preferred for hand-written code; `pat` is for programmatic pattern construction.
 
 ### `perm`
 
@@ -631,53 +641,66 @@ push q
 - `n` MUST be a non-negative number.
 - `pattern` MUST be a PatternRef or `throw ERR.TYPE`.
 
-Let `k = len(pattern)` (pattern length). Let `pattern[j]` be the j-th index (0-based).
+Let `k = len(pattern)` (pattern length). Let `pattern[j]` be the j-th element (0-based from the left, i.e., from the bottom of the output).
 
-Let the top `n` stack items (from top downward) be:
+Let the top `n` stack items be labeled:
 
-- `x0` = top item
-- `x1` = next
+- `x0` = TOS (index 0, letter `a`)
+- `x1` = next below TOS (index 1, letter `b`)
 - ...
-- `x(n-1)` = deepest of the segment
+- `x(n-1)` = deepest in window (index n-1)
 
 Requirements:
 
 - For all `j`, `0 <= pattern[j] < n`, else `throw ERR.PATTERN`.
 - DS must have at least `n` items, else `throw ERR.STACK`.
 
-After `perm`, those `n` items are replaced by `k` items:
+**Reading direction (TOS-right):** the pattern reads left-to-right as bottom-to-top of the output stack. After `perm`, those `n` items are replaced by `k` items:
 
-- new items `y0..y(k-1)` (from top downward) where `yj = x(pattern[j])`.
+- `pattern[0]` specifies the **deepest** output item
+- `pattern[k-1]` specifies the **new TOS**
+- Each output item is `x(pattern[j])`, i.e., the input item at the named index.
+
+Equivalently: new items `y0..y(k-1)` (from bottom upward) where `yj = x(pattern[j])`.
 
 This simultaneously performs drop/dup/reorder.
 
 Examples (library-defined):
 
-- `dup`  : `1 p[0 0] perm`
-- `swap` : `2 p[1 0] perm`
+- `dup`  : `1 p[a a] perm`
+- `swap` : `2 p[a b] perm`
 - `drop` : `1 p[] perm`
-- `over` : `2 p[1 0 1] perm`
-- `rot`  : `3 p[2 0 1] perm`   (a b c -> b c a)
-- `-rot` : `3 p[1 2 0] perm`   (a b c -> c a b)
+- `over` : `2 p[b a b] perm`
+- `rot`  : `3 p[b a c] perm`   (deepest rises to TOS)
+- `-rot` : `3 p[c a b] perm`   (TOS sinks to deepest)
+- `nip`  : `2 p[a] perm`
 
+Numeric equivalents (using `pat`):
 
+- `dup`  : `1 [0 0] pat perm`
+- `swap` : `2 [0 1] pat perm`
+- `drop` : `1 [] pat perm`
+- `over` : `2 [1 0 1] pat perm`
+- `rot`  : `3 [1 0 2] pat perm`
+- `-rot` : `3 [2 0 1] pat perm`
+- `nip`  : `2 [0] pat perm`
 
 > **Informative example — common stack words in one primitive**
 >
-> `perm` rewires the top **n** stack items according to a pattern (indices into that window).
+> `perm` rewires the top **n** stack items according to a pattern. The pattern is a picture of the resulting stack: leftmost = deepest output, rightmost = new TOS.
 >
 > ```froth
 > \ dup ( x -- x x )
-> ' dup  [ 1 p[0 0] perm ] def
+> ' dup  [ 1 p[a a] perm ] def
 >
-> \ swap ( a b -- b a )
-> ' swap [ 2 p[1 0] perm ] def
+> \ swap ( x y -- y x )      a=y(TOS), b=x
+> ' swap [ 2 p[a b] perm ] def
 >
-> \ over ( a b -- a b a )
-> ' over [ 2 p[1 0 1] perm ] def
+> \ over ( x y -- x y x )    a=y(TOS), b=x
+> ' over [ 2 p[b a b] perm ] def
 >
-> \ nip ( a b -- b )
-> ' nip  [ 2 p[0] perm ] def
+> \ nip ( x y -- y )          a=y(TOS), b=x
+> ' nip  [ 2 p[a] perm ] def
 > ```
 >
 > **Why this matters:** once “stack movement” is canonical (`perm`), tools can generate it, optimizers can fuse it, and
@@ -876,10 +899,10 @@ When encountering a name reference with original depth `d0` (0 = TOS at entry, N
 To duplicate the value currently at depth `d` to TOS while preserving the segment, emit:
 
 - `n = d + 1`
-- `pattern = p[ d 0 1 2 ... (d-1) d ]`
+- `pattern = p[ d (d-1) ... 1 0 d ]` (TOS-right: leftmost = deepest output, rightmost = new TOS)
 - `n pattern perm`
 
-This is the generalized "over" that preserves all values above and duplicates the targeted one.
+Reading the pattern left-to-right as bottom-to-top: the original items remain in place (descending from `d` to `0`), plus the targeted value `d` is duplicated on top. This is the generalized "over."
 
 The reference increases `delta` by `+1` because it pushes one additional value.
 
@@ -899,10 +922,10 @@ After executing the body, the stack contains (conceptually):
 The compiler emits a final cleanup `perm` to drop the original inputs and keep the outputs:
 
 - `n = N + M`
-- `pattern = p[ 0 1 2 ... (M-1) ]`
+- `pattern = p[ (M-1) (M-2) ... 1 0 ]` (TOS-right: the top M values, listed bottom-to-top)
 - `n pattern perm`
 
-This keeps the top M values and drops the N beneath them.
+This keeps the top M values (the outputs) and drops the N beneath them (the original inputs).
 
 ### Interaction with quotations
 
@@ -1001,7 +1024,7 @@ Propagation rules (minimum):
 - pushing a SlotRef -> push `K.SLOT`
 - pushing a PatternRef -> push `K.PATTERN`
 - pushing a StringRef -> push `K.STRING` (if supported)
-- `perm` MUST permute KS exactly as it permutes DS for the top `n` segment.
+- `perm` MUST permute KS exactly as it permutes DS for the top `n` segment (using the same TOS-right output ordering).
 
 ### User-defined kinds (recommended)
 
@@ -1313,7 +1336,7 @@ For constrained serial links, implementations MAY restrict stepping to definitio
 
 ### Desugaring display (recommended)
 
-When FROTH-Named or other sugar is used, a mode (`desugar on`) SHOULD display the lowered form (e.g., inserted `perm` and cleanup), ideally including an optimized form when applicable.
+When FROTH-Named or other sugar is used, a mode (`desugar on`) SHOULD display the lowered form (e.g., inserted `perm` patterns in TOS-right letter notation and cleanup), ideally including an optimized form when applicable.
 
 ### Machine-readable protocol (optional)
 
@@ -1336,12 +1359,12 @@ This section standardizes a small vocabulary definable on FROTH-Core+Base.
 ### Basic stack words (definitions)
 
 ```froth
-' dup  [ 1 p[0 0] perm ] def
-' swap [ 2 p[1 0] perm ] def
+' dup  [ 1 p[a a] perm ] def
+' swap [ 2 p[a b] perm ] def
 ' drop [ 1 p[] perm ] def
-' over [ 2 p[1 0 1] perm ] def
-' rot  [ 3 p[2 0 1] perm ] def
-' -rot [ 3 p[1 2 0] perm ] def
+' over [ 2 p[b a b] perm ] def
+' rot  [ 3 p[b a c] perm ] def
+' -rot [ 3 p[c a b] perm ] def
 ```
 
 ### `if`
