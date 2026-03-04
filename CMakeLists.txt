@@ -17,7 +17,10 @@ target_sources(Froth
     src/froth_vm.c
     src/froth_executor.c
     src/froth_primitives.c
+    ${CMAKE_BINARY_DIR}/froth_lib_core.h
 )
+
+target_include_directories(Froth PRIVATE ${CMAKE_BINARY_DIR})
 
 set_property(TARGET Froth PROPERTY C_STANDARD 11)
 set_property(TARGET Froth PROPERTY C_STANDARD_REQUIRED ON)
@@ -39,3 +42,11 @@ target_compile_definitions(Froth PRIVATE FROTH_HEAP_SIZE=${FROTH_HEAP_SIZE})
 target_compile_definitions(Froth PRIVATE FROTH_SLOT_TABLE_SIZE=${FROTH_SLOT_TABLE_SIZE})
 target_compile_definitions(Froth PRIVATE FROTH_LINE_BUFFER_SIZE=${FROTH_LINE_BUFFER_SIZE})
 target_compile_definitions(Froth PRIVATE FROTH_MAX_PERM_SIZE=${FROTH_MAX_PERM_SIZE})
+
+# Used to compile .froth lib files so that the c process can read them as embedded data.
+add_custom_command(
+  COMMAND ${CMAKE_COMMAND} -DINPUT=${CMAKE_SOURCE_DIR}/src/lib/core.froth -DOUTPUT=${CMAKE_BINARY_DIR}/froth_lib_core.h -DVARNAME="froth_lib_core" -P ${CMAKE_SOURCE_DIR}/cmake/embed_froth.cmake
+  OUTPUT ${CMAKE_BINARY_DIR}/froth_lib_core.h
+  DEPENDS "${CMAKE_SOURCE_DIR}/src/lib/core.froth"
+  COMMENT "Embedding .froth files as C data..."
+)

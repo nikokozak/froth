@@ -1,0 +1,15 @@
+'dup [1 p[a a] perm] def
+
+'swap [2 p[a b] perm] def
+
+'drop [1 p[] perm] def
+
+'over [2 p[b a b] perm] def
+
+'rot [3 p[b a c] perm] def
+
+'-rot [3 p[a c b] perm] def
+
+'nip [2 p[a] perm] def
+
+'tuck [2 p[a b a] perm] def

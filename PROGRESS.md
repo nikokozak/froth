@@ -4,9 +4,9 @@
 
 ## Current Status
 
-**Phase**: `perm` + `pat` + `p[...]` complete and smoke-tested. All canonical shuffles verified. Next: stdlib definitions, `choose` + `while`.
-**Blocking issues**: ~3 days behind original schedule. perm/pat milestone originally Mar 2, landed Mar 3–4.
-**Morale check**: Full perm/pat pipeline working end-to-end. Spec `-rot` bug found and fixed during testing.
+**Phase**: First Froth-defined words working. Stdlib shuffle words loaded from embedded `.froth` file at boot. Next: `choose` + `while`.
+**Blocking issues**: ~3 days behind original schedule. perm/pat milestone originally Mar 2, landed Mar 3–4. Stdlib embedding landed Mar 4.
+**Morale check**: Full pipeline working: `.froth` source → CMake embedding → evaluator → working words. First words defined in Froth itself.
 
 ## What's Done
 
@@ -22,12 +22,16 @@
 - `froth_executor.h` / `froth_executor.c`: executor — walks quotation bodies dispatching on cell tags. `froth_execute_slot` (prim-first, then impl), `froth_execute_quote` (iterate body cells).
 - `froth_primitives.h` / `froth_primitives.c`: primitive registration table. Core: `def`, `get`, `call`. Arithmetic: `+`, `-`, `*`, `/mod` (wrapping via unsigned cast, ADR-011). Comparisons: `<`, `>`, `=` (returning -1/0). Bitwise: `and`, `or`, `xor`, `not`, `lshift`, `rshift` (logical shifts with payload masking). I/O: `emit` (low byte), `key`, `key?`. Pattern: `pat` (quotation → PatternRef, validates indices), `perm` (stack rewrite using PatternRef + window size, fixed-size scratch buffer, index-flipped for 0=TOS convention). Division-by-zero error. Type checking on all ops. `FROTH_MAX_PERM_SIZE` (default 8) caps both pattern length and window size.
 - `froth_repl.h` / `froth_repl.c`: interactive REPL loop — read line, evaluate, print stack. Rich cell display (`Q:16`, `S:foo`, `C:bar`), named error messages (including type mismatch, undefined word, division by zero), blank-line skipping, clean EOF exit, non-fatal error recovery.
+- `froth_executor.c`: `FROTH_PATTERN` case added — PatternRef cells pushed to DS like other values.
+- Build-time stdlib embedding: CMake `file(READ HEX)` pipeline (ADR-014). `cmake/embed_froth.cmake` script generates null-terminated `const char[]` headers from `.froth` source files. No external tool dependencies.
+- `src/lib/core.froth`: shuffle words (`dup`, `swap`, `drop`, `over`, `rot`, `-rot`, `nip`, `tuck`) defined via `perm`. First words written in Froth itself.
+- `froth_evaluate_input` signature changed to `const char*`.
 - Naming overhaul: tag-0 renamed from "Cell" to "Number" (ADR-005), spec updated to v1.0
-- ADRs: 001–010 (cell width, host-native, build system, value tagging, naming, slot table, linear heap, heap accessor, call tag, contiguous quotation layout), 011 (wrapping arithmetic), 012 (perm TOS-right reading), 013 (PatternRef byte encoding)
+- ADRs: 001–010 (cell width, host-native, build system, value tagging, naming, slot table, linear heap, heap accessor, call tag, contiguous quotation layout), 011 (wrapping arithmetic), 012 (perm TOS-right reading), 013 (PatternRef byte encoding), 014 (embedded stdlib via CMake)
 
 ## In Progress
 
-- Stdlib shuffle definitions (`dup swap drop over rot nip tuck` as `perm`-based Froth words)
+Nothing in progress.
 
 ## Blocked / Waiting
 
@@ -35,8 +39,7 @@ Nothing blocked.
 
 ## Next Up
 
-1. Stdlib shuffles (define `dup swap drop over rot -rot nip tuck` via `perm`)
-2. choose + while
+1. `choose` + `while`
 3. catch/throw + "prompt never dies" (will also fix REPL stack persistence on error)
 
 ## Open Questions

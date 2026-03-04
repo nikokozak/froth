@@ -36,6 +36,10 @@ froth_error_t froth_execute_quote(froth_vm_t* vm, froth_cell_t quote_cell) {
         FROTH_TRY(froth_execute_slot(vm, FROTH_CELL_STRIP_TAG(current_cell)));
         break;
 
+      case FROTH_PATTERN:
+        FROTH_TRY(froth_stack_push(&vm->ds, current_cell));
+        break;
+
       default:
         return FROTH_ERROR_UNRECOGNIZED_CELL_TYPE;
     }

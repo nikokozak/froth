@@ -209,7 +209,7 @@ static froth_error_t froth_evaluator_handle_open_bracket(froth_reader_t* reader,
 }
 
 /* Top-level evaluator. Reads tokens from input and dispatches each one. */
-froth_error_t froth_evaluate_input(char* input, froth_vm_t* vm) {
+froth_error_t froth_evaluate_input(const char* input, froth_vm_t* vm) {
   froth_reader_t reader;
   froth_token_t token;
 
