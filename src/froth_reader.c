@@ -12,13 +12,13 @@ static int is_digit(char c) {
 }
 
 static int is_delimiter(char c) {
-  return c == '[' || c == ']' || c == '\'' || c == '\0' || is_whitespace(c);
+  return c == '[' || c == ']' || c == '(' || c == ')' || c == '\'' || c == '\0' || is_whitespace(c);
 }
 
 /* Skip past whitespace and comments. A backslash (\) starts a line comment
  * that runs to end-of-input. After this call, reader->position points at
  * the next meaningful character or the null terminator. */
-static void skip_whitespace_and_comments(froth_reader_t* reader) {
+static froth_error_t skip_whitespace_and_comments(froth_reader_t* reader) {
   while (reader->input[reader->position] != '\0') {
     char c = reader->input[reader->position];
 
@@ -27,16 +27,37 @@ static void skip_whitespace_and_comments(froth_reader_t* reader) {
       continue;
     }
 
-    // Line comment: \ to end of input
+    // Line comment: \ to end of line
     if (c == '\\') {
-      while (reader->input[reader->position] != '\0') {
+      while (reader->input[reader->position] != '\0' &&
+             reader->input[reader->position] != '\n') {
         reader->position++;
       }
-      return;
+      continue;
+    }
+
+    // Paren comment: ( to matching )
+    if (c == '(') {
+      reader->position++;
+      while (reader->input[reader->position] != '\0' &&
+             reader->input[reader->position] != ')') {
+        reader->position++;
+      }
+      if (reader->input[reader->position] == '\0') {
+        return FROTH_ERROR_UNTERMINATED_COMMENT;
+      }
+      reader->position++; // skip )
+      continue;
+    }
+
+    // Stray )
+    if (c == ')') {
+      return FROTH_ERROR_UNEXPECTED_PAREN;
     }
 
     break;
   }
+  return FROTH_OK;
 }
 
 /* Peek into the next character without advancing the reader. peek(0) returns the current character, peek(1)
@@ -99,7 +120,7 @@ void froth_reader_init(froth_reader_t* reader, const char* input) {
 }
 
 froth_error_t froth_reader_next_token(froth_reader_t* reader, froth_token_t* token) {
-  skip_whitespace_and_comments(reader);
+  FROTH_TRY(skip_whitespace_and_comments(reader));
 
   char c = reader->input[reader->position];
 

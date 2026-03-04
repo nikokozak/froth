@@ -46,6 +46,8 @@ static const char* error_name(froth_error_t err) {
     case FROTH_ERROR_DIVISION_BY_ZERO:    return "division by zero";
     case FROTH_ERROR_PATTERN_SYNTAX:      return "invalid pattern";
     case FROTH_ERROR_PATTERN_TOO_LARGE:   return "pattern too large";
+    case FROTH_ERROR_UNTERMINATED_COMMENT: return "unterminated comment";
+    case FROTH_ERROR_UNEXPECTED_PAREN:  return "unexpected )";
     default:                              return "unknown error";
   }
 }
