@@ -13,3 +13,5 @@
 'nip ( b a -- a )   [2 p[a] perm] def
 
 'tuck ( b a -- a b a )   [2 p[a b a] perm] def
+
+'if ( cond if-true if-false -- )   [choose call] def

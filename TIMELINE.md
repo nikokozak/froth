@@ -48,13 +48,13 @@
 - [x] Spec fix: `-rot` pattern corrected from `p[c a b]` to `p[a c b]` (stale from TOS-left era)
 - [x] Define `dup swap drop over rot -rot nip tuck` in Froth as library words (ADR-014: CMake `file(READ)` embedding)
 
-### Mar 3–4 (Tue–Wed) — choose + while (originally Mar 3)
-- [ ] `choose` primitive
-- [ ] `while` primitive with stack discipline rules
-- [ ] Define `if := choose call` in Froth stdlib
-- [ ] **Proof**: non-recursive loops run indefinitely
+### Mar 4 (Wed) — choose + while (originally Mar 3)
+- [x] `choose` primitive
+- [x] `while` primitive with stack discipline rules
+- [x] Define `if := choose call` in Froth stdlib
+- [x] **Proof**: `10 [ dup 5 > ] [ 1 - ] while` → `[5]`
 
-### Mar 4 (Wed) — catch/throw + "prompt never dies"
+### Mar 5 (Thu) — catch/throw + "prompt never dies" (originally Mar 4)
 - [ ] `catch` installs handler frame (DS depth snapshot minimum)
 - [ ] `throw` unwinds to nearest `catch`, restores DS depth
 - [ ] REPL wraps each top-level evaluation in implicit `catch`
@@ -132,3 +132,5 @@
 | Core call/def/get | Feb 27 | Mar 1 | Completed same day as reader. VM struct refactor, executor, primitives, two-pass quotation builder (ADR-010). |
 | FROTH-Base arithmetic + I/O | Feb 28–Mar 1 | Mar 2 | Landed Mar 2. Wrapping arithmetic (ADR-011), all ops + I/O complete. |
 | perm + pat + stdlib | Mar 2 | Mar 2–4 | ADR-013 (byte encoding) Mar 3, `p[...]` reader/evaluator Mar 3, `pat` + `perm` primitives Mar 4. Found and fixed spec `-rot` bug. Stdlib embedding (ADR-014) and shuffle defs landed Mar 4. |
+| choose + while | Mar 3 | Mar 4 | Landed same day as stdlib. `choose`, `while`, `if` all working. |
+| catch/throw | Mar 4 | Mar 5 | Pushed by choose/while slip. |

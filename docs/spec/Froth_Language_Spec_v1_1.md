@@ -24,7 +24,6 @@ Froth additionally treats program fragments as first-class data via **quotations
 
 ---
 
-
 ### Froth’s mental model on an embedded device (informative)
 
 It helps to think of Froth as a **small virtual machine** that sits *inside* your firmware image and is able to
@@ -76,8 +75,6 @@ A few important ones:
   and they map cleanly to “recover and keep the REPL alive.”
 
 ---
-
-
 
 ## Conformance profiles
 
@@ -226,7 +223,6 @@ Any other backslash escape MUST raise a reader error.
 - If `FROTH-String-Lite` is not enabled, encountering `"` MUST raise `ERR.FEATURE` (feature: STRING; fail-fast), rather than treating it as part of an identifier.
 
 **Inside quotations:** string literals are stored as literal StringRef tokens (like QuoteRef literals). Executing the quotation pushes the same StringRef value (i.e., the string literal is allocated once at definition/load time, not on each execution).
-
 
 ### Quotation form: `[ ... ]`
 
@@ -393,8 +389,6 @@ If `s.impl` is unbound/null: `throw ERR.UNDEF`.
 
 > FROTH-Checked: contract checks MAY occur at slot entry (Section 9).
 
-
-
 > **Informative example — calling a quote vs a slot**
 >
 > ```froth
@@ -417,8 +411,6 @@ If `s.impl` is unbound/null: `throw ERR.UNDEF`.
 - `impl` MUST be a callable (QuoteRef or Primitive) or `throw ERR.TYPE`.
 - Set `slot.impl := impl`.
 - SHOULD increment `slot.version`.
-
-
 
 > **Informative example — redefinition is coherent**
 >
@@ -443,8 +435,6 @@ If `s.impl` is unbound/null: `throw ERR.UNDEF`.
 - `slot` MUST be SlotRef or `throw ERR.TYPE`.
 - If `slot.impl` is unbound/null: `throw ERR.UNDEF`.
 - Otherwise push `slot.impl`.
-
-
 
 > **Informative note**
 >
@@ -474,8 +464,6 @@ Library `if` can be defined as:
 ```froth
 ' if [ choose call ] def
 ```
-
-
 
 > **Informative example — building `if`**
 >
@@ -522,8 +510,6 @@ Proof mechanisms are profile-specific. Examples include:
 
 This design keeps FROTH-Core simple (no required global static effect system) while still permitting zero-overhead loops in optimized builds.
 
-
-
 > **Informative example — a simple polling loop**
 >
 > ```froth
@@ -543,8 +529,6 @@ This design keeps FROTH-Core simple (no required global static effect system) wh
 - `q` MUST be QuoteRef or `throw ERR.TYPE`.
 - Push the number of tokens in the quotation.
 
-
-
 > **Informative note**
 >
 > `q.len` and `q@` are the minimum “program as data” interface that allows self-hosted tooling (e.g., expanders/weavers)
@@ -560,8 +544,6 @@ This design keeps FROTH-Core simple (no required global static effect system) wh
 - Push the i-th token as a value suitable for use with `call`/execution:
   - literal tokens are returned as their literal value
   - call tokens are returned as SlotRefs
-
-
 
 > **Informative example — printing tokens**
 >
@@ -602,8 +584,6 @@ push q
 **Important (no-GC note):** `q.pack` allocates on the linear heap. Long-running firmware SHOULD NOT use unbounded quotation construction without FROTH-Region or a higher-level policy.
 
 **Fail-fast option (FROTH-Region-Strict):** In strict region mode, `q.pack` MUST `throw ERR.REGION` unless there is at least one active region (an outstanding `mark` not yet released). This turns accidental heap growth into an immediate, debuggable fault on small devices.
-
-
 
 > **Informative example — building a quotation deterministically**
 >
@@ -746,8 +726,6 @@ Outcomes:
 - **On `throw e` (e != 0) inside q:**  
   `catch` restores DS, RS, and CS depths to their saved values, removes its handler frame, and pushes `e` on DS.
 
-
-
 > **Informative example — REPL-safe evaluation**
 >
 > ```froth
@@ -779,8 +757,6 @@ Implementations SHOULD maintain a fixed-size last error record (no heap allocati
 - instruction pointer within QuoteRef (token index)
 - optional platform fault info
 
-
-
 > **Informative note**
 >
 > `throw` uses integer error codes so that error signaling does not allocate. Rich error context (word name, IP, etc.)
@@ -805,6 +781,7 @@ All arithmetic operates on **numbers** with wraparound semantics (two's compleme
 ### Comparisons
 
 Comparisons push a **flag** (a number). Flag convention (normative):  
+
 - false = `0`  
 - true  = `-1` (all bits set), matching standard Forth idiom.
 
@@ -960,8 +937,6 @@ Parameter names shadow slot names within the body. To force a slot call when a n
 
 ---
 
-
-
 ### Worked example: named inputs compile to `perm` (informative)
 
 Named stack frames are meant to preserve the **feel** of stack programming while making dataflow legible.
@@ -994,7 +969,6 @@ Recommended implementation strategies (often placed in **FROTH-Perf**) that pres
 - **backend locals frame (optional):** a compiler may internally lower name references to a fixed locals frame (RS-based or dedicated) rather than literal `perm` sequences, *provided the observable DS behavior matches the spec* and no heap allocation is introduced.
 
 The language-level contract remains: named frames are labels on an entry stack window, not mutable variables.
-
 
 ## FROTH-Checked (optional): kinds and contracts
 
@@ -1080,8 +1054,6 @@ Before entering `slot.impl`, if `slot.contract` exists:
 
 ---
 
-
-
 ### Practical contracts (informative)
 
 Kinds/contracts are an optional safety net intended for:
@@ -1125,9 +1097,6 @@ If `m` is invalid or out of range: `throw ERR.REGION`.
 
 ---
 
-
-
-
 ### FROTH-Region-Strict (optional): fail-fast allocation gating
 
 Some devices are too small to tolerate “accidental heap growth” (e.g., an unintended `q.pack` inside a long-running `while`). **FROTH-Region-Strict** is an optional tightening of FROTH-Region that makes runtime allocation an explicit, scoped choice.
@@ -1146,7 +1115,6 @@ At minimum, the gated operations MUST include:
 - `pat` (dynamic pattern compilation)
 
 **Rationale:** strict mode does not “prevent leaks” if a region is kept open forever. Its purpose is to turn accidental dynamic allocation into a fail-fast error and to encourage explicit lifetime scoping.
-
 
 ### Why regions matter (informative)
 
@@ -1280,7 +1248,6 @@ For dynamic formatting (post-sprint), prefer a fixed scratch buffer over heap co
 
 This mirrors the spirit of “pictured numeric output” in classic Forth: deterministic, bounded, and allocation-free until explicitly packed.
 
-
 ## FROTH-REPL (optional): stack visualization protocol
 
 This section specifies a recommended REPL behavior for consistent tooling across serial terminals, WebSerial, and IDE integrations.
@@ -1350,7 +1317,6 @@ Implementations MAY emit machine-readable lines prefixed with `#`:
 ```
 
 Lines beginning with `#` are reserved for tooling; all other output is human-oriented.
-
 
 ## FROTH-Stdlib (optional): standard combinators and helpers
 
@@ -1476,7 +1442,6 @@ Reference definition (uses RS to keep `q`):
 ] def
 ```
 
-
 ---
 
 ## FROTH-Perf (optional): performance representations and optimization
@@ -1559,8 +1524,6 @@ Recommended REPL policy:
 - print error code and last-error record,
 - keep the prompt alive without reboot.
 
-
-
 ### A minimal hardware blink sketch (informative)
 
 Assuming an FFI profile provides:
@@ -1607,3 +1570,4 @@ your Froth handler is just a word:
 ```
 
 Hook calls SHOULD enforce stack neutrality so that a buggy handler cannot poison the VM.
+

@@ -65,7 +65,8 @@ typedef enum {
   FROTH_ERROR_PATTERN_SYNTAX,
   FROTH_ERROR_PATTERN_TOO_LARGE,
   FROTH_ERROR_UNTERMINATED_COMMENT,
-  FROTH_ERROR_UNEXPECTED_PAREN
+  FROTH_ERROR_UNEXPECTED_PAREN,
+  FROTH_ERROR_WHILE_STACK_CORRUPTION,
 } froth_error_t;
 
 /* Early-return on error. Only works in functions returning froth_error_t. */

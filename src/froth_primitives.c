@@ -270,6 +270,51 @@ froth_error_t froth_prim_bitwise_and(froth_vm_t* froth_vm) {
   return FROTH_OK;
 }
 
+froth_error_t froth_prim_choose(froth_vm_t* froth_vm) {
+  froth_cell_t false_case_cell, true_case_cell, condition_cell;
+
+  FROTH_TRY(froth_stack_pop(&froth_vm->ds, &false_case_cell));
+  FROTH_TRY(froth_stack_pop(&froth_vm->ds, &true_case_cell));
+  FROTH_TRY(froth_stack_pop(&froth_vm->ds, &condition_cell));
+  if (!FROTH_CELL_IS_NUMBER(condition_cell)) { return FROTH_ERROR_ARGUMENT_TYPE_MISMATCH; }
+
+  bool condition = FROTH_CELL_STRIP_TAG(condition_cell) != 0;
+  froth_cell_t result = condition ? true_case_cell : false_case_cell;
+  FROTH_TRY(froth_stack_push(&froth_vm->ds, result));
+
+  return FROTH_OK;
+}
+
+froth_error_t froth_prim_while(froth_vm_t* froth_vm) {
+  froth_cell_t body_cell, condition_cell, condition_result_cell;
+
+  FROTH_TRY(froth_stack_pop(&froth_vm->ds, &body_cell));
+  if (!FROTH_CELL_IS_QUOTE(body_cell)) { return FROTH_ERROR_ARGUMENT_TYPE_MISMATCH; }
+  FROTH_TRY(froth_stack_pop(&froth_vm->ds, &condition_cell));
+  if (!FROTH_CELL_IS_QUOTE(condition_cell)) { return FROTH_ERROR_ARGUMENT_TYPE_MISMATCH; }
+
+  froth_cell_u_t stack_depth = froth_vm->ds.pointer;
+
+  for (;;) {
+    // Execute condition
+    FROTH_TRY(froth_execute_quote(froth_vm, condition_cell));
+    // Check data stack is depth + 1 ONLY.
+    if (froth_vm->ds.pointer != stack_depth + 1) { return FROTH_ERROR_WHILE_STACK_CORRUPTION; }
+    // Get the condition result and validate it's a number
+    FROTH_TRY(froth_stack_pop(&froth_vm->ds, &condition_result_cell));
+    if (!FROTH_CELL_IS_NUMBER(condition_result_cell)) { return FROTH_ERROR_ARGUMENT_TYPE_MISMATCH; }
+    
+    if (FROTH_CELL_STRIP_TAG(condition_result_cell) == 0) { break; }
+
+    // Execute body
+    FROTH_TRY(froth_execute_quote(froth_vm, body_cell));
+    // Check no cells have been added to stack beyond the condition result.
+    if (froth_vm->ds.pointer != stack_depth) { return FROTH_ERROR_WHILE_STACK_CORRUPTION; }
+  }
+
+  return FROTH_OK;
+}
+
 froth_error_t froth_prim_bitwise_or(froth_vm_t* froth_vm) {
   froth_cell_t a_cell, b_cell;
 
@@ -407,6 +452,8 @@ extern const froth_primitive_t froth_primitives[] = {
   { .name = "key?", .prim_word = froth_prim_key_ready },
   { .name = "pat", .prim_word = froth_prim_pat },
   { .name = "perm", .prim_word = froth_prim_perm },
+  { .name = "choose", .prim_word = froth_prim_choose },
+  { .name = "while", .prim_word = froth_prim_while },
 };
 
 froth_error_t froth_primitives_register(froth_vm_t* froth_vm) {

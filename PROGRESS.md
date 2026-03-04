@@ -4,9 +4,9 @@
 
 ## Current Status
 
-**Phase**: First Froth-defined words working. Stdlib shuffle words loaded from embedded `.froth` file at boot. Next: `choose` + `while`.
-**Blocking issues**: ~3 days behind original schedule. perm/pat milestone originally Mar 2, landed Mar 3–4. Stdlib embedding landed Mar 4.
-**Morale check**: Full pipeline working: `.froth` source → CMake embedding → evaluator → working words. First words defined in Froth itself.
+**Phase**: `choose`, `while`, `if` landed. Control flow complete. Next: `catch`/`throw` + "prompt never dies."
+**Blocking issues**: ~3 days behind original schedule. `choose`/`while` milestone originally Mar 3, landed Mar 4.
+**Morale check**: First loop ran: `10 [ dup 5 > ] [ 1 - ] while` → `[5]`. Control flow is working.
 
 ## What's Done
 
@@ -26,6 +26,9 @@
 - Build-time stdlib embedding: CMake `file(READ HEX)` pipeline (ADR-014). `cmake/embed_froth.cmake` script generates null-terminated `const char[]` headers from `.froth` source files. No external tool dependencies.
 - `src/lib/core.froth`: shuffle words (`dup`, `swap`, `drop`, `over`, `rot`, `-rot`, `nip`, `tuck`) defined via `perm`. First words written in Froth itself.
 - `froth_evaluate_input` signature changed to `const char*`.
+- `froth_prim_choose`: `( cond a b -- x )` — type-agnostic selection, cond must be number. Zero picks `b`, nonzero picks `a`.
+- `froth_prim_while`: `( condQ bodyQ -- )` — disciplined stack loop. Snapshots `d0` after popping quotes. Checks `condQ` leaves `d0+1`, `bodyQ` leaves `d0`. `FROTH_ERROR_WHILE_STACK_CORRUPTION` on violation.
+- `if` defined in `core.froth` as `choose call`.
 - Naming overhaul: tag-0 renamed from "Cell" to "Number" (ADR-005), spec updated to v1.0
 - ADRs: 001–010 (cell width, host-native, build system, value tagging, naming, slot table, linear heap, heap accessor, call tag, contiguous quotation layout), 011 (wrapping arithmetic), 012 (perm TOS-right reading), 013 (PatternRef byte encoding), 014 (embedded stdlib via CMake)
 
@@ -39,8 +42,7 @@ Nothing blocked.
 
 ## Next Up
 
-1. `choose` + `while`
-3. catch/throw + "prompt never dies" (will also fix REPL stack persistence on error)
+1. `catch`/`throw` + "prompt never dies" (will also fix REPL stack persistence on error)
 
 ## Open Questions
 
