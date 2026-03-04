@@ -1,6 +1,6 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-03*
+*Last reviewed: 2026-03-04*
 *Source: Froth Implementation Roadmap v0.3 (Feb 25 → End of Spring Break)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
@@ -40,12 +40,13 @@
 - [x] `emit`, `key`, `key?`
 - [x] **Proof**: interactive math works; echo loop deferred until `while` (Mar 3)
 
-### Mar 2–3 (Mon–Tue) — perm + pat + canonical shuffles (originally Mar 2)
+### Mar 2–4 (Mon–Wed) — perm + pat + canonical shuffles (originally Mar 2)
 - [x] PatternRef encoding from `p[ ... ]` (ADR-013: byte-packed heap layout)
-- [ ] `pat` primitive (quotation → PatternRef)
-- [ ] `perm` correctly rewires top n DS items
+- [x] `pat` primitive (quotation → PatternRef)
+- [x] `perm` correctly rewires top n DS items
+- [x] **Proof**: perm test suite passes (dup, swap, drop, over, rot, -rot, nip, tuck — both `p[...]` and `pat` forms)
+- [x] Spec fix: `-rot` pattern corrected from `p[c a b]` to `p[a c b]` (stale from TOS-left era)
 - [ ] Define `dup swap drop over` in Froth as library words
-- [ ] **Proof**: perm test suite passes (swap, over, nip, rot)
 
 ### Mar 3–4 (Tue–Wed) — choose + while (originally Mar 3)
 - [ ] `choose` primitive
@@ -130,3 +131,4 @@
 | Reader + tokenization | Feb 26 | Mar 1 | Completed in one session: tokenizer, evaluator, quotation building, REPL. ADR-009 (call tag), allocator API rework. |
 | Core call/def/get | Feb 27 | Mar 1 | Completed same day as reader. VM struct refactor, executor, primitives, two-pass quotation builder (ADR-010). |
 | FROTH-Base arithmetic + I/O | Feb 28–Mar 1 | Mar 2 | Landed Mar 2. Wrapping arithmetic (ADR-011), all ops + I/O complete. |
+| perm + pat | Mar 2 | Mar 2–4 | ADR-013 (byte encoding) Mar 3, `p[...]` reader/evaluator Mar 3, `pat` + `perm` primitives Mar 4. Found and fixed spec `-rot` bug. Stdlib defs still pending. |

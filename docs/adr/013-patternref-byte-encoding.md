@@ -55,7 +55,7 @@ The deciding factors:
 
 3. **The divergence from QuoteRef is intentional and justified.** QuoteRef stores tagged cells that need the full cell width. PatternRef stores small indices that fit in a byte. Using the same layout for both would be false consistency.
 
-4. **Compile-time cap.** `FROTH_MAX_PERM_PATTERN_SIZE` (default 8) bounds `k` at compile time. This enables stack-allocated scratch buffers in `perm` (for copying input items before overwriting) without dynamic allocation. The cap is enforced in `pat` and `p[...]` at pattern construction time, not at `perm` execution time.
+4. **Compile-time cap.** `FROTH_MAX_PERM_SIZE` (default 8) bounds both pattern length (`k`) and window size (`n`) at compile time. This enables a fixed-size scratch buffer in `perm` (for snapshotting input items before overwriting) without dynamic allocation or VLAs. The cap is enforced in `pat` and `p[...]` at pattern construction time, and in `perm` for the window size at execution time.
 
 ## Heap Layout Detail
 
@@ -92,7 +92,7 @@ uint8_t k    = pat[0];
 ### Constraints on future decisions
 
 - Pattern indices must fit in `uint8_t` (max 255). This is not a meaningful constraint — `perm` window sizes beyond ~8 are pathological.
-- `FROTH_MAX_PERM_PATTERN_SIZE` must be set before compilation. Changing it requires a rebuild.
+- `FROTH_MAX_PERM_SIZE` must be set before compilation. Changing it requires a rebuild.
 - If FROTH-Perf needs to inline or optimize patterns, the byte-packed format is easy to read at compile time and easy to specialize.
 
 ## References

@@ -132,6 +132,80 @@ froth_error_t froth_prim_divmod(froth_vm_t* froth_vm) {
   return FROTH_OK;
 }
 
+/* pat ( q -- pattern ): validate quotation of indices, pack into byte-packed PatternRef. */
+froth_error_t froth_prim_pat(froth_vm_t* froth_vm) {
+  froth_cell_t quote_cell;
+  FROTH_TRY(froth_stack_pop(&froth_vm->ds, &quote_cell));
+  if (!FROTH_CELL_IS_QUOTE(quote_cell)) { return FROTH_ERROR_ARGUMENT_TYPE_MISMATCH; }
+
+  froth_cell_t* body = froth_heap_cell_ptr(&froth_vm->heap, FROTH_CELL_STRIP_TAG(quote_cell));
+  froth_cell_t len = body[0];
+
+  if (len > FROTH_MAX_PERM_SIZE) { return FROTH_ERROR_PATTERN_TOO_LARGE; }
+
+  // Validate: every body cell must be a non-negative number that fits in a byte
+  for (froth_cell_t i = 0; i < len; i++) {
+    froth_cell_t cell = body[1 + i];
+    if (!FROTH_CELL_IS_NUMBER(cell)) { return FROTH_ERROR_PATTERN_SYNTAX; }
+    froth_cell_t val = FROTH_CELL_STRIP_TAG(cell);
+    if (val < 0 || val > 255) { return FROTH_ERROR_PATTERN_SYNTAX; }
+  }
+
+  // All valid — allocate and pack
+  froth_cell_u_t pat_offset;
+  FROTH_TRY(froth_heap_allocate_bytes(1 + len, &froth_vm->heap, &pat_offset));
+  uint8_t* pat = &froth_vm->heap.data[pat_offset];
+  pat[0] = (uint8_t)len;
+  for (froth_cell_t i = 0; i < len; i++) {
+    pat[1 + i] = (uint8_t)FROTH_CELL_STRIP_TAG(body[1 + i]);
+  }
+
+  froth_cell_t result;
+  FROTH_TRY(froth_make_cell(pat_offset, FROTH_PATTERN, &result));
+  FROTH_TRY(froth_stack_push(&froth_vm->ds, result));
+  return FROTH_OK;
+}
+
+/* perm ( window_size pattern -- ): rewrite top window_size stack items according to pattern.
+ * Pattern reads TOS-right: pattern[0] = deepest output, pattern[pattern_len-1] = new TOS.
+ * Each index selects from the input window where 0 = TOS, 1 = next below, etc. */
+froth_error_t froth_prim_perm(froth_vm_t* froth_vm) {
+  // Pop pattern
+  froth_cell_t pattern_cell;
+  FROTH_TRY(froth_stack_pop(&froth_vm->ds, &pattern_cell));
+  if (!FROTH_CELL_IS_PATTERN(pattern_cell)) { return FROTH_ERROR_ARGUMENT_TYPE_MISMATCH; }
+  uint8_t* pattern = &froth_vm->heap.data[FROTH_CELL_STRIP_TAG(pattern_cell)];
+  uint8_t pattern_len = pattern[0];
+
+  // Pop window size
+  froth_cell_t window_cell;
+  FROTH_TRY(froth_stack_pop(&froth_vm->ds, &window_cell));
+  if (!FROTH_CELL_IS_NUMBER(window_cell)) { return FROTH_ERROR_ARGUMENT_TYPE_MISMATCH; }
+  froth_cell_t window_size = FROTH_CELL_STRIP_TAG(window_cell);
+  if (window_size < 0 || window_size > FROTH_MAX_PERM_SIZE) { return FROTH_ERROR_PATTERN_SYNTAX; }
+  if ((froth_cell_u_t)window_size > froth_vm->ds.pointer) { return FROTH_ERROR_STACK_UNDERFLOW; }
+
+  // Validate all indices are within the window
+  for (uint8_t i = 0; i < pattern_len; i++) {
+    if (pattern[1 + i] >= window_size) { return FROTH_ERROR_PATTERN_SYNTAX; }
+  }
+
+  // Snapshot the input window into a fixed-size scratch buffer
+  froth_cell_t scratch[FROTH_MAX_PERM_SIZE];
+  froth_cell_u_t base = froth_vm->ds.pointer - (froth_cell_u_t)window_size;
+  for (froth_cell_u_t i = 0; i < (froth_cell_u_t)window_size; i++) {
+    scratch[i] = froth_vm->ds.data[base + i];
+  }
+
+  // Remove window_size items, push pattern_len items according to pattern
+  froth_vm->ds.pointer = base;
+  for (uint8_t i = 0; i < pattern_len; i++) {
+    FROTH_TRY(froth_stack_push(&froth_vm->ds, scratch[window_size - 1 - pattern[1 + i]]));
+  }
+
+  return FROTH_OK;
+}
+
 froth_error_t froth_prim_compare_lt(froth_vm_t* froth_vm) {
   froth_cell_t a_cell, b_cell;
 
@@ -331,6 +405,8 @@ extern const froth_primitive_t froth_primitives[] = {
   { .name = "emit", .prim_word = froth_prim_emit },
   { .name = "key", .prim_word = froth_prim_key },
   { .name = "key?", .prim_word = froth_prim_key_ready },
+  { .name = "pat", .prim_word = froth_prim_pat },
+  { .name = "perm", .prim_word = froth_prim_perm },
 };
 
 froth_error_t froth_primitives_register(froth_vm_t* froth_vm) {

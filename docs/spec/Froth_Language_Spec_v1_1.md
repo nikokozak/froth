@@ -672,7 +672,7 @@ Examples (library-defined):
 - `drop` : `1 p[] perm`
 - `over` : `2 p[b a b] perm`
 - `rot`  : `3 p[b a c] perm`   (deepest rises to TOS)
-- `-rot` : `3 p[c a b] perm`   (TOS sinks to deepest)
+- `-rot` : `3 p[a c b] perm`   (TOS sinks to deepest)
 - `nip`  : `2 p[a] perm`
 
 Numeric equivalents (using `pat`):
@@ -682,7 +682,7 @@ Numeric equivalents (using `pat`):
 - `drop` : `1 [] pat perm`
 - `over` : `2 [1 0 1] pat perm`
 - `rot`  : `3 [1 0 2] pat perm`
-- `-rot` : `3 [2 0 1] pat perm`
+- `-rot` : `3 [0 2 1] pat perm`
 - `nip`  : `2 [0] pat perm`
 
 > **Informative example — common stack words in one primitive**

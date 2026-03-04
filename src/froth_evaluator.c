@@ -94,7 +94,7 @@ static froth_error_t count_and_typecheck_pattern_body(froth_reader_t* reader, fr
     count++;
   }
 
-  if (count > FROTH_MAX_PERM_PATTERN_SIZE) {
+  if (count > FROTH_MAX_PERM_SIZE) {
     *reader = saved;
     return FROTH_ERROR_PATTERN_TOO_LARGE;
   }

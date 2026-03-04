@@ -105,7 +105,7 @@ swap:  2 p[a b]   perm    or  2 [0 1] pat perm
 drop:  1 p[]      perm    or  1 [] pat perm
 over:  2 p[b a b] perm    or  2 [1 0 1] pat perm
 rot:   3 p[b a c] perm    or  3 [1 0 2] pat perm
--rot:  3 p[c a b] perm    or  3 [2 0 1] pat perm
+-rot:  3 p[a c b] perm    or  3 [0 2 1] pat perm
 nip:   2 p[a]     perm    or  2 [0] pat perm
 tuck:  2 p[a b a] perm    or  2 [0 1 0] pat perm
 ```
