@@ -47,26 +47,33 @@ typedef struct froth_vm_t froth_vm_t;
 
 typedef enum {
   FROTH_OK = 0,
-  FROTH_ERROR_STACK_OVERFLOW,
-  FROTH_ERROR_STACK_UNDERFLOW,
-  FROTH_ERROR_VALUE_OVERFLOW,
-  FROTH_ERROR_IO,
-  FROTH_ERROR_HEAP_OUT_OF_MEMORY,
-  FROTH_ERROR_SLOT_NAME_NOT_FOUND,
-  FROTH_ERROR_SLOT_IMPL_NOT_FOUND,
-  FROTH_ERROR_SLOT_PRIM_NOT_FOUND,
-  FROTH_ERROR_SLOT_TABLE_FULL,
-  FROTH_ERROR_SLOT_INDEX_EMPTY,
-  FROTH_ERROR_TOKEN_TOO_LONG,
-  FROTH_ERROR_UNTERMINATED_QUOTATION,
-  FROTH_ERROR_UNRECOGNIZED_CELL_TYPE,
-  FROTH_ERROR_ARGUMENT_TYPE_MISMATCH,
-  FROTH_ERROR_DIVISION_BY_ZERO,
-  FROTH_ERROR_PATTERN_SYNTAX,
-  FROTH_ERROR_PATTERN_TOO_LARGE,
-  FROTH_ERROR_UNTERMINATED_COMMENT,
-  FROTH_ERROR_UNEXPECTED_PAREN,
-  FROTH_ERROR_WHILE_STACK_CORRUPTION,
+
+  /* Runtime errors — visible to Froth programs via catch/throw.
+   * These numbers are the stable user-facing API. Never reorder.
+   * Append new runtime errors after the last assigned value. */
+  FROTH_ERROR_STACK_OVERFLOW       = 1,
+  FROTH_ERROR_STACK_UNDERFLOW      = 2,
+  FROTH_ERROR_TYPE_MISMATCH        = 3,
+  FROTH_ERROR_UNDEFINED_WORD       = 4,
+  FROTH_ERROR_DIVISION_BY_ZERO     = 5,
+  FROTH_ERROR_HEAP_OUT_OF_MEMORY   = 6,
+  FROTH_ERROR_PATTERN_INVALID      = 7,
+  FROTH_ERROR_PATTERN_TOO_LARGE    = 8,
+  FROTH_ERROR_IO                   = 9,
+  FROTH_ERROR_NOCATCH              = 10,
+  FROTH_ERROR_WHILE_STACK          = 11,
+  FROTH_ERROR_VALUE_OVERFLOW       = 12,
+  FROTH_ERROR_BOUNDS               = 13,
+
+  /* Reader/evaluator errors — occur before execution.
+   * Stable numbers, but programs won't typically catch these. */
+  FROTH_ERROR_TOKEN_TOO_LONG       = 100,
+  FROTH_ERROR_UNTERMINATED_QUOTE   = 101,
+  FROTH_ERROR_UNTERMINATED_COMMENT = 102,
+  FROTH_ERROR_UNEXPECTED_PAREN     = 103,
+
+  /* Internal sentinel — not a user-visible error code. */
+  FROTH_ERROR_THROW                = -1,
 } froth_error_t;
 
 /* Early-return on error. Only works in functions returning froth_error_t. */

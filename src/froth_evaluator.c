@@ -9,7 +9,7 @@
 /* Resolve a name to a slot index, creating the slot if it doesn't exist yet. */
 static froth_error_t resolve_or_create_slot(const char* name, froth_heap_t* heap, froth_cell_u_t* slot_index) {
   froth_error_t err = froth_slot_find_name(name, slot_index);
-  if (err == FROTH_ERROR_SLOT_NAME_NOT_FOUND) {
+  if (err == FROTH_ERROR_UNDEFINED_WORD) {
     FROTH_TRY(froth_slot_create(name, heap, slot_index));
   } else if (err != FROTH_OK) {
     return err;
@@ -77,18 +77,18 @@ static froth_error_t count_and_typecheck_pattern_body(froth_reader_t* reader, fr
       case FROTH_TOKEN_IDENTIFIER:
         if (!(token.name[1] == '\0' && token.name[0] >= 'a' && token.name[0] <= 'z')) {
           *reader = saved;
-          return FROTH_ERROR_PATTERN_SYNTAX;
+          return FROTH_ERROR_PATTERN_INVALID;
         } 
         break;
       case FROTH_TOKEN_NUMBER:
         if (token.number > 255 || token.number < 0) {
           *reader = saved;
-          return FROTH_ERROR_PATTERN_SYNTAX; // Only allow numbers that fit in a byte
+          return FROTH_ERROR_PATTERN_INVALID; // Only allow numbers that fit in a byte
         }
         break; // Numbers are fine
       default:
         *reader = saved;
-        return FROTH_ERROR_PATTERN_SYNTAX; // Other token types not allowed in pattern body
+        return FROTH_ERROR_PATTERN_INVALID; // Other token types not allowed in pattern body
     }
 
     count++;
@@ -205,7 +205,7 @@ static froth_error_t froth_evaluator_handle_open_bracket(froth_reader_t* reader,
     return FROTH_OK;
   }
 
-  return FROTH_ERROR_UNTERMINATED_QUOTATION;
+  return FROTH_ERROR_UNTERMINATED_QUOTE;
 }
 
 /* Top-level evaluator. Reads tokens from input and dispatches each one. */

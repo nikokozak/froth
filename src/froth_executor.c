@@ -14,7 +14,7 @@ froth_error_t froth_execute_slot(froth_vm_t* vm, froth_cell_u_t slot_index) {
     return froth_execute_quote(vm, impl);
   }
 
-  return FROTH_ERROR_SLOT_IMPL_NOT_FOUND;
+  return FROTH_ERROR_UNDEFINED_WORD;
 }
 
 /* Execute a quotation body from the heap. */
@@ -41,7 +41,7 @@ froth_error_t froth_execute_quote(froth_vm_t* vm, froth_cell_t quote_cell) {
         break;
 
       default:
-        return FROTH_ERROR_UNRECOGNIZED_CELL_TYPE;
+        return FROTH_ERROR_TYPE_MISMATCH;
     }
   }
   return FROTH_OK;

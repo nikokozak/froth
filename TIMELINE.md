@@ -54,11 +54,12 @@
 - [x] Define `if := choose call` in Froth stdlib
 - [x] **Proof**: `10 [ dup 5 > ] [ 1 - ] while` → `[5]`
 
-### Mar 5 (Thu) — catch/throw + "prompt never dies" (originally Mar 4)
-- [ ] `catch` installs handler frame (DS depth snapshot minimum)
-- [ ] `throw` unwinds to nearest `catch`, restores DS depth
-- [ ] REPL wraps each top-level evaluation in implicit `catch`
-- [ ] **Proof**: deliberate errors return to prompt with stack restored
+### Mar 4 (Wed) — catch/throw + "prompt never dies" (originally Mar 4)
+- [x] `catch` snapshots DS/RS/CS depths, intercepts all errors (ADR-015)
+- [x] `throw` stores error code in `vm->thrown`, returns `FROTH_ERROR_THROW` sentinel
+- [x] REPL snapshots/restores DS/RS on error, displays `error(N): description`
+- [x] Error enum reorganized with stable explicit values (ADR-016)
+- [x] **Proof**: `[ 1 drop drop ] catch` → `[2]`; `42 throw` at top level → error, prompt alive
 
 ### Mar 5–Mar 6 (Thu–Fri) — FFI Stage 1 + LED blink demo
 - [ ] `froth_pop_cell` / `froth_push_cell` / `froth_throw`

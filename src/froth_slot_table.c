@@ -15,11 +15,11 @@ froth_error_t froth_slot_find_name(const char* name, froth_cell_u_t* found_slot_
       return FROTH_OK;
     }
   }
-  return FROTH_ERROR_SLOT_NAME_NOT_FOUND;
+  return FROTH_ERROR_UNDEFINED_WORD;
 }
 
 froth_error_t froth_slot_create(const char* name, froth_heap_t* heap, froth_cell_u_t* created_slot_index) {
-  if (slot_pointer >= FROTH_SLOT_TABLE_SIZE) { return FROTH_ERROR_SLOT_TABLE_FULL; }
+  if (slot_pointer >= FROTH_SLOT_TABLE_SIZE) { return FROTH_ERROR_HEAP_OUT_OF_MEMORY; }
 
   froth_cell_u_t name_heap_location;
 
@@ -37,32 +37,32 @@ froth_error_t froth_slot_create(const char* name, froth_heap_t* heap, froth_cell
 }
 
 froth_error_t froth_slot_get_impl(froth_cell_u_t slot_index, froth_cell_t* impl) {
-  if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_SLOT_INDEX_EMPTY; }
+  if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_UNDEFINED_WORD; }
   *impl = slot_table[slot_index].impl;
-  if (*impl == 0) { return FROTH_ERROR_SLOT_IMPL_NOT_FOUND; }
+  if (*impl == 0) { return FROTH_ERROR_UNDEFINED_WORD; }
   return FROTH_OK;
 }
 
 froth_error_t froth_slot_get_prim(froth_cell_u_t slot_index, froth_primitive_fn_t* prim) {
-  if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_SLOT_INDEX_EMPTY; }
+  if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_UNDEFINED_WORD; }
   *prim = slot_table[slot_index].prim;
-  if (*prim == NULL) { return FROTH_ERROR_SLOT_PRIM_NOT_FOUND; }
+  if (*prim == NULL) { return FROTH_ERROR_UNDEFINED_WORD; }
   return FROTH_OK;
 }
 
 froth_error_t froth_slot_set_impl(froth_cell_u_t slot_index, froth_cell_t impl) {
-  if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_SLOT_INDEX_EMPTY; }
+  if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_UNDEFINED_WORD; }
   slot_table[slot_index].impl = impl;
   return FROTH_OK;
 }
 froth_error_t froth_slot_set_prim(froth_cell_u_t slot_index, froth_primitive_fn_t prim) {
-  if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_SLOT_INDEX_EMPTY; }
+  if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_UNDEFINED_WORD; }
   slot_table[slot_index].prim = prim;
   return FROTH_OK;
 }
 
 froth_error_t froth_slot_get_name(froth_cell_u_t slot_index, const char** name) {
-  if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_SLOT_INDEX_EMPTY; }
+  if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_UNDEFINED_WORD; }
   *name = slot_table[slot_index].name;
   return FROTH_OK;
 }

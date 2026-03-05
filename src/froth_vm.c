@@ -10,4 +10,5 @@ froth_vm_t froth_vm = {
   .rs = { .pointer = 0, .capacity = FROTH_RS_CAPACITY, .data = rs_memory },
   .cs = { .pointer = 0, .capacity = FROTH_CS_CAPACITY, .data = cs_memory },
   .heap = { .data = heap_memory, .pointer = 0 },
+  .thrown = FROTH_OK,
 };
