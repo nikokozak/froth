@@ -1,7 +1,7 @@
 # Froth Language Specification
 
 **Status:** Candidate (pre-freeze)  
-**Version:** 1.1 (2026-03-02)  
+**Version:** 1.2 (2026-03-05)  
 **Scope:** This document specifies the *core* semantics of Froth (FROTH-Core) and a small set of optional, strictly layered profiles intended to remain stable for decades.  
 **Non-goals:** Garbage collection; implicit allocation in hot paths; a large mandatory standard library.
 
@@ -314,7 +314,7 @@ An identifier resolves to a **slot** with stable identity, represented by a Slot
 Each slot has:
 
 - `slot.name` (debug/printing only)
-- `slot.impl` (the current implementation; callable, see 3.5)
+- `slot.impl` (the current value or implementation; any Froth value, see 3.5 and 4.2)
 - `slot.version` (non-negative integer; used by FROTH-Perf)
 - optional `slot.contract` (FROTH-Checked)
 - optional `slot.in_arity`, `slot.out_arity` (stack-effect metadata; used by FROTH-Named and tooling)
@@ -381,7 +381,7 @@ Errors are signaled via `throw` with the error codes in Section 6.
 
 If `callee` is:
 
-- SlotRef `s`: invoke `s` (load `s.impl` and execute it).
+- SlotRef `s`: invoke `s` (load `s.impl`; if callable, execute it; if a plain value, push it on DS).
 - QuoteRef `q`: execute `q` per Section 4.3.
 - Otherwise: `throw ERR.TYPE`.
 
@@ -405,12 +405,15 @@ If `s.impl` is unbound/null: `throw ERR.UNDEF`.
 
 ### `def`
 
-**Stack:** `( slot impl -- )`
+**Stack:** `( slot value -- )`
 
 - `slot` MUST be SlotRef or `throw ERR.TYPE`.
-- `impl` MUST be a callable (QuoteRef or Primitive) or `throw ERR.TYPE`.
-- Set `slot.impl := impl`.
+- `value` may be any Froth value (number, QuoteRef, SlotRef, PatternRef, StringRef, etc.).
+- Set `slot.impl := value`.
 - SHOULD increment `slot.version`.
+
+If `value` is callable (QuoteRef or Primitive), invoking the slot executes it.
+If `value` is a plain value (number, PatternRef, etc.), invoking the slot pushes it on DS.
 
 > **Informative example — redefinition is coherent**
 >
@@ -427,6 +430,21 @@ If `s.impl` is unbound/null: `throw ERR.UNDEF`.
 >
 > Because compiled quotations refer to **SlotRefs**, redefinition updates behavior globally. Implementations may still
 > cache dispatch targets for speed, but the semantic model is “stable identity, mutable implementation.”
+
+> **Informative example — slots as mutable storage**
+>
+> ```froth
+> ' count 0 def
+> count
+> \ -> [0]
+>
+> ' count count 1 + def
+> count
+> \ -> [1]
+> ```
+>
+> Because `def` accepts any value, slots double as named mutable storage with zero heap cost.
+> The library word `set` (`swap def`) provides imperative-style assignment: `42 'x set`.
 
 ### `get`
 
@@ -1340,6 +1358,14 @@ This section standardizes a small vocabulary definable on FROTH-Core+Base.
 ```
 
 Usage: `cond [then] [else] if`.
+
+### `set`
+
+```froth
+' set [ swap def ] def
+```
+
+Usage: `42 'x set`. Imperative-style assignment — stores a value in a slot.
 
 ### Quotation combinators
 

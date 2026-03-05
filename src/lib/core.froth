@@ -15,3 +15,5 @@
 'tuck ( b a -- a b a )   [2 p[a b a] perm] def
 
 'if ( cond if-true if-false -- )   [choose call] def
+
+'set ( value ident -- )   [swap def] def

@@ -2,8 +2,11 @@
 #include "froth_slot_table.h"
 #include "froth_stack.h"
 
-/* Look up a slot and invoke whatever's in it — prim or quotation. */
+/* Look up a slot and invoke whatever's in it — prim or quotation. 
+ * If the slot instead holds a value, (it might, in the 'impl' field), then simply push it. */
 froth_error_t froth_execute_slot(froth_vm_t* vm, froth_cell_u_t slot_index) {
+  vm->last_error_slot = (froth_cell_t)slot_index;
+
   froth_primitive_fn_t prim;
   if (froth_slot_get_prim(slot_index, &prim) == FROTH_OK) {
     return prim(vm);
@@ -11,7 +14,11 @@ froth_error_t froth_execute_slot(froth_vm_t* vm, froth_cell_u_t slot_index) {
 
   froth_cell_t impl;
   if (froth_slot_get_impl(slot_index, &impl) == FROTH_OK) {
-    return froth_execute_quote(vm, impl);
+    // Check to see if impl is a quote - if it is, then execute it.
+    if (FROTH_CELL_IS_QUOTE(impl)) { return froth_execute_quote(vm, impl); }
+    // Otherwise, just push the impl onto the stack.
+    else { FROTH_TRY(froth_stack_push(&vm->ds, impl)); }
+    return FROTH_OK;
   }
 
   return FROTH_ERROR_UNDEFINED_WORD;

@@ -9,7 +9,6 @@ froth_error_t froth_prim_def(froth_vm_t* froth_vm) {
   froth_cell_t slot_cell, impl_cell;
 
   FROTH_TRY(froth_stack_pop(&froth_vm->ds, &impl_cell));
-  if (!FROTH_CELL_IS_QUOTE(impl_cell)) { return FROTH_ERROR_TYPE_MISMATCH; }
 
   FROTH_TRY(froth_stack_pop(&froth_vm->ds, &slot_cell));
   if (!FROTH_CELL_IS_SLOT(slot_cell)) { return FROTH_ERROR_TYPE_MISMATCH; } 
@@ -126,8 +125,8 @@ froth_error_t froth_prim_divmod(froth_vm_t* froth_vm) {
   FROTH_TRY(froth_make_cell(FROTH_CELL_STRIP_TAG(a_cell) / FROTH_CELL_STRIP_TAG(b_cell), FROTH_NUMBER, &quotient));
   FROTH_TRY(froth_make_cell(FROTH_CELL_STRIP_TAG(a_cell) % FROTH_CELL_STRIP_TAG(b_cell), FROTH_NUMBER, &remainder));
   
-  FROTH_TRY(froth_stack_push(&froth_vm->ds, quotient));
   FROTH_TRY(froth_stack_push(&froth_vm->ds, remainder));
+  FROTH_TRY(froth_stack_push(&froth_vm->ds, quotient));
 
   return FROTH_OK;
 }
@@ -486,7 +485,7 @@ extern const froth_primitive_t froth_primitives[] = {
   { .name = "and", .prim_word = froth_prim_bitwise_and },
   { .name = "or", .prim_word = froth_prim_bitwise_or },
   { .name = "xor", .prim_word = froth_prim_bitwise_xor },
-  { .name = "not", .prim_word = froth_prim_bitwise_invert },
+  { .name = "invert", .prim_word = froth_prim_bitwise_invert },
   { .name = "lshift", .prim_word = froth_prim_bitwise_shl },
   { .name = "rshift", .prim_word = froth_prim_bitwise_shr },
   { .name = "emit", .prim_word = froth_prim_emit },
