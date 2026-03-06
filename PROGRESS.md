@@ -1,12 +1,12 @@
 # Froth Implementation Progress
 
-*Last updated: 2026-03-05*
+*Last updated: 2026-03-06*
 
 ## Current Status
 
-**Phase**: Ergonomics review done. Spec conformance fixes, stack display improvements, error context landed. Next: FFI Stage 1 + LED blink demo.
-**Blocking issues**: ~1 day behind original schedule.
-**Morale check**: `1 2 rot` → `error(2): stack underflow in "perm"`. Errors tell you where.
+**Phase**: REPL essentials landed. Next: FFI Stage 1 + LED blink demo.
+**Blocking issues**: ~2 days behind original schedule.
+**Morale check**: `: inc 1 + ; 5 inc .` → `6`. Sugar works.
 
 ## What's Done
 
@@ -30,8 +30,11 @@
 - Spec conformance fixes: `/mod` result order, `not` renamed to `invert`
 - Stack display: inline quotation/pattern expansion (`[1 2 +]`, `p[a b]`, nested quotes), falls back to `<q:N>` above 8 tokens. Slots show `<s:name>`.
 - Error context: `last_error_slot` on VM, executor sets it before dispatch, REPL displays faulting word name
-- Ergonomics review: `docs/ERGONOMICS_REVIEW.md` — prioritized list of gaps, open design questions, and future considerations
-- ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes)
+- `froth_fmt.h` / `froth_fmt.c`: shared formatting helpers (`emit_string`, `format_number`) used by primitives and REPL
+- `.` primitive (pop and print), `.s` primitive (print stack non-destructively), `words` primitive (list all slot names)
+- `: ;` sugar: `: foo 1 + ;` desugars to `'foo [ 1 + ] def`. Reader treats `;` as close-bracket (ADR-018). Evaluator special-cases `:` identifier.
+- REPL thinned: stack display now delegates to `.s` primitive; error display uses shared `emit_string`/`format_number`
+- ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar)
 
 ## In Progress
 
@@ -43,10 +46,15 @@ Nothing blocked.
 
 ## Next Up
 
-1. FFI Stage 1 + LED blink demo (`froth_pop_cell`, `froth_push_cell`, `froth_throw`, `FROTH_FN`, `gpio.mode`, `gpio.write`, `ms`)
+1. FFI Stage 1 + LED blink demo (`froth_pop_cell`, `froth_push_cell`, `froth_throw`, `FROTH_FN`, `gpio.mode`, `gpio.write`, `ms`) — FFI struct should carry metadata (stack effect, help text)
+2. Ctrl-C / interrupt flag
+3. Return stack (`>r`, `r>`, `r@`), multi-line input, stdlib combinators (`dip`, `keep`, `bi`, `times`), `see`, `info`
 
 ## Open Questions
 
 - CS holds `froth_cell_t` currently and is unused — will it need a different entry type for the eventual trampoline refactor? (deferred to FROTH-Perf)
 - `divmod`: INT_MIN / -1 is UB in C (result overflows). Need to decide: wrap or error? (deferred — edge case, not blocking)
 - Tick syntax: spec grammar says `'name` (prefix, no space) but spec examples use `' name` (space-separated). Reader currently requires prefix form. Need ADR to pick one. (deferred — not blocking)
+- `while` stack discipline: too strict for REPL exploration? Revisit after `>r`/`r>`/`r@` and `times` exist — the pressure may ease naturally. (deferred)
+- String-Lite timing: `"Hello" s.emit` is spec-optional but high-impact for a REPL-first language. Deferred to post-sprint.
+- FFI metadata design: every FFI binding should carry at minimum name + stack effect + help text. Consider coarse kind contracts and board/module tags for future introspection (`words`, `see`, `help`, FROTH-Checked). Design during FFI Stage 1.

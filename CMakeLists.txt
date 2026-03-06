@@ -18,6 +18,7 @@ target_sources(Froth
     src/froth_executor.c
     src/froth_primitives.c
     ${CMAKE_BINARY_DIR}/froth_lib_core.h
+    src/froth_fmt.c
 )
 
 target_include_directories(Froth PRIVATE ${CMAKE_BINARY_DIR})

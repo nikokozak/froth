@@ -4,6 +4,7 @@
 #include "froth_stack.h"
 #include "froth_slot_table.h"
 #include "froth_executor.h"
+#include "froth_primitives.h"
 #include <stddef.h>
 
 /* Resolve a name to a slot index, creating the slot if it doesn't exist yet. */
@@ -221,6 +222,24 @@ froth_error_t froth_evaluate_input(const char* input, froth_vm_t* vm) {
         FROTH_TRY(froth_evaluator_handle_number(token, vm));
         break;
       case FROTH_TOKEN_IDENTIFIER:
+        // Special case for slot definition: if the identifier is a single ":", treat it as a definition marker and create the next token as a slot name.
+        if (token.name[0] == ':' && token.name[1] == '\0') {
+          froth_token_t next_token;
+          froth_cell_u_t slot_index;
+          froth_cell_t slot_cell, quote_cell;
+          if (froth_reader_next_token(&reader, &next_token) != FROTH_OK || next_token.type != FROTH_TOKEN_IDENTIFIER) {
+            return FROTH_ERROR_TYPE_MISMATCH; // Expect a slot name after ":"
+          }
+          froth_slot_create(next_token.name, &vm->heap, &slot_index); // Create the slot if it doesn't exist
+          FROTH_TRY(froth_make_cell(slot_index, FROTH_SLOT, &slot_cell)); // Create a Slot cell with the slot index
+          FROTH_TRY(froth_stack_push(&vm->ds, slot_cell)); // Push slot name as string for definition
+
+          FROTH_TRY(froth_evaluator_handle_open_bracket(&reader, vm, &quote_cell));
+          FROTH_TRY(froth_stack_push(&vm->ds, quote_cell)); // Push quotation for definition
+
+          FROTH_TRY(froth_prim_def(vm)); // Call the 'def' primitive to bind the slot to the quotation
+          break;
+        }
         FROTH_TRY(froth_evaluator_handle_identifier(token, vm));
         break;
       case FROTH_TOKEN_OPEN_BRACKET: {

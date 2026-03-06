@@ -1,6 +1,6 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-04*
+*Last reviewed: 2026-03-06*
 *Source: Froth Implementation Roadmap v0.3 (Feb 25 → End of Spring Break)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
@@ -61,25 +61,36 @@
 - [x] Error enum reorganized with stable explicit values (ADR-016)
 - [x] **Proof**: `[ 1 drop drop ] catch` → `[2]`; `42 throw` at top level → error, prompt alive
 
-### Mar 5–Mar 6 (Thu–Fri) — FFI Stage 1 + LED blink demo
+### Mar 5–6 (Thu–Fri) — REPL essentials
+- [x] `.` (print integer, no heap allocation)
+- [x] `.s` (print stack without modification)
+- [x] `words` (walk slot table, emit names)
+- [x] `: ;` sugar (desugar to `'name [...] def`, ADR-018)
+- [x] `froth_fmt` module extracted (shared `emit_string`, `format_number`)
+- [x] **Proof**: `: inc 1 + ; 5 inc .` prints `6`; `words` lists all defined names
+
+### Mar 6–Mar 7 (Fri–Sat) — FFI Stage 1 + LED blink demo (was Mar 5–6)
 - [ ] `froth_pop_cell` / `froth_push_cell` / `froth_throw`
 - [ ] `FROTH_FN`, `FROTH_TRY`, `FROTH_PRIM`
+- [ ] FFI registration struct carries metadata (stack effect string, help text)
 - [ ] Bind: `gpio.mode`, `gpio.write`, `ms`
 - [ ] Static registration table
 - [ ] **Proof**: `: blink ( pin -- ) ... ;` runs from REPL, blinks LED
 
-### Mar 7 (Sat) — Ctrl-C / interrupt flag
+### Mar 8 (Sun) — Ctrl-C / interrupt flag (was Mar 7)
 - [ ] CAN (0x18) sets VM interrupt flag
 - [ ] VM checks flag at safe points; throws ERR.INTERRUPT
 - [ ] **Proof**: infinite loops can be stopped without reset
 
-### Mar 8–Mar 9 (Sun–Mon) — Introspection essentials
-- [ ] `.s`, `words`, `see` (token dump is fine)
-- [ ] `.` (print integer, no heap alloc)
-- [ ] `info` banner: version, heap free, snapshot status
-- [ ] **Proof**: inspect definitions and recover from mistakes quickly
+### Mar 9–Mar 10 (Mon–Tue) — Return stack, combinators, introspection (was Mar 8–9)
+- [ ] `>r`, `r>`, `r@` primitives
+- [ ] Multi-line input (bracket depth tracking, `..` continuation prompt)
+- [ ] Stdlib: `dip`, `keep`, `bi`, `times`, `negate`, `abs`, `cr`
+- [ ] `see` (token dump of quotation body)
+- [ ] `info` banner: version, heap free, slot count
+- [ ] **Proof**: `' inc see` dumps definition; `5 [ dup . 1 - ] times` prints `5 4 3 2 1`
 
-### Mar 10–Mar 12 (Tue–Thu) — Snapshot overlay persistence
+### Mar 11–Mar 13 (Wed–Fri) — Snapshot overlay persistence (was Mar 10–12)
 - [ ] A/B snapshot region, header + CRC, generation selection
 - [ ] Serialize/restore overlay (QUOTE-only) via name table + object IDs
 - [ ] `save`, `restore`, `wipe`
@@ -92,7 +103,7 @@
 > 2. Minimal flash implementation for demo (single-image + backup)
 > 3. Full A/B atomicity and wear hardening
 
-### Mar 13–Mar 15 (Fri–Sun) — Link Mode + host tool (OPTIONAL)
+### Mar 14–Mar 15 (Sat–Sun) — Link Mode + host tool (OPTIONAL, was Mar 13–15)
 - [ ] FROTH-LINK handshake, STX/ETX framing
 - [ ] `#ACK`/`#NAK` textual replies
 - [ ] Minimal `froth-link` tool: send file line-by-line or frame-by-frame
@@ -116,11 +127,17 @@
 ## Deferred (post–Spring Break)
 
 - DTC/native promotion (FROTH-Perf)
-- Named frames compiler pass (FROTH-Named)
-- Checked kinds/contracts as selectable build profile (FROTH-Checked)
+- Named frames compiler pass (FROTH-Named); consider a "Named Lite" path first
+- Checked kinds/contracts as selectable build profile (FROTH-Checked); FFI metadata makes this more practical
 - FROTH-Region (mark/release)
-- FROTH-String-Lite
+- FROTH-String-Lite (`"Hello" s.emit` — high impact for REPL usability)
+- Hex/binary number literals (syntax TBD — needs ADR: `0xFF`, `$FF`, `0b1010`, etc.)
+- `q.len` / `q@` / `q.pack` — quotation introspection primitives (needed for advanced `see` and metaprogramming)
+- `free` / `used` — heap introspection words
+- Machine-readable `#STACK`/`#ERR` protocol lines for host tooling
+- Step mode / trace mode for debugging
 - Richer `see` (pretty printing, source retention policies)
+- Board package story (FFI bindings grouped by target hardware)
 
 ## Slip Log
 
@@ -135,3 +152,5 @@
 | perm + pat + stdlib | Mar 2 | Mar 2–4 | ADR-013 (byte encoding) Mar 3, `p[...]` reader/evaluator Mar 3, `pat` + `perm` primitives Mar 4. Found and fixed spec `-rot` bug. Stdlib embedding (ADR-014) and shuffle defs landed Mar 4. |
 | choose + while | Mar 3 | Mar 4 | Landed same day as stdlib. `choose`, `while`, `if` all working. |
 | catch/throw | Mar 4 | Mar 5 | Pushed by choose/while slip. |
+| FFI Stage 1 + LED blink | Mar 5–6 | Mar 6–7 | REPL essentials (`.`, `.s`, `words`, `: ;`) inserted before FFI. |
+| Introspection essentials | Mar 8–9 | Mar 9–10 | Expanded: added `>r`/`r>`/`r@`, multi-line input, stdlib combinators. |

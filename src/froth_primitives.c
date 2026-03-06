@@ -3,7 +3,10 @@
 #include "froth_vm.h"
 #include "froth_stack.h"
 #include "platform.h"
+#include "froth_fmt.h"
 #include <stdbool.h>
+#include <stdio.h>
+
 
 froth_error_t froth_prim_def(froth_vm_t* froth_vm) {
   froth_cell_t slot_cell, impl_cell;
@@ -470,8 +473,164 @@ froth_error_t froth_prim_catch(froth_vm_t* froth_vm) {
   FROTH_TRY(froth_stack_push(&froth_vm->ds, return_cell));
   return FROTH_OK;
 }
+/*------------- END OF CORE PRIMITIVES -------------*/
 
-extern const froth_primitive_t froth_primitives[] = {
+
+/*------------------------------------------------------------*
+ *------------------------------------------------------------*
+ *------------- PRINTING HELPERS AND PRIMITIVES --------------*
+ *------------------------------------------------------------*
+ *------------------------------------------------------------*/
+
+#define REPL_QUOTE_DISPLAY_MAX 8
+
+static froth_error_t emit_cell(froth_cell_t cell, froth_heap_t* heap);
+
+/* Emit a quotation body token in display form (no angle brackets). */
+static froth_error_t emit_quote_token(froth_cell_t cell, froth_heap_t* heap) {
+  froth_cell_t payload = FROTH_CELL_STRIP_TAG(cell);
+  switch (FROTH_CELL_GET_TAG(cell)) {
+    case FROTH_CALL: {
+      const char* name;
+      if (froth_slot_get_name((froth_cell_u_t)payload, &name) == FROTH_OK)
+        return emit_string(name);
+      return emit_string(format_number(payload));
+    }
+    case FROTH_SLOT: {
+      const char* name;
+      emit_string("'");
+      if (froth_slot_get_name((froth_cell_u_t)payload, &name) == FROTH_OK)
+        return emit_string(name);
+      return emit_string(format_number(payload));
+    }
+    default:
+      return emit_cell(cell, heap);
+  }
+}
+
+/* Emit a pattern as p[a b c ...]. */
+static froth_error_t emit_pattern(froth_cell_t payload, froth_heap_t* heap) {
+  uint8_t len = heap->data[payload];
+  emit_string("p[");
+  for (uint8_t i = 0; i < len; i++) {
+    if (i > 0) platform_emit((uint8_t)' ');
+    char letter = 'a' + heap->data[payload + 1 + i];
+    platform_emit((uint8_t)letter);
+  }
+  return emit_string("]");
+}
+
+static froth_error_t emit_cell(froth_cell_t cell, froth_heap_t* heap) {
+  froth_cell_t payload = FROTH_CELL_STRIP_TAG(cell);
+
+  switch (FROTH_CELL_GET_TAG(cell)) {
+    case FROTH_NUMBER:
+      return emit_string(format_number(payload));
+
+    case FROTH_QUOTE: {
+      froth_cell_t* body = froth_heap_cell_ptr(heap, payload);
+      froth_cell_t len = body[0];
+      if (len > REPL_QUOTE_DISPLAY_MAX) {
+        emit_string("<q:");
+        emit_string(format_number(len));
+        return emit_string(">");
+      }
+      emit_string("[");
+      for (froth_cell_t i = 0; i < len; i++) {
+        if (i > 0) platform_emit((uint8_t)' ');
+        FROTH_TRY(emit_quote_token(body[1 + i], heap));
+      }
+      return emit_string("]");
+    }
+
+    case FROTH_SLOT: {
+      const char* name;
+      if (froth_slot_get_name((froth_cell_u_t)payload, &name) == FROTH_OK) {
+        emit_string("<s:");
+        emit_string(name);
+        return emit_string(">");
+      }
+      emit_string("<s:");
+      emit_string(format_number(payload));
+      return emit_string(">");
+    }
+
+    case FROTH_CALL: {
+      const char* name;
+      if (froth_slot_get_name((froth_cell_u_t)payload, &name) == FROTH_OK) {
+        emit_string("<c:");
+        emit_string(name);
+        return emit_string(">");
+      }
+      emit_string("<c:");
+      emit_string(format_number(payload));
+      return emit_string(">");
+    }
+
+    case FROTH_PATTERN:
+      return emit_pattern(payload, heap);
+
+    case FROTH_STRING:
+      return emit_string("<str>");
+
+    case FROTH_CONTRACT:
+      return emit_string("<con>");
+
+    default:
+      return emit_string("<?>");
+  }
+}
+
+static froth_error_t print_stack(froth_stack_t* stack, froth_heap_t* heap) {
+  froth_cell_u_t depth = froth_stack_depth(stack);
+
+  FROTH_TRY(emit_string("["));
+
+  for (froth_cell_u_t i = 0; i < depth; i++) {
+    if (i > 0) { FROTH_TRY(platform_emit((uint8_t)' ')); }
+    FROTH_TRY(emit_cell(stack->data[i], heap));
+  }
+
+  FROTH_TRY(emit_string("]\n"));
+  return FROTH_OK;
+}
+
+froth_error_t froth_prim_dot(froth_vm_t* froth_vm) {
+  froth_cell_t cell;
+  FROTH_TRY(froth_stack_pop(&froth_vm->ds, &cell));
+
+  FROTH_TRY(emit_cell(cell, &froth_vm->heap)); // Emit the cell's text representation to output
+  FROTH_TRY(emit_string(" "));
+
+  return FROTH_OK;
+};
+
+froth_error_t froth_prim_dots(froth_vm_t* froth_vm) {
+  FROTH_TRY(print_stack(&froth_vm->ds, &froth_vm->heap));
+
+  return FROTH_OK;
+};
+
+froth_error_t froth_prim_words(froth_vm_t* froth_vm) {
+  froth_cell_u_t idx = 0;
+
+  for (;;) {
+    const char* name;
+    froth_error_t err = froth_slot_get_name(idx, &name);
+
+    if (err == FROTH_ERROR_UNDEFINED_WORD) { break; }
+
+    FROTH_TRY(emit_string(name));
+    FROTH_TRY(emit_string(" | "));
+
+    idx++;
+  }
+
+  FROTH_TRY(emit_string("\n"));
+  return FROTH_OK;
+};
+
+const froth_primitive_t froth_primitives[] = {
   { .name = "def", .prim_word = froth_prim_def },
   { .name = "get", .prim_word = froth_prim_get },
   { .name = "call", .prim_word = froth_prim_call },
@@ -497,6 +656,9 @@ extern const froth_primitive_t froth_primitives[] = {
   { .name = "while", .prim_word = froth_prim_while },
   { .name = "catch", .prim_word = froth_prim_catch },
   { .name = "throw", .prim_word = froth_prim_throw },
+  { .name = ".", .prim_word = froth_prim_dot },
+  { .name = ".s", .prim_word = froth_prim_dots },
+  { .name = "words", .prim_word = froth_prim_words },
 };
 
 froth_error_t froth_primitives_register(froth_vm_t* froth_vm) {

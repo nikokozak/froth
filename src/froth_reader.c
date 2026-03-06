@@ -12,7 +12,7 @@ static int is_digit(char c) {
 }
 
 static int is_delimiter(char c) {
-  return c == '[' || c == ']' || c == '(' || c == ')' || c == '\'' || c == '\0' || is_whitespace(c);
+  return c == '[' || c == ']' || c == ';' || c == '(' || c == ')' || c == '\'' || c == '\0' || is_whitespace(c);
 }
 
 /* Skip past whitespace and comments. A backslash (\) starts a line comment
@@ -144,7 +144,7 @@ froth_error_t froth_reader_next_token(froth_reader_t* reader, froth_token_t* tok
   }
 
   // Close bracket
-  if (c == ']') {
+  if (c == ']' || c == ';') {
     token->type = FROTH_TOKEN_CLOSE_BRACKET;
     reader->position++;
     return FROTH_OK;

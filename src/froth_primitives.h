@@ -12,3 +12,5 @@ typedef struct {
 } froth_primitive_t;
 
 froth_error_t froth_primitives_register(froth_vm_t* froth_vm);
+froth_error_t froth_prim_dots(froth_vm_t* froth_vm);
+froth_error_t froth_prim_def(froth_vm_t* froth_vm);
