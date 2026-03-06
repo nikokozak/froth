@@ -2,10 +2,10 @@
 #include "froth_executor.h"
 #include "froth_vm.h"
 #include "froth_stack.h"
+#include "froth_slot_table.h"
 #include "platform.h"
 #include "froth_fmt.h"
 #include <stdbool.h>
-#include <stdio.h>
 
 
 froth_error_t froth_prim_def(froth_vm_t* froth_vm) {
@@ -630,45 +630,52 @@ froth_error_t froth_prim_words(froth_vm_t* froth_vm) {
   return FROTH_OK;
 };
 
-const froth_primitive_t froth_primitives[] = {
-  { .name = "def", .prim_word = froth_prim_def },
-  { .name = "get", .prim_word = froth_prim_get },
-  { .name = "call", .prim_word = froth_prim_call },
-  { .name = "+", .prim_word = froth_prim_add },
-  { .name = "-", .prim_word = froth_prim_sub },
-  { .name = "*", .prim_word = froth_prim_mul },
-  { .name = "/mod", .prim_word = froth_prim_divmod },
-  { .name = "<", .prim_word = froth_prim_compare_lt },
-  { .name = "=", .prim_word = froth_prim_compare_eq },
-  { .name = ">", .prim_word = froth_prim_compare_gt },
-  { .name = "and", .prim_word = froth_prim_bitwise_and },
-  { .name = "or", .prim_word = froth_prim_bitwise_or },
-  { .name = "xor", .prim_word = froth_prim_bitwise_xor },
-  { .name = "invert", .prim_word = froth_prim_bitwise_invert },
-  { .name = "lshift", .prim_word = froth_prim_bitwise_shl },
-  { .name = "rshift", .prim_word = froth_prim_bitwise_shr },
-  { .name = "emit", .prim_word = froth_prim_emit },
-  { .name = "key", .prim_word = froth_prim_key },
-  { .name = "key?", .prim_word = froth_prim_key_ready },
-  { .name = "pat", .prim_word = froth_prim_pat },
-  { .name = "perm", .prim_word = froth_prim_perm },
-  { .name = "choose", .prim_word = froth_prim_choose },
-  { .name = "while", .prim_word = froth_prim_while },
-  { .name = "catch", .prim_word = froth_prim_catch },
-  { .name = "throw", .prim_word = froth_prim_throw },
-  { .name = ".", .prim_word = froth_prim_dot },
-  { .name = ".s", .prim_word = froth_prim_dots },
-  { .name = "words", .prim_word = froth_prim_words },
+const froth_ffi_entry_t froth_primitives[] = {
+  /* Core */
+  { "def",    froth_prim_def,              "( 'name value -- )",    "Bind value to slot" },
+  { "get",    froth_prim_get,              "( 'name -- value )",    "Fetch slot value" },
+  { "call",   froth_prim_call,             "( callable -- )",       "Execute quote or slot" },
+
+  /* Arithmetic */
+  { "+",      froth_prim_add,              "( a b -- a+b )",        "Add" },
+  { "-",      froth_prim_sub,              "( a b -- a-b )",        "Subtract" },
+  { "*",      froth_prim_mul,              "( a b -- a*b )",        "Multiply" },
+  { "/mod",   froth_prim_divmod,           "( a b -- rem quot )",   "Divide with remainder" },
+
+  /* Comparison */
+  { "<",      froth_prim_compare_lt,       "( a b -- flag )",       "Less than" },
+  { "=",      froth_prim_compare_eq,       "( a b -- flag )",       "Equal" },
+  { ">",      froth_prim_compare_gt,       "( a b -- flag )",       "Greater than" },
+
+  /* Bitwise */
+  { "and",    froth_prim_bitwise_and,      "( a b -- a&b )",        "Bitwise AND" },
+  { "or",     froth_prim_bitwise_or,       "( a b -- a|b )",        "Bitwise OR" },
+  { "xor",    froth_prim_bitwise_xor,      "( a b -- a^b )",        "Bitwise XOR" },
+  { "invert", froth_prim_bitwise_invert,   "( a -- ~a )",           "Bitwise NOT" },
+  { "lshift", froth_prim_bitwise_shl,      "( a n -- a<<n )",       "Left shift" },
+  { "rshift", froth_prim_bitwise_shr,      "( a n -- a>>n )",       "Logical right shift" },
+
+  /* I/O */
+  { "emit",   froth_prim_emit,             "( char -- )",           "Emit low byte as character" },
+  { "key",    froth_prim_key,              "( -- char )",           "Read one byte from input" },
+  { "key?",   froth_prim_key_ready,        "( -- flag )",           "True if input available" },
+
+  /* Pattern */
+  { "pat",    froth_prim_pat,              "( quote -- pattern )",  "Compile quotation to pattern" },
+  { "perm",   froth_prim_perm,             "( n pat -- )",          "Permute top n stack items" },
+
+  /* Control flow */
+  { "choose", froth_prim_choose,           "( flag t f -- t|f )",   "Conditional select" },
+  { "while",  froth_prim_while,            "( cond body -- )",      "Loop while cond yields true" },
+
+  /* Error handling */
+  { "catch",  froth_prim_catch,            "( quote -- code )",     "Execute quote, catch errors" },
+  { "throw",  froth_prim_throw,            "( code -- )",           "Throw error code" },
+
+  /* Display */
+  { ".",      froth_prim_dot,              "( x -- )",              "Print and consume top" },
+  { ".s",     froth_prim_dots,             "( -- )",                "Print stack" },
+  { "words",  froth_prim_words,            "( -- )",                "List all defined words" },
+
+  {0}
 };
-
-froth_error_t froth_primitives_register(froth_vm_t* froth_vm) {
-  for (froth_cell_u_t i = 0; i < sizeof(froth_primitives) / sizeof(froth_primitive_t); i++) {
-    const char* name = froth_primitives[i].name;
-    froth_primitive_fn_t prim_fn = froth_primitives[i].prim_word;
-
-    froth_cell_u_t slot_index;
-    FROTH_TRY(froth_slot_create(name, &froth_vm->heap, &slot_index));
-    FROTH_TRY(froth_slot_set_prim(slot_index, prim_fn));
-  }
-  return FROTH_OK;
-}

@@ -122,6 +122,7 @@ typedef enum {
 #define FROTH_CELL_IS_CONTRACT(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_CONTRACT))
 #define FROTH_CELL_IS_CALL(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_CALL))
 
+
 /* Wrap a raw arithmetic result to payload range with two's-complement semantics.
  * Operates in unsigned space to avoid C signed-overflow UB, then truncates to
  * payload width (FROTH_CELL_SIZE_BITS - 3) and sign-extends back. */
@@ -135,12 +136,15 @@ static inline froth_cell_t froth_wrap_payload(froth_cell_u_t raw) {
   return (froth_cell_t)raw;
 }
 
-static inline froth_error_t froth_make_cell(froth_cell_t value, froth_cell_tag_t tag, froth_cell_t* return_value) {
-  froth_cell_t max_value = ((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3)) - 1;
-  froth_cell_t min_value = -((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3));
-  if (!(value >= min_value && value <= max_value)) { return FROTH_ERROR_VALUE_OVERFLOW; }
-  *return_value = FROTH_CELL_PACK_TAG(value, tag);
+/* Payload range limits (signed, FROTH_CELL_SIZE_BITS - 3 wide). */
+#define FROTH_MAX_CELL_VALUE  ((froth_cell_t)(((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3)) - 1))
+#define FROTH_MIN_CELL_VALUE  ((froth_cell_t)(-((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3))))
+
+static inline froth_error_t froth_make_cell(froth_cell_t value, froth_cell_tag_t tag, froth_cell_t *out) {
+  if (value < FROTH_MIN_CELL_VALUE || value > FROTH_MAX_CELL_VALUE) { return FROTH_ERROR_VALUE_OVERFLOW; }
+  *out = FROTH_CELL_PACK_TAG(value, tag);
   return FROTH_OK;
 }
 
-
+/* C function that implements a Froth word (kernel primitive or FFI binding). */
+typedef froth_error_t (*froth_native_word_t)(froth_vm_t *vm);

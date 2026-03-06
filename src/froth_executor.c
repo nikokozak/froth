@@ -7,7 +7,7 @@
 froth_error_t froth_execute_slot(froth_vm_t* vm, froth_cell_u_t slot_index) {
   vm->last_error_slot = (froth_cell_t)slot_index;
 
-  froth_primitive_fn_t prim;
+  froth_native_word_t prim;
   if (froth_slot_get_prim(slot_index, &prim) == FROTH_OK) {
     return prim(vm);
   }

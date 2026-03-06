@@ -70,12 +70,17 @@
 - [x] **Proof**: `: inc 1 + ; 5 inc .` prints `6`; `words` lists all defined names
 
 ### Mar 6–Mar 7 (Fri–Sat) — FFI Stage 1 + LED blink demo (was Mar 5–6)
-- [ ] `froth_pop_cell` / `froth_push_cell` / `froth_throw`
-- [ ] `FROTH_FN`, `FROTH_TRY`, `FROTH_PRIM`
-- [ ] FFI registration struct carries metadata (stack effect string, help text)
-- [ ] Bind: `gpio.mode`, `gpio.write`, `ms`
-- [ ] Static registration table
-- [ ] **Proof**: `: blink ( pin -- ) ... ;` runs from REPL, blinks LED
+- [x] `froth_pop` / `froth_push` / `froth_pop_tagged` / `froth_throw` (ADR-019)
+- [x] `FROTH_FFI`, `FROTH_POP`, `FROTH_PUSH`, `FROTH_BIND` convenience macros
+- [x] `froth_ffi_entry_t` registration struct with name, word, stack_effect, help
+- [x] `froth_ffi_register` walks null-terminated table into slot table
+- [x] `froth_native_word_t` typedef replaces `froth_primitive_fn_t` throughout
+- [x] Kernel primitives migrated to `froth_ffi_entry_t` with stack effects + help on all 28 entries
+- [x] `main.c` boots via `froth_ffi_register` — unified path for kernel and FFI
+- [x] Error code ranges: kernel 1–299, FFI 300+ (convention, not enforced)
+- [x] Bind: `gpio.mode`, `gpio.write`, `ms` (POSIX stubs with trace output)
+- [x] Board package structure: `boards/posix/`, `FROTH_BOARD_BEGIN`/`END`/`DECLARE` macros
+- [x] **Proof**: `: blink` runs from REPL, shows alternating HIGH/LOW trace with delays
 
 ### Mar 8 (Sun) — Ctrl-C / interrupt flag (was Mar 7)
 - [ ] CAN (0x18) sets VM interrupt flag
@@ -137,7 +142,7 @@
 - Machine-readable `#STACK`/`#ERR` protocol lines for host tooling
 - Step mode / trace mode for debugging
 - Richer `see` (pretty printing, source retention policies)
-- Board package story (FFI bindings grouped by target hardware)
+- ~~Board package story~~ (landed: `boards/<board>/` structure, POSIX reference board)
 
 ## Slip Log
 

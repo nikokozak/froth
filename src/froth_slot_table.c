@@ -43,7 +43,7 @@ froth_error_t froth_slot_get_impl(froth_cell_u_t slot_index, froth_cell_t* impl)
   return FROTH_OK;
 }
 
-froth_error_t froth_slot_get_prim(froth_cell_u_t slot_index, froth_primitive_fn_t* prim) {
+froth_error_t froth_slot_get_prim(froth_cell_u_t slot_index, froth_native_word_t* prim) {
   if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_UNDEFINED_WORD; }
   *prim = slot_table[slot_index].prim;
   if (*prim == NULL) { return FROTH_ERROR_UNDEFINED_WORD; }
@@ -55,7 +55,7 @@ froth_error_t froth_slot_set_impl(froth_cell_u_t slot_index, froth_cell_t impl) 
   slot_table[slot_index].impl = impl;
   return FROTH_OK;
 }
-froth_error_t froth_slot_set_prim(froth_cell_u_t slot_index, froth_primitive_fn_t prim) {
+froth_error_t froth_slot_set_prim(froth_cell_u_t slot_index, froth_native_word_t prim) {
   if (!index_has_slot_assigned(slot_index)) { return FROTH_ERROR_UNDEFINED_WORD; }
   slot_table[slot_index].prim = prim;
   return FROTH_OK;
