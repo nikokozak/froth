@@ -1,8 +1,23 @@
 #include "platform.h"
+#include "froth_vm.h"
 
 #include <stdio.h>
 #include <unistd.h>
 #include <poll.h>
+#include <signal.h>
+
+static void interrupt_handler(int signum) {
+  if (signum != SIGINT) { return; }
+  froth_vm.interrupted = 1;
+  return;
+}
+
+froth_error_t platform_init(void) {
+  if (signal(SIGINT, interrupt_handler) == SIG_ERR) {
+    return FROTH_ERROR_IO;
+  }
+  return FROTH_OK;
+}
 
 froth_error_t platform_emit(uint8_t byte) {
   if (fputc(byte, stdout) == EOF) { return FROTH_ERROR_IO; }

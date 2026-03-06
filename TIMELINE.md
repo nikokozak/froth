@@ -82,10 +82,11 @@
 - [x] Board package structure: `boards/posix/`, `FROTH_BOARD_BEGIN`/`END`/`DECLARE` macros
 - [x] **Proof**: `: blink` runs from REPL, shows alternating HIGH/LOW trace with delays
 
-### Mar 8 (Sun) — Ctrl-C / interrupt flag (was Mar 7)
-- [ ] CAN (0x18) sets VM interrupt flag
-- [ ] VM checks flag at safe points; throws ERR.INTERRUPT
-- [ ] **Proof**: infinite loops can be stopped without reset
+### Mar 6 (Thu) — Ctrl-C / interrupt flag (was Mar 7, originally Mar 8)
+- [x] SIGINT handler sets `volatile int interrupted` on VM (ADR-020)
+- [x] VM checks flag at safe points; throws ERR.INTERRUPT (code 14)
+- [x] `platform_init()` added to platform layer for signal setup
+- [x] **Proof**: `[ 1 ] [ ] while` + Ctrl-C → `error(14): interrupted in "while"`, prompt alive
 
 ### Mar 9–Mar 10 (Mon–Tue) — Return stack, combinators, introspection (was Mar 8–9)
 - [ ] `>r`, `r>`, `r@` primitives

@@ -298,6 +298,11 @@ froth_error_t froth_prim_while(froth_vm_t* froth_vm) {
   froth_cell_u_t stack_depth = froth_vm->ds.pointer;
 
   for (;;) {
+    // Check for interrupt flag here.
+    if (froth_vm->interrupted) { 
+      froth_vm->interrupted = 0; // Clear the flag so that if the user re-issues the command, it will run instead of immediately interrupting again.
+      froth_vm->thrown = FROTH_ERROR_PROGRAM_INTERRUPTED;
+      return FROTH_ERROR_THROW; }
     // Execute condition
     FROTH_TRY(froth_execute_quote(froth_vm, condition_cell));
     // Check data stack is depth + 1 ONLY.

@@ -30,6 +30,11 @@ froth_error_t froth_execute_quote(froth_vm_t* vm, froth_cell_t quote_cell) {
   froth_cell_u_t quote_length = heap_cell[0];
 
   for (froth_cell_u_t i = 1; i <= quote_length; i++) {
+    if (vm->interrupted != 0) { 
+      vm->interrupted = 0; // Clear the flag so that if the user re-issues the command, it will run instead of immediately interrupting again.
+      vm->thrown = FROTH_ERROR_PROGRAM_INTERRUPTED;
+      return FROTH_ERROR_THROW; }
+
     froth_cell_t current_cell = heap_cell[i];
 
     switch (FROTH_CELL_GET_TAG(current_cell)) {

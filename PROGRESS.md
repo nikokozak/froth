@@ -39,7 +39,8 @@
 - Board package structure: `boards/<board>/` separation from kernel `src/`. `FROTH_BOARD_BEGIN`/`FROTH_BOARD_END`/`FROTH_BOARD_DECLARE` macros for binding tables.
 - `boards/posix/ffi_posix.c` / `ffi_posix.h`: POSIX board package. `gpio.mode` and `gpio.write` print trace output; `ms` uses `usleep`. Demonstrates full `FROTH_FFI` macro usage.
 - LED blink demo proof: `: blink 1 gpio.mode [ dup 1 gpio.write 500 ms 0 gpio.write 500 ms ] while ;` runs, shows alternating HIGH/LOW trace output with delays
-- ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API)
+- Ctrl-C / interrupt flag (ADR-020): `SIGINT` handler sets `volatile int interrupted` on VM, checked at safe points (executor loop, `while` iterations). Triggers `FROTH_ERROR_PROGRAM_INTERRUPTED` (code 14) via throw. REPL recovers via existing catch. `platform_init()` added to platform layer.
+- ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler)
 
 ## In Progress
 
@@ -51,8 +52,7 @@ Nothing blocked.
 
 ## Next Up
 
-1. Ctrl-C / interrupt flag
-2. Return stack (`>r`, `r>`, `r@`), multi-line input, stdlib combinators (`dip`, `keep`, `bi`, `times`), `see`, `info`
+1. Return stack (`>r`, `r>`, `r@`), multi-line input, stdlib combinators (`dip`, `keep`, `bi`, `times`), `see`, `info`
 
 ## Open Questions
 

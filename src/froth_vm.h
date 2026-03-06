@@ -2,6 +2,7 @@
 
 #include "froth_stack.h"
 #include "froth_heap.h"
+#include <stdbool.h>
 
 struct froth_vm_t {
   froth_stack_t ds;
@@ -10,6 +11,7 @@ struct froth_vm_t {
   froth_heap_t heap;
   froth_cell_t thrown;
   froth_cell_t last_error_slot; /* slot index at point of error, or -1 */
+  volatile int interrupted;
 };
 
 extern froth_vm_t froth_vm;

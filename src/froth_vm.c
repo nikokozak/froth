@@ -12,4 +12,5 @@ froth_vm_t froth_vm = {
   .heap = { .data = heap_memory, .pointer = 0 },
   .thrown = FROTH_OK,
   .last_error_slot = -1,
+  .interrupted = 0,
 };
