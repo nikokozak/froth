@@ -4,7 +4,7 @@
 
 ## Current Status
 
-**Phase**: Return stack primitives complete. String-Lite + stdlib combinators next.
+**Phase**: Stdlib combinators landed. String-Lite, `see`, `info`, multi-line input next.
 **Blocking issues**: ~2 days behind original schedule but Ctrl-C landed early, buying buffer.
 **Morale check**: `0xFF` → `[255]` — hardware register values feel natural now.
 
@@ -17,14 +17,14 @@
 - `platform.h` / `platform_posix.c`: console I/O (`platform_emit`, `platform_key`, `platform_key_ready`) using fputc/fgetc/poll
 - `froth_heap.h` / `froth_heap.c`: single linear heap (uint8_t backing), `froth_heap_allocate_bytes`, `froth_heap_allocate_cells` (returns `froth_cell_t*` directly), `froth_heap_cell_ptr` accessor (no longer owns global instance — moved to VM)
 - `froth_slot_table.h` / `froth_slot_table.c`: flat array with linear scan, find/create/get/set for impl and prim, name lookup by index, name storage in heap. Null/0 guards on get_impl/get_prim. Prim field now uses `froth_native_word_t`.
-- `froth_reader.h` / `froth_reader.c`: tokenizer — numbers (decimal, hex `0x`, binary `0b`; ADR-021), identifiers, tick-identifiers, brackets, `p[` pattern opener, line comments, EOF. `froth_reader_peek` for lookahead.
+- `froth_reader.h` / `froth_reader.c`: tokenizer — numbers (decimal, hex `0x`, binary `0b`; ADR-021), identifiers, tick-identifiers, brackets, `p[` pattern opener, line comments (`\`), nested paren comments (`( ... )`), EOF. `froth_reader_peek` for lookahead.
 - `froth_evaluator.h` / `froth_evaluator.c`: evaluator — number pushing, identifier resolution + immediate execution via executor, tick-identifier handling (FROTH_SLOT), two-pass contiguous quotation building (ADR-010), two-pass pattern building with validation (ADR-013). `resolve_or_create_slot` helper. `count_quote_body` handles nested `p[...]` depth. `count_and_typecheck_pattern_body` validates letters (single a-z), number range (0-255), and `FROTH_MAX_PERM_SIZE` cap.
 - `froth_executor.h` / `froth_executor.c`: executor — walks quotation bodies dispatching on cell tags. `froth_execute_slot` (prim-first, then impl), `froth_execute_quote` (iterate body cells).
 - `froth_primitives.h` / `froth_primitives.c`: primitive table now uses `froth_ffi_entry_t` with stack effects and help text on all 28 entries. Grouped by category (core, arithmetic, comparison, bitwise, I/O, pattern, control flow, error handling, display). Core: `def`, `get`, `call`. Arithmetic: `+`, `-`, `*`, `/mod` (wrapping via unsigned cast, ADR-011). Comparisons: `<`, `>`, `=` (returning -1/0). Bitwise: `and`, `or`, `xor`, `invert`, `lshift`, `rshift` (logical shifts with payload masking). I/O: `emit` (low byte), `key`, `key?`. Pattern: `pat` (quotation → PatternRef, validates indices), `perm` (stack rewrite using PatternRef + window size, fixed-size scratch buffer, index-flipped for 0=TOS convention). Control flow: `choose`, `while`. Error handling: `catch`, `throw` (ADR-015). Division-by-zero error. Type checking on all ops. `FROTH_MAX_PERM_SIZE` (default 8) caps both pattern length and window size.
 - `froth_ffi.h` / `froth_ffi.c`: FFI public API (ADR-019). Four functions: `froth_pop` (number, type-checked), `froth_pop_tagged` (any cell, decomposed), `froth_push` (number), `froth_throw` (set thrown + return sentinel). `froth_ffi_entry_t` struct with name, word, stack_effect, help. Convenience macros: `FROTH_FFI` (function def + metadata struct), `FROTH_POP`/`FROTH_PUSH` (stack sugar), `FROTH_BIND` (table entry reference). `froth_ffi_register` walks null-terminated table, creates slots, sets prims. Error code ranges: kernel 1–299, FFI 300+.
 - `froth_repl.h` / `froth_repl.c`: interactive REPL loop — read line, evaluate, print stack. Rich cell display. Error display with numeric code, name, and faulting word (`error(2): stack underflow in "perm"`). DS/RS snapshot and restore on error. Blank-line skipping, clean EOF exit. "Prompt never dies."
 - Build-time stdlib embedding: CMake `file(READ HEX)` pipeline (ADR-014). `cmake/embed_froth.cmake` script generates null-terminated `const char[]` headers from `.froth` source files. No external tool dependencies.
-- `src/lib/core.froth`: shuffle words (`dup`, `swap`, `drop`, `over`, `rot`, `-rot`, `nip`, `tuck`) defined via `perm`. `if` defined as `choose call`. First words written in Froth itself.
+- `src/lib/core.froth`: shuffle words (`dup`, `swap`, `drop`, `over`, `rot`, `-rot`, `nip`, `tuck`) via `perm`. Control flow: `if`. Combinators: `set`, `dip`, `keep`, `bi`, `times`. Arithmetic: `negate`, `abs`. I/O: `cr`. All defined in Froth with `: ;` sugar, `\` doc comments, HTDP-style documentation (purpose, stack effect, example), inline `( )` stack effects.
 - `froth_evaluate_input` signature changed to `const char*`.
 - Error enum reorganized: stable explicit values (ADR-016). Runtime errors (1–13), reader errors (100+), internal sentinel `FROTH_ERROR_THROW = -1`. Old fine-grained slot/internal errors collapsed to user-meaningful codes (`FROTH_ERROR_UNDEFINED_WORD`, `FROTH_ERROR_TYPE_MISMATCH`, etc.).
 - `def` accepts any value, not just callables (ADR-017, spec v1.2). Slots double as zero-cost mutable storage. `set` defined as `swap def` in stdlib.
@@ -43,6 +43,9 @@
 - Hex/binary number literals (ADR-021): `0xFF`, `0b1010`, negative forms (`-0x1A`). Parsed in `try_parse_number`, emits same `TOKEN_NUMBER` — no evaluator changes. Payload range constrained by 3-bit tag (CELL_BITS - 3 usable bits).
 - REPL backspace handling: `0x7F` (DEL) and `0x08` (BS) erase last character with `\b space \b` terminal sequence. Guards against underflow at position 0.
 - `>r`, `r>`, `r@` return stack primitives. RS quotation balance check: executor snapshots RS depth on quotation entry, asserts match on exit. Violation throws `FROTH_ERROR_UNBALANCED_RETURN_STACK_CALLS` (code 15) with cleared error context (structural error, not attributable to a single word). ADR-022.
+- Nested paren comment support: `( ( a -- a a ) )` now works. Comment skipper tracks depth.
+- Evaluator error propagation fix: `froth_evaluate_input` now returns reader errors instead of silently stopping.
+- Spec fix: `times` reference definition corrected (`>r` stashes `q`, not `swap >r`).
 - ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check)
 
 ## In Progress
@@ -55,7 +58,9 @@ Nothing blocked.
 
 ## Next Up
 
-1. String-Lite, multi-line input, stdlib combinators (`dip`, `keep`, `bi`, `times`), `see`, `info`
+1. String-Lite (ADR + reader `"..."` + StringRef heap layout + escape sequences + `s.emit`/`s.len`/`s@`/`s.=`)
+2. Multi-line input (bracket/string depth tracking, `..` continuation prompt)
+3. `see`, `info`
 
 ## Open Questions
 
@@ -63,5 +68,5 @@ Nothing blocked.
 - `divmod`: INT_MIN / -1 is UB in C (result overflows). Need to decide: wrap or error? (deferred — edge case, not blocking)
 - Tick syntax: spec grammar says `'name` (prefix, no space) but spec examples use `' name` (space-separated). Reader currently requires prefix form. Need ADR to pick one. (deferred — not blocking)
 - `while` stack discipline: too strict for REPL exploration? Revisit after `>r`/`r>`/`r@` and `times` exist — the pressure may ease naturally. (deferred)
-- String-Lite timing: `"Hello" s.emit` is spec-optional but high-impact for a REPL-first language. Deferred to post-sprint.
+- ~~String-Lite timing~~: moved to next-up, targeting Mar 8.
 - ~~POSIX GPIO story~~: resolved — print trace output.

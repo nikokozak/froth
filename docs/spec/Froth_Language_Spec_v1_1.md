@@ -1459,9 +1459,9 @@ Reference definition (uses RS to keep `q`):
 
 ```froth
 ' times [
-  swap >r                 \ stash q; DS: n
+  >r                      \ stash q on RS; DS: n
   [ dup 0 > ]             \ condQ: n -- n flag
-  [ r@ call 1 - ]         \ bodyQ: n -- n  (q must be stack-neutral)
+  [ 1 - r@ call ]         \ bodyQ: n -- n  (q must be stack-neutral)
   while
   drop                    \ drop final n
   r> drop                 \ discard q from RS

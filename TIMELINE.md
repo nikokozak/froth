@@ -96,14 +96,21 @@
 - [x] **Proof**: `0xFF` → `[255]`; `0b1010` → `[10]`; `-0x1A` → `[-26]`
 - [x] **Proof**: `5 >r 10 r> +` → `[15]`; `[ 5 >r ] call` → `error(15): unbalanced return stack`
 
-### Mar 8 (Sun) — Strong push: String-Lite + stdlib + REPL polish
+### Mar 7 (Sat) — Bonus: stdlib combinators + bugfixes
+- [x] Stdlib: `dip`, `keep`, `bi`, `times`, `negate`, `abs`, `cr` in `core.froth`
+- [x] `core.froth` rewritten: `: ;` sugar, `\` doc comments, HTDP-style docs, inline stack effects
+- [x] Nested paren comment support in reader (depth tracking)
+- [x] Evaluator error propagation fix (`froth_evaluate_input` no longer swallows reader errors)
+- [x] Spec fix: `times` reference definition corrected
+- [x] **Proof**: `3 [ 42 . ] times` prints `42 42 42`; `5 [ 2 * ] [ 1 + ] bi` → `[10 6]`
+
+### Mar 8 (Sun) — Strong push: String-Lite + REPL polish
 - [ ] FROTH-String-Lite (ADR + reader `"..."` + StringRef heap layout + escape sequences)
 - [ ] `s.emit`, `s.len`, `s@`, `s.=` primitives
 - [ ] Multi-line input (bracket/string depth tracking, `..` continuation prompt)
-- [ ] Stdlib: `dip`, `keep`, `bi`, `times`, `negate`, `abs`, `cr` (unlocked by `>r`/`r>`)
 - [ ] `see` (token dump of quotation body / `<primitive>` for prims)
 - [ ] `info` banner: version, heap free, slot count
-- [ ] **Proof**: `"Hello!" s.emit` prints; `5 [ dup . 1 - ] times` prints `5 4 3 2 1`; `' inc see` dumps definition
+- [ ] **Proof**: `"Hello!" s.emit` prints; `' inc see` dumps definition
 
 ### Mar 9 (Mon) — Persistence stage 1: format + RAM round-trip
 - [ ] Snapshot persistence design (review spec, ADR for implementation choices)

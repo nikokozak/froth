@@ -36,17 +36,18 @@ static froth_error_t skip_whitespace_and_comments(froth_reader_t* reader) {
       continue;
     }
 
-    // Paren comment: ( to matching )
+    // Paren comment: ( to matching ), with nesting
     if (c == '(') {
+      int depth = 1;
       reader->position++;
-      while (reader->input[reader->position] != '\0' &&
-             reader->input[reader->position] != ')') {
+      while (reader->input[reader->position] != '\0' && depth > 0) {
+        if (reader->input[reader->position] == '(') { depth++; }
+        else if (reader->input[reader->position] == ')') { depth--; }
         reader->position++;
       }
-      if (reader->input[reader->position] == '\0') {
+      if (depth > 0) {
         return FROTH_ERROR_UNTERMINATED_COMMENT;
       }
-      reader->position++; // skip )
       continue;
     }
 

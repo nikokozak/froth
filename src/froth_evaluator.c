@@ -216,7 +216,9 @@ froth_error_t froth_evaluate_input(const char* input, froth_vm_t* vm) {
 
   froth_reader_init(&reader, input);
 
-  while (froth_reader_next_token(&reader, &token) == FROTH_OK && token.type != FROTH_TOKEN_EOF) {
+  for (;;) {
+    FROTH_TRY(froth_reader_next_token(&reader, &token));
+    if (token.type == FROTH_TOKEN_EOF) break;
     switch (token.type) {
       case FROTH_TOKEN_NUMBER:
         FROTH_TRY(froth_evaluator_handle_number(token, vm));
