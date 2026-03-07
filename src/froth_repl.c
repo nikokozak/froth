@@ -61,6 +61,16 @@ static froth_error_t froth_repl_read_line(char* output_buffer) {
     froth_error_t err = platform_key(&byte);
     if (err != FROTH_OK) { return err; }
 
+    if (byte == '\b' || byte == 127) { // Handle backspace (127 is DEL, which some terminals send for backspace)
+      if (pos > 0) {
+        pos--;
+        FROTH_TRY(platform_emit('\b')); // Move cursor back
+        FROTH_TRY(platform_emit(' '));  // Erase the character
+        FROTH_TRY(platform_emit('\b')); // Move cursor back again
+      }
+      continue;
+    }
+
     if (byte == '\n') { break; }
 
     output_buffer[pos++] = byte;

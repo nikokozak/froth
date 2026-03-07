@@ -92,6 +92,7 @@ static froth_error_t read_word(froth_reader_t* reader, char* buf, froth_cell_u_t
 static int try_parse_number(const char* word, froth_cell_t* result) {
   const char* p = word;
   int negative = 0;
+  froth_cell_t value = 0;
 
   if (*p == '-') {
     negative = 1;
@@ -101,10 +102,39 @@ static int try_parse_number(const char* word, froth_cell_t* result) {
 
   if (!is_digit(*p)) { return 0; }
 
-  froth_cell_t value = 0;
-  while (is_digit(*p)) {
-    value = value * 10 + (*p - '0');
-    p++;
+  if (*p == '0' && p[1] == 'x') { // Number is a hex
+    p += 2; // Skip "0x"
+    if (*p == '\0') { return 0; } // "0x" followed by whitespace or end of input is an identifier
+    // Parse hex string into number
+    while (*p != '\0') {
+      if (is_digit(*p)) {
+        value = (value << 4) | (*p - '0');
+      } else if (*p >= 'a' && *p <= 'f') {
+        value = (value << 4) | (*p - 'a' + 10);
+      } else if (*p >= 'A' && *p <= 'F') {
+        value = (value << 4) | (*p - 'A' + 10);
+      } else {
+        return 0; // Invalid hex character
+      }
+      p++;
+    }
+  } else if (*p == '0' && p[1] == 'b') { // Number is a binary
+    p += 2; // Skip "0b"
+    if (*p == '\0') { return 0; } // "0b" followed by whitespace or end of input is an identifier
+    // Parse binary string into number
+    while (*p != '\0') {
+      if (*p == '0' || *p == '1') {
+        value = (value << 1) | (*p - '0');
+      } else {
+        return 0; // Invalid binary character
+      }
+      p++;
+    }
+  } else { // Number is a base 10
+    while (is_digit(*p)) {
+      value = value * 10 + (*p - '0');
+      p++;
+    }
   }
 
   // If there are trailing non-digit characters, it's an identifier (e.g. "3foo")
