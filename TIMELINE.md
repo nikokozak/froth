@@ -1,7 +1,7 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-06*
-*Source: Froth Implementation Roadmap v0.3 (Feb 25 → End of Spring Break)*
+*Last reviewed: 2026-03-07*
+*Source: Froth Implementation Roadmap v0.4 (Feb 25 → Workshop week of Mar 15)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
 > Format: `[status] Milestone — target date (original date if slipped)`
@@ -88,62 +88,123 @@
 - [x] `platform_init()` added to platform layer for signal setup
 - [x] **Proof**: `[ 1 ] [ ] while` + Ctrl-C → `error(14): interrupted in "while"`, prompt alive
 
-### Mar 9–Mar 10 (Mon–Tue) — Return stack, combinators, introspection (was Mar 8–9)
-- [ ] `>r`, `r>`, `r@` primitives
-- [ ] Multi-line input (bracket depth tracking, `..` continuation prompt)
-- [ ] Stdlib: `dip`, `keep`, `bi`, `times`, `negate`, `abs`, `cr`
-- [ ] `see` (token dump of quotation body)
+### Mar 7 (Sat) — Light day: reader extensions + return stack
+- [ ] Hex/binary number literals (ADR — syntax: `0xFF`, `0b1010`)
+- [ ] Basic backspace handling in REPL readline (`0x7F`/`0x08`)
+- [ ] `>r`, `r>`, `r@` primitives (RS already exists on VM)
+- [ ] **Proof**: `0xFF` → `[255]`; `5 >r 10 r> +` → `[15]`
+
+### Mar 8 (Sun) — Strong push: String-Lite + stdlib + REPL polish
+- [ ] FROTH-String-Lite (ADR + reader `"..."` + StringRef heap layout + escape sequences)
+- [ ] `s.emit`, `s.len`, `s@`, `s.=` primitives
+- [ ] Multi-line input (bracket/string depth tracking, `..` continuation prompt)
+- [ ] Stdlib: `dip`, `keep`, `bi`, `times`, `negate`, `abs`, `cr` (unlocked by `>r`/`r>`)
+- [ ] `see` (token dump of quotation body / `<primitive>` for prims)
 - [ ] `info` banner: version, heap free, slot count
-- [ ] **Proof**: `' inc see` dumps definition; `5 [ dup . 1 - ] times` prints `5 4 3 2 1`
+- [ ] **Proof**: `"Hello!" s.emit` prints; `5 [ dup . 1 - ] times` prints `5 4 3 2 1`; `' inc see` dumps definition
 
-### Mar 11–Mar 13 (Wed–Fri) — Snapshot overlay persistence (was Mar 10–12)
-- [ ] A/B snapshot region, header + CRC, generation selection
-- [ ] Serialize/restore overlay (QUOTE-only) via name table + object IDs
-- [ ] `save`, `restore`, `wipe`
-- [ ] Boot restores snapshot, runs `autorun` under `catch`
-- [ ] Safe boot escape (pin or CAN window)
-- [ ] **Proof**: define `autorun`, `save`, power cycle → it runs. `wipe` resets to base.
+### Mar 9 (Mon) — Persistence stage 1: format + RAM round-trip
+- [ ] Snapshot persistence design (review spec, ADR for implementation choices)
+- [ ] Overlay ownership tracking (base watermark or per-slot flag)
+- [ ] Serializer: walk overlay slots, emit name table + objects + bindings
+- [ ] Deserializer: parse payload, rebuild heap objects, apply slot bindings
+- [ ] **Proof**: def a word, serialize to buffer, wipe, restore from buffer — word still works
 
-> **Timebox warning**: flash persistence is the highest-risk milestone. Priority order if time-constrained:
-> 1. Correctness of format and restore logic (round-trip in RAM)
-> 2. Minimal flash implementation for demo (single-image + backup)
-> 3. Full A/B atomicity and wear hardening
+> **Timebox warning**: persistence is the highest-risk milestone. Priority order if time-constrained:
+> 1. Correctness of format and restore logic (RAM round-trip)
+> 2. File-backed storage for POSIX (save/restore survive process restart)
+> 3. Full A/B atomicity with CRC and generation counters
 
-### Mar 14–Mar 15 (Sat–Sun) — Link Mode + host tool (OPTIONAL, was Mar 13–15)
-- [ ] FROTH-LINK handshake, STX/ETX framing
-- [ ] `#ACK`/`#NAK` textual replies
-- [ ] Minimal `froth-link` tool: send file line-by-line or frame-by-frame
-- [ ] **Proof**: edit `.froth` file, push to device, it updates; Direct Mode still works
+### Mar 10 (Tue) — Strong push: persistence finish + ESP32 first contact
+- [ ] File-backed save/restore on POSIX (write to `froth.snap`)
+- [ ] `save`, `restore`, `wipe` words
+- [ ] A/B image selection, header CRC, payload CRC
+- [ ] Boot sequence: restore snapshot on startup, `autorun` under `catch`
+- [ ] Safe boot escape (CAN window during boot)
+- [ ] ESP32 port: `platform_esp32.c`, `boards/esp32/`, ESP-IDF CMake integration
+- [ ] **Proof**: define `autorun`, `save`, restart → it runs. `wipe` resets to base.
+- [ ] **Proof**: LED blink from Froth REPL on real ESP32 hardware
+
+> **Risk**: Tue is overloaded. If persistence takes the full day, ESP32 slides to Wed.
+
+### Mar 11 (Wed) — Overflow + quotation introspection + region
+- [ ] ESP32 port (if slipped from Tue)
+- [ ] `q.len`, `q@` (quotation introspection — enables richer `see`)
+- [ ] `q.pack` (build quotation from stack values)
+- [ ] `mark` / `release` (FROTH-Region — heap watermark, keeps workshop experimentation tidy)
+- [ ] `arity!` (stack-effect metadata for slots — supports tooling + web editor)
+- [ ] **Proof**: `[ 1 2 + ] q.len` → `[3]`; `mark ... release` reclaims heap
+
+---
+
+## Phase 2: Workshop Preparation (Mar 12–18)
+
+> Phase 2 leans heavily on AI-assisted porting and frontend work.
+> The kernel is feature-complete after Phase 1. Phase 2 is ecosystem.
+
+### Mar 12–13 (Thu–Fri) — ESP32 dual-core architecture + audio FFI
+- [ ] Dual-core architecture ADR (Froth VM on Core 1, audio engine on Core 0)
+- [ ] FreeRTOS task setup, UART routing, shared parameter struct
+- [ ] AI-assisted: port ESP32Forth I2S/DAC/ADC/GPIO/timer bindings to Froth FFI
+- [ ] Audio engine skeleton in C (Core 0): oscillator, DAC output
+- [ ] Froth FFI bridge to audio parameters (`osc.freq`, `osc.wave`, etc.)
+- [ ] **Proof**: set oscillator frequency from Froth REPL, hear audio output
+
+### Mar 14–15 (Sat–Sun) — Web editor + flash tooling + Link Mode
+- [ ] Web editor: WebSerial connection to ESP32
+- [ ] Froth syntax highlighting, library/board definition loading
+- [ ] Flash tooling integration (esptool.py wrapper or equivalent)
+- [ ] Link Mode (STX/ETX framing, `#ACK`/`#NAK`) — enables reliable editor→device communication
+- [ ] Machine-readable `#STACK`/`#ERR` protocol lines for editor integration
+- [ ] **Proof**: edit `.froth` in web editor, push to device, it updates
+
+### Mar 16–17 (Mon–Tue) — ESP32 persistence + workshop hardening
+- [ ] ESP32 NVS/flash backend for snapshot persistence
+- [ ] Save/restore survives power cycle on real hardware
+- [ ] Safe boot escape (GPIO pin or CAN window)
+- [ ] End-to-end test: flash → REPL → define synth → save → power cycle → autorun
+- [ ] Workshop failure mode testing (bad input, heap exhaustion, bricked recovery)
+
+### Mar 18 (Wed) — Workshop prep
+- [ ] Example synth patches in Froth (oscillators, filters, LFOs, envelopes)
+- [ ] Participant documentation / cheat sheet
+- [ ] Pre-flash ESP32 boards
+- [ ] Dry run of workshop flow
 
 ## Kernel "Definition of Done"
 
-- [ ] No GC
-- [ ] No implicit allocation during primitive execution
-- [ ] Coherent redefinition works
-- [ ] Errors recover to prompt
-- [ ] `perm` passes tests
+- [x] No GC
+- [x] No implicit allocation during primitive execution
+- [x] Coherent redefinition works
+- [x] Errors recover to prompt
+- [x] `perm` passes tests
 
-## Demo "Definition of Done"
+## Workshop "Definition of Done"
 
-- [ ] LED blink from bare terminal
+- [ ] LED blink from Froth REPL on ESP32
 - [ ] Interrupt stops runaway loop
-- [ ] `save` survives power loss
+- [ ] `save` survives power cycle on ESP32
 - [ ] `wipe` returns to base-only state
+- [ ] `"Hello" s.emit` works
+- [ ] Hex literals work (`0xFF`)
+- [ ] Synth audio controllable from Froth REPL
+- [ ] Web editor can push code to device
+- [ ] 15 pre-flashed ESP32 boards ready
 
-## Deferred (post–Spring Break)
+## Deferred (post-workshop)
 
 - DTC/native promotion (FROTH-Perf)
 - Named frames compiler pass (FROTH-Named); consider a "Named Lite" path first
 - Checked kinds/contracts as selectable build profile (FROTH-Checked); FFI metadata makes this more practical
-- FROTH-Region (mark/release)
-- FROTH-String-Lite (`"Hello" s.emit` — high impact for REPL usability)
-- Hex/binary number literals (syntax TBD — needs ADR: `0xFF`, `$FF`, `0b1010`, etc.)
-- `q.len` / `q@` / `q.pack` — quotation introspection primitives (needed for advanced `see` and metaprogramming)
-- `free` / `used` — heap introspection words
-- Machine-readable `#STACK`/`#ERR` protocol lines for host tooling
+- FROTH-Region-Strict (fail-fast allocation gating)
+- FROTH-String (`s.pack` — explicit allocation from FFI buffers)
 - Step mode / trace mode for debugging
 - Richer `see` (pretty printing, source retention policies)
 - ~~Board package story~~ (landed: `boards/<board>/` structure, POSIX reference board)
+- ~~FROTH-String-Lite~~ (moved to Phase 1)
+- ~~Hex/binary literals~~ (moved to Phase 1)
+- ~~FROTH-Region mark/release~~ (moved to Phase 1)
+- ~~`q.len` / `q@` / `q.pack`~~ (moved to Phase 1)
 
 ## Slip Log
 
@@ -159,4 +220,12 @@
 | choose + while | Mar 3 | Mar 4 | Landed same day as stdlib. `choose`, `while`, `if` all working. |
 | catch/throw | Mar 4 | Mar 5 | Pushed by choose/while slip. |
 | FFI Stage 1 + LED blink | Mar 5–6 | Mar 6–7 | REPL essentials (`.`, `.s`, `words`, `: ;`) inserted before FFI. |
-| Introspection essentials | Mar 8–9 | Mar 9–10 | Expanded: added `>r`/`r>`/`r@`, multi-line input, stdlib combinators. |
+| Ctrl-C interrupt | Mar 8 | Mar 6 | Landed early. ADR-020, SIGINT handler, safe-point checks. |
+| Return stack + combinators | Mar 8–9 | Mar 7–8 | Restructured: split across light day (return stack) and push day (stdlib + strings). |
+| String-Lite | Post-break | Mar 8 | Pulled forward — critical for workshop REPL experience. |
+| Hex/binary literals | Post-break | Mar 7 | Pulled forward — critical for hardware register work. |
+| Snapshot persistence | Mar 10–12 | Mar 9–10 | Compressed to 2 days. RAM round-trip first, file-backed second. |
+| ESP32 port | Not scheduled | Mar 10–11 | Added. Platform layer + board + ESP-IDF build. |
+| Link Mode | Mar 13–15 | Mar 14–15 | Moved to Phase 2 (workshop prep), paired with web editor. |
+| FROTH-Region | Post-break | Mar 11 | Pulled forward — workshop heap hygiene. |
+| q.len/q@/q.pack | Post-break | Mar 11 | Pulled forward — enables richer `see`, metaprogramming. |
