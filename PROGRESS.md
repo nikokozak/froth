@@ -50,7 +50,7 @@
 
 ## In Progress
 
-Nothing in progress.
+- String-Lite: reader done (`FROTH_TOKEN_STRING`, `froth_reader_read_string` with escape processing, `FROTH_BSTRING_LEN_MAX`). Evaluator heap allocation, executor STRING tag handling, primitives (`s.emit`/`s.len`/`s@`/`s.=`), and stack display still needed.
 
 ## Blocked / Waiting
 
@@ -58,7 +58,7 @@ Nothing blocked.
 
 ## Next Up
 
-1. String-Lite (ADR + reader `"..."` + StringRef heap layout + escape sequences + `s.emit`/`s.len`/`s@`/`s.=`)
+1. String-Lite: evaluator + executor + primitives + stack display (reader done)
 2. Multi-line input (bracket/string depth tracking, `..` continuation prompt)
 3. `see`, `info`
 

@@ -3,6 +3,7 @@
 #include "froth_types.h"
 
 #define FROTH_TOKEN_NAME_MAX 32
+#define FROTH_BSTRING_LEN_MAX 128
 
 typedef enum {
   FROTH_TOKEN_NUMBER,           // A parsed integer value
@@ -12,6 +13,7 @@ typedef enum {
   FROTH_TOKEN_CLOSE_BRACKET,    // "]" — ends a quotation
   FROTH_TOKEN_OPEN_PAT,         // "p[" - starts a pattern body
   FROTH_TOKEN_EOF,              // No more tokens in the input
+  FROTH_TOKEN_STRING,
 } froth_token_type_t;
 
 /* A single token produced by the reader.
@@ -21,6 +23,10 @@ typedef struct {
   union {
     froth_cell_t number;              // Valid when type == FROTH_TOKEN_NUMBER
     char name[FROTH_TOKEN_NAME_MAX];  // Valid when type == IDENTIFIER or TICK_IDENTIFIER
+    struct {                          // Valid when type == FROTH_TOKEN_STRING
+      froth_cell_u_t bstring_len;
+      uint8_t bstring_bytes[FROTH_BSTRING_LEN_MAX];
+    };
   };
 } froth_token_t;
 

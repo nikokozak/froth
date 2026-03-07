@@ -66,6 +66,9 @@ typedef enum {
   FROTH_ERROR_BOUNDS               = 13,
   FROTH_ERROR_PROGRAM_INTERRUPTED  = 14,
   FROTH_ERROR_UNBALANCED_RETURN_STACK_CALLS = 15,
+  FROTH_ERROR_BSTRING_TOO_LONG        = 16,
+  FROTH_ERROR_UNTERMINATED_STRING            = 17,
+  FROTH_ERROR_INVALID_BSTRING_ESCAPE_SEQUENCE = 18,
 
   /* Reader/evaluator errors — occur before execution.
    * Stable numbers, but programs won't typically catch these. */

@@ -12,7 +12,7 @@ static int is_digit(char c) {
 }
 
 static int is_delimiter(char c) {
-  return c == '[' || c == ']' || c == ';' || c == '(' || c == ')' || c == '\'' || c == '\0' || is_whitespace(c);
+  return c == '[' || c == ']' || c == ';' || c == '(' || c == ')' || c == '"' || c == '\'' || c == '\0' || is_whitespace(c);
 }
 
 /* Skip past whitespace and comments. A backslash (\) starts a line comment
@@ -145,6 +145,47 @@ static int try_parse_number(const char* word, froth_cell_t* result) {
   return 1;
 }
 
+froth_error_t froth_reader_read_string(froth_reader_t* reader, uint8_t* buf, froth_cell_u_t* bstring_len) {
+  froth_cell_u_t len = 0;
+
+  while (1) {
+    char c = reader->input[reader->position];
+    if (c == '\0') {
+      return FROTH_ERROR_UNTERMINATED_STRING;
+    }
+    if (c == '"') {
+      reader->position++; // skip closing quote
+      break;
+    }
+
+    if (len >= FROTH_BSTRING_LEN_MAX) { return FROTH_ERROR_BSTRING_TOO_LONG; }
+
+    if (c == '\\') {
+      reader->position++; // skip the backslash
+      c = reader->input[reader->position];
+      if (c == '\0') {
+        return FROTH_ERROR_UNTERMINATED_STRING;
+      }
+      if (c == '\\') { buf[len++] = '\\'; }
+      else if (c == '"') { buf[len++] = '"'; }
+      else if (c == 'n') { buf[len++] = '\n'; }
+      else if (c == 'r') { buf[len++] = '\r'; }
+      else if (c == 't') { buf[len++] = '\t'; }
+      else {
+        return FROTH_ERROR_INVALID_BSTRING_ESCAPE_SEQUENCE;
+      }
+      reader->position++;
+      continue;
+    }
+    buf[len++] = c;
+    reader->position++;
+  }
+
+  *bstring_len = len;
+
+  return FROTH_OK;
+}
+
 void froth_reader_init(froth_reader_t* reader, const char* input) {
   reader->input = input;
   reader->position = 0;
@@ -158,6 +199,13 @@ froth_error_t froth_reader_next_token(froth_reader_t* reader, froth_token_t* tok
   // End of input
   if (c == '\0') {
     token->type = FROTH_TOKEN_EOF;
+    return FROTH_OK;
+  }
+
+  if (c == '"') {
+    reader->position++; // skip the opening quote
+    FROTH_TRY(froth_reader_read_string(reader, token->bstring_bytes, &token->bstring_len));
+    token->type = FROTH_TOKEN_STRING;
     return FROTH_OK;
   }
 
