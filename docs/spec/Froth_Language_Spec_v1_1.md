@@ -51,8 +51,7 @@ Key points:
   application, or run as one task in an RTOS.
 - **Froth does not replace your vendor SDK.** Instead, it provides a REPL-first systems language that can call into
   the SDK via FFI, and can host glue logic and control planes.
-- **Froth is comfortable at the metal.** If you want to poke registers directly, you can: expose `@/!` and bit ops,
-  or bind register-level accessors as primitives. If you want to stay at the HAL level, you can do that too.
+- **Froth is comfortable at the metal.** If you want to poke registers directly, you can: the optional FROTH-Addr profile provides full-width native addresses with width-specific memory access (`@8`/`@16`/`@32`, `!8`/`!16`/`!32`), or you can bind register-level accessors as FFI primitives. If you want to stay at the HAL level, you can do that too.
 
 ### Why the primitives are named this way (informative)
 
@@ -168,6 +167,12 @@ FROTH-Perf permits additional callable representations (ITC/DTC/native) and inli
 
 Specified informally in Section 13.
 
+### FROTH-Addr (optional)
+
+FROTH-Addr provides full-width native machine addresses as a first-class value type, enabling direct hardware register access without compromising the compact tagged-value core. NativeAddr values are non-persistable by construction, ensuring snapshot safety.
+
+Specified in Section 14.
+
 ---
 
 ## Reader (lexical structure and forms)
@@ -273,7 +278,7 @@ FROTH-Named (Section 8) extends this sugar with binding stack-effect declaration
 
 A Froth value is one of:
 
-- **Number**: a machine word-sized signed integer (implementation-defined width, typically 16/32/64).
+- **Number**: a signed integer whose range is implementation-defined. Implementations typically use a cell width of 16, 32, or 64 bits; the usable integer range MAY be smaller than the full cell width if the implementation reserves bits for internal tagging or other purposes. For full-width machine addresses and hardware handles, see the optional FROTH-Addr profile.
 - **Object reference**: an opaque reference to an immutable heap object. FROTH-Core requires:
   - QuoteRef
   - SlotRef
@@ -788,7 +793,7 @@ FROTH-Base defines a minimal primitive vocabulary required for a practical REPL 
 
 ### Integer arithmetic
 
-All arithmetic operates on **numbers** with wraparound semantics (two's complement modulo 2^W), where W is cell width.
+All arithmetic operates on **numbers** with wraparound semantics (two's complement modulo 2^W), where W is the implementation's usable integer width (which MAY be less than the full cell width if bits are reserved for tagging).
 
 - `+`   `( a b -- sum )`
 - `-`   `( a b -- diff )`
@@ -1519,6 +1524,64 @@ If an overlay-owned slot has no canonical persistable representation, `save` MUS
 - **perm fusion:** adjacent `perm` operations over overlapping windows can often be combined or eliminated.
 - **pattern compilation:** compile `p[ ... ]` patterns into compact internal micro-ops.
 - **named frames backend:** for tiny flash targets, a compiler MAY lower name references into a fixed locals frame (RS-based or dedicated) rather than literal `perm` sequences, provided observable DS behavior remains identical and no heap allocation is introduced.
+
+## FROTH-Addr (optional): native addresses and hardware handles
+
+FROTH-Addr provides full-width machine addresses as a first-class value type, enabling direct hardware register access on embedded targets without compromising the compact tagged-value core.
+
+### Design rationale
+
+Froth's tagged Number representation (implementation-defined range, typically smaller than the full cell width) is sufficient for arithmetic, loop counts, flags, offsets, and most program logic. However, memory-mapped peripheral registers on 32-bit MCUs often reside at addresses that exceed the Number range (e.g., ESP32 GPIO at `0x3FF44000`). FROTH-Addr solves this boundary concern without taxing every stack slot.
+
+Addresses are semantically distinct from Numbers: they represent machine locations, not arithmetic values. This distinction enables snapshot safety (addresses are non-persistable) and type safety (adding two addresses is meaningless; adding an address and an offset is well-defined).
+
+### Value type: NativeAddr
+
+A **NativeAddr** is an opaque value representing a full-width machine address or hardware handle.
+
+- NativeAddr values occupy one DS slot.
+- NativeAddr values are **non-persistable**: `save` MUST refuse to serialize overlay slots whose implementations transitively contain NativeAddr literals. Implementations SHOULD signal `ERR.SNAP.NONPERSIST`.
+- NativeAddr values MUST NOT participate in Number arithmetic (`+`, `-`, `*`, `/mod`). Passing a NativeAddr to a Number-only word MUST signal `ERR.TYPE`.
+- NativeAddr equality is bitwise equality of the underlying address.
+
+### Required words (FROTH-Addr)
+
+#### Address creation
+
+- `addr.pack ( hi lo -- addr )`
+  Combine two Numbers into a NativeAddr. On 32-bit cells: `value = (hi << 16) | (lo & 0xFFFF)`.
+
+Board packages SHOULD provide named address constants as FFI primitives (e.g., `gpio.base ( -- addr )`). This is the expected primary way addresses enter Froth programs.
+
+#### Memory access (width-specific)
+
+All memory access words take `( addr offset -- ... )` form. The offset is an ordinary Number, keeping struct/register field walking cheap.
+
+- `@8  ( addr offset -- byte )`   Read unsigned 8-bit value from `addr + offset`.
+- `@16 ( addr offset -- half )`   Read unsigned 16-bit value from `addr + offset`.
+- `@32 ( addr offset -- value )`  Read 32-bit value from `addr + offset`.
+- `!8  ( value addr offset -- )`  Write low 8 bits of `value` to `addr + offset`.
+- `!16 ( value addr offset -- )`  Write low 16 bits of `value` to `addr + offset`.
+- `!32 ( value addr offset -- )`  Write 32-bit `value` to `addr + offset`.
+
+All memory access words MUST use volatile semantics. This is required for correct MMIO register access.
+
+#### Address arithmetic
+
+- `addr+ ( addr offset -- addr' )` Add a Number offset to a NativeAddr, producing a new NativeAddr.
+- `addr.= ( addr1 addr2 -- flag )` Compare two NativeAddr values for equality.
+
+#### Inspection
+
+- `addr. ( addr -- )` Print the underlying address in hexadecimal.
+
+### Interaction with FROTH-Snapshot
+
+NativeAddr values are non-persistable by construction. Addresses defined at boot via FFI are base-layer primitives and do not affect `save`. User definitions like `: gpio-out@ gpio.base 0x04 @32 ;` are persistable because `gpio.base` is a slot call — the address is reconstructed at boot, not baked into the snapshot.
+
+### Interaction with FROTH-Checked
+
+If FROTH-Checked is enabled, the implementation MUST provide the built-in kind `K.ADDR`. Memory access words SHOULD have contracts requiring `K.ADDR` for the address argument and `K.NUMBER` for the offset.
 
 ---
 

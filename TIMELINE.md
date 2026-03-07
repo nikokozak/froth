@@ -202,13 +202,23 @@
 
 ## Deferred (post-workshop)
 
+### Near-term: ESP32 hardware deepening
+
+- **CALL tag decoupling** (ADR TBD): Move CALL/literal distinction out of the value-tag layer (ADR-009 rework). Frees tag 6 for NativeAddr. Prerequisite for FROTH-Addr. Independent cleanup — benefits the tag space regardless.
+- **FROTH-Addr profile** (ADR-024): Native address type for full-width machine addresses. Fixed address pool, width-specific memory access (`@8`/`@16`/`@32`, `!8`/`!16`/`!32`), `addr+`, `addr.pack`. FFI API additions (`froth_push_addr`/`froth_pop_addr`). Board packages provide named address constants (`gpio.base`). Target: implement when doing direct register work on ESP32, after the workshop HAL-level FFI is proven.
+- FROTH-String (`s.pack` — explicit allocation from FFI buffers)
+
+### Medium-term: language maturation
+
 - DTC/native promotion (FROTH-Perf)
 - Named frames compiler pass (FROTH-Named); consider a "Named Lite" path first
 - Checked kinds/contracts as selectable build profile (FROTH-Checked); FFI metadata makes this more practical
 - FROTH-Region-Strict (fail-fast allocation gating)
-- FROTH-String (`s.pack` — explicit allocation from FFI buffers)
 - Step mode / trace mode for debugging
 - Richer `see` (pretty printing, source retention policies)
+
+### Completed (moved out of deferred)
+
 - ~~Board package story~~ (landed: `boards/<board>/` structure, POSIX reference board)
 - ~~FROTH-String-Lite~~ (moved to Phase 1)
 - ~~Hex/binary literals~~ (moved to Phase 1)
