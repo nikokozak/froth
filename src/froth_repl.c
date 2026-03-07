@@ -29,7 +29,8 @@ static const char* error_name(froth_error_t err) {
     case FROTH_ERROR_WHILE_STACK:          return "while: stack discipline violation";
     case FROTH_ERROR_VALUE_OVERFLOW:       return "value overflow";
     case FROTH_ERROR_BOUNDS:               return "index out of bounds";
-    case FROTH_ERROR_PROGRAM_INTERRUPTED: return "interrupted";
+    case FROTH_ERROR_PROGRAM_INTERRUPTED:          return "interrupted";
+    case FROTH_ERROR_UNBALANCED_RETURN_STACK_CALLS: return "unbalanced return stack";
     /* Reader/evaluator errors */
     case FROTH_ERROR_TOKEN_TOO_LONG:       return "token too long";
     case FROTH_ERROR_UNTERMINATED_QUOTE:   return "unterminated quotation";

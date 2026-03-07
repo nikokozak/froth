@@ -91,9 +91,10 @@
 ### Mar 7 (Sat) — Light day: reader extensions + return stack
 - [x] Hex/binary number literals (ADR-021 — syntax: `0xFF`, `0b1010`)
 - [x] Basic backspace handling in REPL readline (`0x7F`/`0x08`)
-- [ ] `>r`, `r>`, `r@` primitives (RS already exists on VM)
+- [x] `>r`, `r>`, `r@` primitives (RS already exists on VM)
+- [x] RS quotation balance check (ADR-022): executor asserts RS depth unchanged on quotation exit
 - [x] **Proof**: `0xFF` → `[255]`; `0b1010` → `[10]`; `-0x1A` → `[-26]`
-- [ ] **Proof**: `5 >r 10 r> +` → `[15]`
+- [x] **Proof**: `5 >r 10 r> +` → `[15]`; `[ 5 >r ] call` → `error(15): unbalanced return stack`
 
 ### Mar 8 (Sun) — Strong push: String-Lite + stdlib + REPL polish
 - [ ] FROTH-String-Lite (ADR + reader `"..."` + StringRef heap layout + escape sequences)

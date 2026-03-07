@@ -28,6 +28,7 @@ froth_error_t froth_execute_slot(froth_vm_t* vm, froth_cell_u_t slot_index) {
 froth_error_t froth_execute_quote(froth_vm_t* vm, froth_cell_t quote_cell) {
   froth_cell_t* heap_cell = froth_heap_cell_ptr(&vm->heap, FROTH_CELL_STRIP_TAG(quote_cell));
   froth_cell_u_t quote_length = heap_cell[0];
+  froth_cell_u_t rs_length = froth_stack_depth(&vm->rs); // For RS operator quote balance checks
 
   for (froth_cell_u_t i = 1; i <= quote_length; i++) {
     if (vm->interrupted != 0) { 
@@ -56,5 +57,11 @@ froth_error_t froth_execute_quote(froth_vm_t* vm, froth_cell_t quote_cell) {
         return FROTH_ERROR_TYPE_MISMATCH;
     }
   }
+
+  if (froth_stack_depth(&vm->rs) != rs_length) {
+    vm->last_error_slot = -1;
+    return FROTH_ERROR_UNBALANCED_RETURN_STACK_CALLS;
+  }
+
   return FROTH_OK;
 }

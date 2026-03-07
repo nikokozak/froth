@@ -616,6 +616,30 @@ froth_error_t froth_prim_dots(froth_vm_t* froth_vm) {
   return FROTH_OK;
 };
 
+froth_error_t froth_prim_rpush(froth_vm_t* froth_vm) {
+  froth_cell_t cell;
+  FROTH_TRY(froth_stack_pop(&froth_vm->ds, &cell));
+  FROTH_TRY(froth_stack_push(&froth_vm->rs, cell));
+
+  return FROTH_OK;
+};
+
+froth_error_t froth_prim_rpop(froth_vm_t* froth_vm) {
+  froth_cell_t cell;
+  FROTH_TRY(froth_stack_pop(&froth_vm->rs, &cell));
+  FROTH_TRY(froth_stack_push(&froth_vm->ds, cell));
+
+  return FROTH_OK;
+};
+
+froth_error_t froth_prim_rpeek(froth_vm_t* froth_vm) {
+  froth_cell_t cell;
+  FROTH_TRY(froth_stack_peek(&froth_vm->rs, &cell));
+  FROTH_TRY(froth_stack_push(&froth_vm->ds, cell));
+
+  return FROTH_OK;
+};
+
 froth_error_t froth_prim_words(froth_vm_t* froth_vm) {
   froth_cell_u_t idx = 0;
 
@@ -668,6 +692,11 @@ const froth_ffi_entry_t froth_primitives[] = {
   /* Pattern */
   { "pat",    froth_prim_pat,              "( quote -- pattern )",  "Compile quotation to pattern" },
   { "perm",   froth_prim_perm,             "( n pat -- )",          "Permute top n stack items" },
+
+  /* Return stack */
+  { ">r",     froth_prim_rpush,            "( x -- ) ( R: -- x )",  "Move TOS to return stack" },
+  { "r>",     froth_prim_rpop,             "( -- x ) ( R: x -- )",  "Move top of RS to DS" },
+  { "r@",     froth_prim_rpeek,            "( -- x ) ( R: x -- x )","Copy top of RS to DS" },
 
   /* Control flow */
   { "choose", froth_prim_choose,           "( flag t f -- t|f )",   "Conditional select" },

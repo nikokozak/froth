@@ -4,7 +4,7 @@
 
 ## Current Status
 
-**Phase**: Reader extensions (hex/binary literals, backspace handling) complete. Return stack next.
+**Phase**: Return stack primitives complete. String-Lite + stdlib combinators next.
 **Blocking issues**: ~2 days behind original schedule but Ctrl-C landed early, buying buffer.
 **Morale check**: `0xFF` → `[255]` — hardware register values feel natural now.
 
@@ -42,7 +42,8 @@
 - Ctrl-C / interrupt flag (ADR-020): `SIGINT` handler sets `volatile int interrupted` on VM, checked at safe points (executor loop, `while` iterations). Triggers `FROTH_ERROR_PROGRAM_INTERRUPTED` (code 14) via throw. REPL recovers via existing catch. `platform_init()` added to platform layer.
 - Hex/binary number literals (ADR-021): `0xFF`, `0b1010`, negative forms (`-0x1A`). Parsed in `try_parse_number`, emits same `TOKEN_NUMBER` — no evaluator changes. Payload range constrained by 3-bit tag (CELL_BITS - 3 usable bits).
 - REPL backspace handling: `0x7F` (DEL) and `0x08` (BS) erase last character with `\b space \b` terminal sequence. Guards against underflow at position 0.
-- ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals)
+- `>r`, `r>`, `r@` return stack primitives. RS quotation balance check: executor snapshots RS depth on quotation entry, asserts match on exit. Violation throws `FROTH_ERROR_UNBALANCED_RETURN_STACK_CALLS` (code 15) with cleared error context (structural error, not attributable to a single word). ADR-022.
+- ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check)
 
 ## In Progress
 
@@ -54,8 +55,7 @@ Nothing blocked.
 
 ## Next Up
 
-1. `>r`, `r>`, `r@` (return stack primitives — RS already exists on VM)
-2. String-Lite, multi-line input, stdlib combinators (`dip`, `keep`, `bi`, `times`), `see`, `info`
+1. String-Lite, multi-line input, stdlib combinators (`dip`, `keep`, `bi`, `times`), `see`, `info`
 
 ## Open Questions
 
