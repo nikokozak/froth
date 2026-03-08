@@ -111,7 +111,8 @@
 - [x] `see` (quotation body dump / `<primitive>` for prims)
 - [x] `info` banner: version (`FROTH_VERSION` CMake define), heap usage, slot count (`froth_slot_count()`)
 - [x] **Proof**: `'inc see` → `[1 +]`; `'emit see` → `<primitive>`; `info` → version, heap, slots
-- [ ] Multi-line input (bracket/string depth tracking, `..` continuation prompt)
+- [x] Multi-line input (bracket/string depth tracking, `..` continuation prompt)
+- [x] **Proof**: `: double ⏎ .. dup + ⏎ .. ; ⏎ 5 double` → `[10]`; multi-line paren comments, strings, nested brackets all accumulate correctly
 
 ### Mar 9 (Mon) — Persistence stage 1: format + RAM round-trip
 - [ ] Snapshot persistence design (review spec, ADR for implementation choices)

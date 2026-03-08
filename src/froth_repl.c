@@ -9,7 +9,8 @@
 #include <stdbool.h>
 
 static char repl_buffer[FROTH_LINE_BUFFER_SIZE];
-static const char* repl_prompt = "froth> ";
+static const char* prompt_normal = "froth> ";
+static const char* prompt_cont   = ".. ";
 
 /* Return a human-readable name for an error code. */
 static const char* error_name(froth_error_t err) {
@@ -53,54 +54,166 @@ static bool is_blank(const char* str) {
   return true;
 }
 
-static froth_error_t froth_repl_print_prompt(void) {
-  FROTH_TRY(emit_string(repl_prompt));
-  return FROTH_OK;
+/* ── Depth scanner ─────────────────────────────────────────────────────
+ * Lightweight pre-scan of raw text to decide whether an expression is
+ * complete.  Tracks bracket nesting (including `:` sugar), paren-comment
+ * nesting, and unclosed string literals.  State carries across lines so
+ * only the newly appended portion needs to be scanned each time.       */
+
+static int is_scan_delimiter(char c) {
+  return c == '[' || c == ']' || c == ';' || c == '(' || c == ')' ||
+         c == '"' || c == '\'' || c == '\0' ||
+         c == ' ' || c == '\t' || c == '\r' || c == '\n';
 }
 
-static froth_error_t froth_repl_read_line(char* output_buffer) {
-  froth_cell_u_t pos = 0;
-  while (pos < FROTH_LINE_BUFFER_SIZE - 1) {
+static void scan_line_depth(const char* text,
+                            int* bracket_depth,
+                            int* paren_depth,
+                            int* in_string) {
+  int i = 0;
+
+  while (text[i] != '\0') {
+    /* Inside an unclosed string from a previous line */
+    if (*in_string) {
+      if (text[i] == '\\' && text[i + 1] != '\0') { i += 2; continue; }
+      if (text[i] == '"') { *in_string = 0; i++; continue; }
+      i++;
+      continue;
+    }
+
+    /* Inside an unclosed paren comment from a previous line */
+    if (*paren_depth > 0) {
+      if (text[i] == '(') { (*paren_depth)++; }
+      else if (text[i] == ')') { (*paren_depth)--; }
+      i++;
+      continue;
+    }
+
+    char c = text[i];
+
+    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') { i++; continue; }
+
+    /* Line comment — skip to newline or end */
+    if (c == '\\') {
+      while (text[i] != '\0' && text[i] != '\n') { i++; }
+      continue;
+    }
+
+    /* Paren comment */
+    if (c == '(') {
+      *paren_depth = 1;
+      i++;
+      while (text[i] != '\0' && *paren_depth > 0) {
+        if (text[i] == '(') { (*paren_depth)++; }
+        else if (text[i] == ')') { (*paren_depth)--; }
+        i++;
+      }
+      continue;
+    }
+
+    /* String literal */
+    if (c == '"') {
+      i++;
+      int closed = 0;
+      while (text[i] != '\0') {
+        if (text[i] == '\\' && text[i + 1] != '\0') { i += 2; continue; }
+        if (text[i] == '"') { i++; closed = 1; break; }
+        i++;
+      }
+      if (!closed) { *in_string = 1; }
+      continue;
+    }
+
+    /* Brackets */
+    if (c == '[') { (*bracket_depth)++; i++; continue; }
+    if (c == ']' || c == ';') { (*bracket_depth)--; i++; continue; }
+
+    /* Tick — skip the quoted word, it doesn't affect depth */
+    if (c == '\'') {
+      i++;
+      while (text[i] != '\0' && !is_scan_delimiter(text[i])) { i++; }
+      continue;
+    }
+
+    /* Regular word — check for `:` colon-sugar opener */
+    int word_start = i;
+    while (text[i] != '\0' && !is_scan_delimiter(text[i])) { i++; }
+    if (i - word_start == 1 && text[word_start] == ':') {
+      (*bracket_depth)++;
+    }
+  }
+}
+
+/* ── Line input ────────────────────────────────────────────────────── */
+
+/* Read characters into buffer starting at *pos.  Backspace is clamped to
+ * line_start so it cannot erase into previous continuation lines. */
+static froth_error_t froth_repl_read_line(char* buffer,
+                                          froth_cell_u_t* pos,
+                                          froth_cell_u_t line_start) {
+  while (*pos < FROTH_LINE_BUFFER_SIZE - 1) {
     uint8_t byte;
     froth_error_t err = platform_key(&byte);
     if (err != FROTH_OK) { return err; }
 
-    if (byte == '\b' || byte == 127) { // Handle backspace (127 is DEL, which some terminals send for backspace)
-      if (pos > 0) {
-        pos--;
-        FROTH_TRY(platform_emit('\b')); // Move cursor back
-        FROTH_TRY(platform_emit(' '));  // Erase the character
-        FROTH_TRY(platform_emit('\b')); // Move cursor back again
+    if (byte == '\b' || byte == 127) {
+      if (*pos > line_start) {
+        (*pos)--;
+        FROTH_TRY(platform_emit('\b'));
+        FROTH_TRY(platform_emit(' '));
+        FROTH_TRY(platform_emit('\b'));
       }
       continue;
     }
 
     if (byte == '\n') { break; }
 
-    output_buffer[pos++] = byte;
+    buffer[(*pos)++] = byte;
   }
-  output_buffer[pos] = '\0';
+  buffer[*pos] = '\0';
   return FROTH_OK;
 }
+
+/* ── REPL main loop ───────────────────────────────────────────────── */
 
 froth_error_t froth_repl_start(froth_vm_t* vm) {
   froth_error_t err;
   while (true) {
-    FROTH_TRY(froth_repl_print_prompt());
+    FROTH_TRY(emit_string(prompt_normal));
 
-    err = froth_repl_read_line(repl_buffer);
-    if (err != FROTH_OK) { return FROTH_OK; }
-
-    froth_cell_u_t ds_snapshot = vm->ds.pointer; // For error recovery
-    froth_cell_u_t rs_snapshot = vm->rs.pointer;
+    froth_cell_u_t buf_pos = 0;
+    err = froth_repl_read_line(repl_buffer, &buf_pos, 0);
+    if (err != FROTH_OK) { return FROTH_OK; } /* EOF */
 
     if (is_blank(repl_buffer)) { continue; }
+
+    /* Scan first line for nesting depth */
+    int bracket_depth = 0, paren_depth = 0, in_string = 0;
+    scan_line_depth(repl_buffer, &bracket_depth, &paren_depth, &in_string);
+
+    /* Accumulate continuation lines while expression is incomplete */
+    while ((bracket_depth > 0 || paren_depth > 0 || in_string) &&
+           buf_pos < FROTH_LINE_BUFFER_SIZE - 2) {
+      FROTH_TRY(emit_string(prompt_cont));
+
+      /* Newline separator — critical for line-comment correctness */
+      repl_buffer[buf_pos++] = '\n';
+
+      froth_cell_u_t line_start = buf_pos;
+      err = froth_repl_read_line(repl_buffer, &buf_pos, line_start);
+      if (err != FROTH_OK) { return FROTH_OK; } /* EOF */
+
+      scan_line_depth(repl_buffer + line_start,
+                      &bracket_depth, &paren_depth, &in_string);
+    }
+
+    /* Evaluate the accumulated buffer */
+    froth_cell_u_t ds_snapshot = vm->ds.pointer;
+    froth_cell_u_t rs_snapshot = vm->rs.pointer;
 
     vm->last_error_slot = -1;
     err = froth_evaluate_input(repl_buffer, vm);
     if (err != FROTH_OK) {
-      /* For explicit throw, vm->thrown has the user's code.
-       * For runtime errors, the C error code is the user-visible code. */
       froth_cell_t code = (err == FROTH_ERROR_THROW) ? vm->thrown : (froth_cell_t)err;
 
       emit_string("error(");
@@ -123,6 +236,6 @@ froth_error_t froth_repl_start(froth_vm_t* vm) {
       continue;
     }
 
-    FROTH_TRY(froth_prim_dots(vm)); // Print the entire stack after each successful evaluation
+    FROTH_TRY(froth_prim_dots(vm));
   }
 }

@@ -4,9 +4,9 @@
 
 ## Current Status
 
-**Phase**: String-Lite, `see`, `info` landed. Multi-line input next.
+**Phase**: Multi-line input landed. Persistence next.
 **Blocking issues**: ~2 days behind original schedule but Ctrl-C landed early, buying buffer.
-**Morale check**: `"Hello" s.emit` → `Hello` — strings are real.
+**Morale check**: `: foo ⏎ .. 1 + ⏎ .. ;` — multi-line definitions work.
 
 ## What's Done
 
@@ -22,7 +22,7 @@
 - `froth_executor.h` / `froth_executor.c`: executor — walks quotation bodies dispatching on cell tags. `froth_execute_slot` (prim-first, then impl), `froth_execute_quote` (iterate body cells).
 - `froth_primitives.h` / `froth_primitives.c`: primitive table now uses `froth_ffi_entry_t` with stack effects and help text on all 34 entries. Grouped by category (core, arithmetic, comparison, bitwise, I/O, pattern, string, control flow, error handling, display/introspection). Core: `def`, `get`, `call`. Arithmetic: `+`, `-`, `*`, `/mod` (wrapping via unsigned cast, ADR-011). Comparisons: `<`, `>`, `=` (returning -1/0). Bitwise: `and`, `or`, `xor`, `invert`, `lshift`, `rshift` (logical shifts with payload masking). I/O: `emit` (low byte), `key`, `key?`. Pattern: `pat` (quotation → PatternRef, validates indices), `perm` (stack rewrite using PatternRef + window size, fixed-size scratch buffer, index-flipped for 0=TOS convention). String: `s.emit`, `s.len`, `s@`, `s.=` (ADR-023). Control flow: `choose`, `while`. Error handling: `catch`, `throw` (ADR-015). Division-by-zero error. Type checking on all ops. `FROTH_MAX_PERM_SIZE` (default 8) caps both pattern length and window size.
 - `froth_ffi.h` / `froth_ffi.c`: FFI public API (ADR-019). Four functions: `froth_pop` (number, type-checked), `froth_pop_tagged` (any cell, decomposed), `froth_push` (number), `froth_throw` (set thrown + return sentinel). `froth_ffi_entry_t` struct with name, word, stack_effect, help. Convenience macros: `FROTH_FFI` (function def + metadata struct), `FROTH_POP`/`FROTH_PUSH` (stack sugar), `FROTH_BIND` (table entry reference). `froth_ffi_register` walks null-terminated table, creates slots, sets prims. Error code ranges: kernel 1–299, FFI 300+.
-- `froth_repl.h` / `froth_repl.c`: interactive REPL loop — read line, evaluate, print stack. Rich cell display. Error display with numeric code, name, and faulting word (`error(2): stack underflow in "perm"`). DS/RS snapshot and restore on error. Blank-line skipping, clean EOF exit. "Prompt never dies."
+- `froth_repl.h` / `froth_repl.c`: interactive REPL loop — read line, evaluate, print stack. Rich cell display. Error display with numeric code, name, and faulting word (`error(2): stack underflow in "perm"`). DS/RS snapshot and restore on error. Blank-line skipping, clean EOF exit. Multi-line input: lightweight depth scanner tracks bracket nesting (including `:` sugar), paren comments, and unclosed strings; `..` continuation prompt; `\n` line separator preserves line-comment correctness.
 - Build-time stdlib embedding: CMake `file(READ HEX)` pipeline (ADR-014). `cmake/embed_froth.cmake` script generates null-terminated `const char[]` headers from `.froth` source files. No external tool dependencies.
 - `src/lib/core.froth`: shuffle words (`dup`, `swap`, `drop`, `over`, `rot`, `-rot`, `nip`, `tuck`) via `perm`. Control flow: `if`. Combinators: `set`, `dip`, `keep`, `bi`, `times`. Arithmetic: `negate`, `abs`. I/O: `cr`. All defined in Froth with `: ;` sugar, `\` doc comments, HTDP-style documentation (purpose, stack effect, example), inline `( )` stack effects.
 - `froth_evaluate_input` signature changed to `const char*`.
@@ -59,7 +59,7 @@ Nothing blocked.
 
 ## Next Up
 
-1. Multi-line input (bracket/string depth tracking, `..` continuation prompt)
+1. Snapshot persistence (format design, serializer, deserializer, RAM round-trip)
 
 ## Open Questions
 
