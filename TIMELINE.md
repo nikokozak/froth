@@ -108,9 +108,10 @@
 - [x] FROTH-String-Lite (ADR-023 + reader `"..."` + StringRef heap layout + escape sequences)
 - [x] `s.emit`, `s.len`, `s@`, `s.=` primitives
 - [x] **Proof**: `"Hello" s.emit` prints `Hello`; `"Hello" s.len` → `[5]`; `"Hello" 0 s@` → `[72]`
+- [x] `see` (quotation body dump / `<primitive>` for prims)
+- [x] `info` banner: version (`FROTH_VERSION` CMake define), heap usage, slot count (`froth_slot_count()`)
+- [x] **Proof**: `'inc see` → `[1 +]`; `'emit see` → `<primitive>`; `info` → version, heap, slots
 - [ ] Multi-line input (bracket/string depth tracking, `..` continuation prompt)
-- [ ] `see` (token dump of quotation body / `<primitive>` for prims)
-- [ ] `info` banner: version, heap free, slot count
 
 ### Mar 9 (Mon) — Persistence stage 1: format + RAM round-trip
 - [ ] Snapshot persistence design (review spec, ADR for implementation choices)

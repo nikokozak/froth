@@ -66,3 +66,7 @@ froth_error_t froth_slot_get_name(froth_cell_u_t slot_index, const char** name) 
   *name = slot_table[slot_index].name;
   return FROTH_OK;
 }
+
+froth_cell_u_t froth_slot_count(void) {
+  return slot_pointer;
+}

@@ -737,6 +737,41 @@ froth_error_t froth_prim_bstring_byteat(froth_vm_t* vm) {
   return froth_stack_push(&vm->ds, result);
 }
 
+froth_error_t froth_prim_see(froth_vm_t* vm) {
+  froth_cell_t slot_cell;
+  FROTH_TRY(froth_stack_pop(&vm->ds, &slot_cell));
+  if (!FROTH_CELL_IS_SLOT(slot_cell)) { return FROTH_ERROR_TYPE_MISMATCH; }
+  
+  froth_cell_t impl;
+  froth_native_word_t prim;
+
+  if (froth_slot_get_impl((froth_cell_u_t)FROTH_CELL_STRIP_TAG(slot_cell), &impl) == FROTH_OK && impl != 0) {
+    FROTH_TRY(emit_cell(impl, &vm->heap));
+    FROTH_TRY(emit_string("\n"));
+  } else if (froth_slot_get_prim((froth_cell_u_t)FROTH_CELL_STRIP_TAG(slot_cell), &prim) == FROTH_OK && prim != 0) {
+    FROTH_TRY(emit_string("<primitive>\n"));
+   } else {
+    FROTH_TRY(emit_string("<unbound>\n"));
+  }
+  return FROTH_OK;
+}
+
+froth_error_t froth_prim_info(froth_vm_t* vm) {
+  FROTH_TRY(emit_string("Froth v" FROTH_VERSION " | "));
+  FROTH_TRY(emit_string(format_number(FROTH_CELL_SIZE_BITS)));
+  FROTH_TRY(emit_string("-bit cells\n"));
+  FROTH_TRY(emit_string("heap: "));
+  FROTH_TRY(emit_string(format_number(vm->heap.pointer)));
+  FROTH_TRY(emit_string(" / "));
+  FROTH_TRY(emit_string(format_number(FROTH_HEAP_SIZE)));
+  FROTH_TRY(emit_string(" bytes used\n"));
+  FROTH_TRY(emit_string("slots: "));
+  FROTH_TRY(emit_string(format_number(froth_slot_count())));
+  FROTH_TRY(emit_string(" / "));
+  FROTH_TRY(emit_string(format_number(FROTH_SLOT_TABLE_SIZE)));
+  return emit_string("\n");
+}
+
 const froth_ffi_entry_t froth_primitives[] = {
   /* Core */
   { "def",    froth_prim_def,              "( 'name value -- )",    "Bind value to slot" },
@@ -790,10 +825,12 @@ const froth_ffi_entry_t froth_primitives[] = {
   { "s@",     froth_prim_bstring_byteat,   "( s i -- byte )",       "Fetch byte at index" },
   { "s.=",    froth_prim_bstring_isequal,  "( s1 s2 -- flag )",     "String equality" },
 
-  /* Display */
+  /* Display / introspection */
   { ".",      froth_prim_dot,              "( x -- )",              "Print and consume top" },
   { ".s",     froth_prim_dots,             "( -- )",                "Print stack" },
   { "words",  froth_prim_words,            "( -- )",                "List all defined words" },
+  { "see",    froth_prim_see,              "( slot -- )",           "Display slot definition" },
+  { "info",   froth_prim_info,             "( -- )",                "Print system info" },
 
   {0}
 };

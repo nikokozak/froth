@@ -21,3 +21,4 @@ froth_error_t froth_slot_get_prim(froth_cell_u_t slot_index, froth_native_word_t
 froth_error_t froth_slot_set_impl(froth_cell_u_t slot_index, froth_cell_t impl);
 froth_error_t froth_slot_set_prim(froth_cell_u_t slot_index, froth_native_word_t prim);
 froth_error_t froth_slot_get_name(froth_cell_u_t slot_index, const char** name);
+froth_cell_u_t froth_slot_count(void);

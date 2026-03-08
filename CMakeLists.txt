@@ -36,6 +36,7 @@ set(FROTH_HEAP_SIZE 4096 CACHE STRING "Heap size in number of bytes.")
 set(FROTH_SLOT_TABLE_SIZE 128 CACHE STRING "Maximum number of slots.")
 set(FROTH_LINE_BUFFER_SIZE 1024 CACHE STRING "Input line buffer for REPL in number of bytes.")
 set(FROTH_MAX_PERM_SIZE 8 CACHE STRING "Maximum number of indices in a perm pattern.")
+set(FROTH_VERSION "0.1.0" CACHE STRING "Froth version string")
 
 target_compile_definitions(Froth PRIVATE FROTH_CELL_SIZE_BITS=${FROTH_CELL_SIZE_BITS})
 target_compile_definitions(Froth PRIVATE FROTH_DS_CAPACITY=${FROTH_DS_CAPACITY})
@@ -45,6 +46,7 @@ target_compile_definitions(Froth PRIVATE FROTH_HEAP_SIZE=${FROTH_HEAP_SIZE})
 target_compile_definitions(Froth PRIVATE FROTH_SLOT_TABLE_SIZE=${FROTH_SLOT_TABLE_SIZE})
 target_compile_definitions(Froth PRIVATE FROTH_LINE_BUFFER_SIZE=${FROTH_LINE_BUFFER_SIZE})
 target_compile_definitions(Froth PRIVATE FROTH_MAX_PERM_SIZE=${FROTH_MAX_PERM_SIZE})
+target_compile_definitions(Froth PRIVATE FROTH_VERSION="${FROTH_VERSION}")
 
 # Used to compile .froth lib files so that the c process can read them as embedded data.
 add_custom_command(
