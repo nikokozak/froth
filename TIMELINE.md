@@ -1,6 +1,6 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-07*
+*Last reviewed: 2026-03-08*
 *Source: Froth Implementation Roadmap v0.4 (Feb 25 → Workshop week of Mar 15)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
@@ -105,12 +105,12 @@
 - [x] **Proof**: `3 [ 42 . ] times` prints `42 42 42`; `5 [ 2 * ] [ 1 + ] bi` → `[10 6]`
 
 ### Mar 8 (Sun) — Strong push: String-Lite + REPL polish
-- [ ] FROTH-String-Lite (ADR + reader `"..."` + StringRef heap layout + escape sequences)
-- [ ] `s.emit`, `s.len`, `s@`, `s.=` primitives
+- [x] FROTH-String-Lite (ADR-023 + reader `"..."` + StringRef heap layout + escape sequences)
+- [x] `s.emit`, `s.len`, `s@`, `s.=` primitives
+- [x] **Proof**: `"Hello" s.emit` prints `Hello`; `"Hello" s.len` → `[5]`; `"Hello" 0 s@` → `[72]`
 - [ ] Multi-line input (bracket/string depth tracking, `..` continuation prompt)
 - [ ] `see` (token dump of quotation body / `<primitive>` for prims)
 - [ ] `info` banner: version, heap free, slot count
-- [ ] **Proof**: `"Hello!" s.emit` prints; `' inc see` dumps definition
 
 ### Mar 9 (Mon) — Persistence stage 1: format + RAM round-trip
 - [ ] Snapshot persistence design (review spec, ADR for implementation choices)

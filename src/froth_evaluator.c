@@ -5,6 +5,7 @@
 #include "froth_slot_table.h"
 #include "froth_executor.h"
 #include "froth_primitives.h"
+#include <string.h>
 #include <stddef.h>
 
 /* Resolve a name to a slot index, creating the slot if it doesn't exist yet. */
@@ -117,7 +118,7 @@ static froth_error_t froth_evaluator_handle_open_pat(froth_reader_t* reader, fro
   vm->heap.data[heap_offset] = (char)body_count; // Store pattern length in heap
   
   froth_cell_u_t heap_location = heap_offset + 1; // Start writing pattern body immediately after length cell
-  while (froth_reader_next_token(reader, &token) == FROTH_OK && token.type != FROTH_TOKEN_EOF && token.type != FROTH_TOKEN_CLOSE_BRACKET) {
+  while (froth_reader_next_token(reader, &token) == FROTH_OK && token.type != FROTH_TOKEN_CLOSE_BRACKET) {
     if (token.type == FROTH_TOKEN_IDENTIFIER) {
 
       char var_name = token.name[0];
@@ -136,6 +137,24 @@ static froth_error_t froth_evaluator_handle_open_pat(froth_reader_t* reader, fro
 
   return FROTH_OK;
 
+}
+
+/* Allocate a string on the heap.
+ * Heap layout: [byte_count (1 cell)] [bytes...] [\0]
+ * The null terminator is not part of the logical string — it exists
+ * for free C interop with emit_string and friends (ADR-023). */
+static froth_error_t froth_evaluator_handle_bstring(froth_token_t token, froth_vm_t* vm, froth_cell_t* output_cell) {
+  froth_cell_u_t heap_offset;
+  froth_cell_t len_cell = token.bstring_len;
+  FROTH_TRY(froth_heap_allocate_bytes(sizeof(froth_cell_t) + token.bstring_len + 1, &vm->heap, &heap_offset));
+  uint8_t* dest = &vm->heap.data[heap_offset];
+
+  memcpy(dest, &len_cell, sizeof(froth_cell_t));
+  memcpy(dest + sizeof(froth_cell_t), token.bstring_bytes, token.bstring_len);
+  dest[sizeof(froth_cell_t) + token.bstring_len] = '\0';
+
+  FROTH_TRY(froth_make_cell(heap_offset, FROTH_BSTRING, output_cell));
+  return FROTH_OK;
 }
 
 /* Build a quotation from the token stream. Called after "[" has been consumed.
@@ -192,6 +211,14 @@ static froth_error_t froth_evaluator_handle_open_bracket(froth_reader_t* reader,
         froth_cell_t pattern_cell;
         FROTH_TRY(froth_evaluator_handle_open_pat(reader, vm, &pattern_cell));
         block[1 + body_index] = pattern_cell;
+        body_index++;
+        break;
+      }
+
+      case FROTH_TOKEN_BSTRING: {
+        froth_cell_t string_cell;
+        FROTH_TRY(froth_evaluator_handle_bstring(token, vm, &string_cell));
+        block[1 + body_index] = string_cell;
         body_index++;
         break;
       }
@@ -260,6 +287,12 @@ froth_error_t froth_evaluate_input(const char* input, froth_vm_t* vm) {
         froth_cell_t pattern_cell;
         FROTH_TRY(froth_evaluator_handle_open_pat(&reader, vm, &pattern_cell));
         FROTH_TRY(froth_stack_push(&vm->ds, pattern_cell));
+        break;
+      }
+      case FROTH_TOKEN_BSTRING: {
+        froth_cell_t string_cell;
+        FROTH_TRY(froth_evaluator_handle_bstring(token, vm, &string_cell));
+        FROTH_TRY(froth_stack_push(&vm->ds, string_cell));
         break;
       }
       default:

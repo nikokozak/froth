@@ -66,16 +66,15 @@ typedef enum {
   FROTH_ERROR_BOUNDS               = 13,
   FROTH_ERROR_PROGRAM_INTERRUPTED  = 14,
   FROTH_ERROR_UNBALANCED_RETURN_STACK_CALLS = 15,
-  FROTH_ERROR_BSTRING_TOO_LONG        = 16,
-  FROTH_ERROR_UNTERMINATED_STRING            = 17,
-  FROTH_ERROR_INVALID_BSTRING_ESCAPE_SEQUENCE = 18,
-
   /* Reader/evaluator errors — occur before execution.
    * Stable numbers, but programs won't typically catch these. */
   FROTH_ERROR_TOKEN_TOO_LONG       = 100,
   FROTH_ERROR_UNTERMINATED_QUOTE   = 101,
   FROTH_ERROR_UNTERMINATED_COMMENT = 102,
   FROTH_ERROR_UNEXPECTED_PAREN     = 103,
+  FROTH_ERROR_BSTRING_TOO_LONG     = 104,
+  FROTH_ERROR_UNTERMINATED_STRING  = 105,
+  FROTH_ERROR_INVALID_ESCAPE       = 106,
 
   /* Internal sentinel — not a user-visible error code. */
   FROTH_ERROR_THROW                = -1,
@@ -93,7 +92,7 @@ typedef enum {
   FROTH_QUOTE = 1,
   FROTH_SLOT = 2,
   FROTH_PATTERN = 3,
-  FROTH_STRING = 4,
+  FROTH_BSTRING = 4,
   FROTH_CONTRACT = 5,
   FROTH_CALL = 6,    // internal: invoke SlotRef (only inside quotation bodies, see ADR-009)
 } froth_cell_tag_t;
@@ -123,7 +122,7 @@ typedef enum {
 #define FROTH_CELL_IS_QUOTE(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_QUOTE))
 #define FROTH_CELL_IS_SLOT(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_SLOT))
 #define FROTH_CELL_IS_PATTERN(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_PATTERN))
-#define FROTH_CELL_IS_STRING(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_STRING))
+#define FROTH_CELL_IS_BSTRING(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_BSTRING))
 #define FROTH_CELL_IS_CONTRACT(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_CONTRACT))
 #define FROTH_CELL_IS_CALL(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_CALL))
 

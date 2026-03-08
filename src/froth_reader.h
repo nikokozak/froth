@@ -12,8 +12,8 @@ typedef enum {
   FROTH_TOKEN_OPEN_BRACKET,     // "[" — begins a quotation
   FROTH_TOKEN_CLOSE_BRACKET,    // "]" — ends a quotation
   FROTH_TOKEN_OPEN_PAT,         // "p[" - starts a pattern body
+  FROTH_TOKEN_BSTRING,          // A string literal (e.g. "hello")
   FROTH_TOKEN_EOF,              // No more tokens in the input
-  FROTH_TOKEN_STRING,
 } froth_token_type_t;
 
 /* A single token produced by the reader.
@@ -23,7 +23,7 @@ typedef struct {
   union {
     froth_cell_t number;              // Valid when type == FROTH_TOKEN_NUMBER
     char name[FROTH_TOKEN_NAME_MAX];  // Valid when type == IDENTIFIER or TICK_IDENTIFIER
-    struct {                          // Valid when type == FROTH_TOKEN_STRING
+    struct {                          // Valid when type == FROTH_TOKEN_BSTRING
       froth_cell_u_t bstring_len;
       uint8_t bstring_bytes[FROTH_BSTRING_LEN_MAX];
     };

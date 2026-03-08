@@ -42,15 +42,13 @@ froth_error_t froth_execute_quote(froth_vm_t* vm, froth_cell_t quote_cell) {
       case FROTH_NUMBER:
       case FROTH_QUOTE:
       case FROTH_SLOT:
+      case FROTH_BSTRING:
+      case FROTH_PATTERN:
         FROTH_TRY(froth_stack_push(&vm->ds, current_cell));
         break;
 
       case FROTH_CALL:
         FROTH_TRY(froth_execute_slot(vm, FROTH_CELL_STRIP_TAG(current_cell)));
-        break;
-
-      case FROTH_PATTERN:
-        FROTH_TRY(froth_stack_push(&vm->ds, current_cell));
         break;
 
       default:

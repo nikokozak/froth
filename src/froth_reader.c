@@ -145,44 +145,37 @@ static int try_parse_number(const char* word, froth_cell_t* result) {
   return 1;
 }
 
-froth_error_t froth_reader_read_string(froth_reader_t* reader, uint8_t* buf, froth_cell_u_t* bstring_len) {
+/* Scan a string body after the opening '"' has been consumed.
+ * Resolves escape sequences (\n, \t, \r, \\, \") into raw bytes.
+ * Unknown escapes are a reader error. */
+static froth_error_t read_string(froth_reader_t* reader, uint8_t* buf, froth_cell_u_t* out_len) {
   froth_cell_u_t len = 0;
 
   while (1) {
     char c = reader->input[reader->position];
-    if (c == '\0') {
-      return FROTH_ERROR_UNTERMINATED_STRING;
-    }
-    if (c == '"') {
-      reader->position++; // skip closing quote
-      break;
-    }
-
+    if (c == '\0') { return FROTH_ERROR_UNTERMINATED_STRING; }
+    if (c == '"') { reader->position++; break; }
     if (len >= FROTH_BSTRING_LEN_MAX) { return FROTH_ERROR_BSTRING_TOO_LONG; }
 
     if (c == '\\') {
-      reader->position++; // skip the backslash
+      reader->position++;
       c = reader->input[reader->position];
-      if (c == '\0') {
-        return FROTH_ERROR_UNTERMINATED_STRING;
-      }
-      if (c == '\\') { buf[len++] = '\\'; }
-      else if (c == '"') { buf[len++] = '"'; }
-      else if (c == 'n') { buf[len++] = '\n'; }
-      else if (c == 'r') { buf[len++] = '\r'; }
-      else if (c == 't') { buf[len++] = '\t'; }
-      else {
-        return FROTH_ERROR_INVALID_BSTRING_ESCAPE_SEQUENCE;
-      }
+      if (c == '\0') { return FROTH_ERROR_UNTERMINATED_STRING; }
+      if      (c == '\\') { buf[len++] = '\\'; }
+      else if (c == '"')  { buf[len++] = '"'; }
+      else if (c == 'n')  { buf[len++] = '\n'; }
+      else if (c == 'r')  { buf[len++] = '\r'; }
+      else if (c == 't')  { buf[len++] = '\t'; }
+      else { return FROTH_ERROR_INVALID_ESCAPE; }
       reader->position++;
       continue;
     }
+
     buf[len++] = c;
     reader->position++;
   }
 
-  *bstring_len = len;
-
+  *out_len = len;
   return FROTH_OK;
 }
 
@@ -204,8 +197,8 @@ froth_error_t froth_reader_next_token(froth_reader_t* reader, froth_token_t* tok
 
   if (c == '"') {
     reader->position++; // skip the opening quote
-    FROTH_TRY(froth_reader_read_string(reader, token->bstring_bytes, &token->bstring_len));
-    token->type = FROTH_TOKEN_STRING;
+    FROTH_TRY(read_string(reader, token->bstring_bytes, &token->bstring_len));
+    token->type = FROTH_TOKEN_BSTRING;
     return FROTH_OK;
   }
 

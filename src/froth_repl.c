@@ -36,6 +36,9 @@ static const char* error_name(froth_error_t err) {
     case FROTH_ERROR_UNTERMINATED_QUOTE:   return "unterminated quotation";
     case FROTH_ERROR_UNTERMINATED_COMMENT: return "unterminated comment";
     case FROTH_ERROR_UNEXPECTED_PAREN:     return "unexpected )";
+    case FROTH_ERROR_BSTRING_TOO_LONG:     return "string too long";
+    case FROTH_ERROR_UNTERMINATED_STRING:  return "unterminated string";
+    case FROTH_ERROR_INVALID_ESCAPE:       return "invalid escape sequence";
     /* Internal */
     case FROTH_ERROR_THROW:                return "unhandled throw";
     default:                               return "unknown error";
