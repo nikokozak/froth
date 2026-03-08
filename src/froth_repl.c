@@ -201,11 +201,19 @@ froth_error_t froth_repl_start(froth_vm_t* vm) {
 
       froth_cell_u_t line_start = buf_pos;
       err = froth_repl_read_line(repl_buffer, &buf_pos, line_start);
-      if (err != FROTH_OK) { return FROTH_OK; } /* EOF */
+      if (err != FROTH_OK) {
+        /* Ctrl-C or EOF during continuation — discard and restart */
+        vm->interrupted = 0;
+        emit_string("\n");
+        break;
+      }
 
       scan_line_depth(repl_buffer + line_start,
                       &bracket_depth, &paren_depth, &in_string);
     }
+
+    /* Interrupted or EOF during continuation — skip evaluation */
+    if (bracket_depth > 0 || paren_depth > 0 || in_string) { continue; }
 
     /* Evaluate the accumulated buffer */
     froth_cell_u_t ds_snapshot = vm->ds.pointer;
