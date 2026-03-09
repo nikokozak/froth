@@ -120,9 +120,7 @@ The snapshot has its own token encoding, separate from the in-memory cell tags. 
 | 0x05 | Contract reference | u32 object_id |
 | 0x06 | String reference | u32 object_id |
 
-Note: there's no CALL tag. In-memory, `CALL` means "invoke this slot" (inside a quotation body). In the snapshot, both `SLOT` and `CALL` are encoded as tag 0x02 (slot reference). The difference is reconstructed at restore time based on context — tokens inside a quotation body that refer to slots become CALL cells, except for tick-quoted slots which stay as SLOT.
-
-Wait — actually this is a design decision you'll need to make. The spec says tag 0x02 is "SLOT reference." Whether that maps to in-memory `FROTH_SLOT` or `FROTH_CALL` depends on the original context. You may want to encode both distinctly, or encode just one and reconstruct. Think about this when you write the ADR.
+The snapshot uses two distinct tags for slot references: **0x02 for SLOT** (push reference onto stack) and **0x07 for CALL** (invoke the slot). This preserves the in-memory distinction between `'foo` (SLOT, tag 2) and `foo` inside a quotation (CALL, tag 6) without any ambiguity at restore time.
 
 ---
 
@@ -388,26 +386,32 @@ Inside a quotation body, there are two kinds of slot references:
 - **CALL** (tag 6): "invoke this slot when the quotation executes." E.g., in `[ 1 double ]`, `double` is a CALL — it gets executed.
 - **SLOT** (tag 2): "push this slot's value onto the stack." E.g., in `[ 'double ]`, `'double` is a SLOT — it's a reference, not an invocation.
 
-Both reference the same slot table entry. The difference is just the tag. When serializing, you need to preserve this distinction so that at restore time, you reconstruct the correct tag. The snapshot format uses tag 0x02 for "slot reference" — you'll likely want to add a way to distinguish "call" vs "push" references, or always encode the original tag alongside the name_id. This is a design decision for your ADR.
-
-One clean approach: use two snapshot token tags — 0x02 for SLOT (push), 0x07 for CALL (invoke). Or encode a single-bit flag alongside the name_id. The important thing is not to lose the information.
+Both reference the same slot table entry. The difference is just the tag. The snapshot uses two distinct token tags to preserve this: **0x02 for SLOT** (push), **0x07 for CALL** (invoke). Both are followed by a u16 `name_id`. At restore time, the tag directly tells you which in-memory tag to use — no ambiguity, no context-dependent reconstruction.
 
 ---
 
-## 12. What happens with non-quotation slot values
+## 12. Persisting all value types
 
-Since `def` accepts any value (ADR-017), a slot could hold a plain number:
+Since `def` accepts any value (ADR-017), a slot could hold a plain number, a string, a pattern, or another slot reference — not just quotations. The spec says only QUOTE implementations are persistable, but we extend this: **all value types are persistable.**
 
-```
-42 'answer def
-```
+The rationale: if users can't persist numbers and strings as slot values, they'll have to wrap everything in quotations (`: answer 42 ;` instead of `42 'answer def`). This is a tax on usability with no real benefit — the serialization cost per type is ~10 lines of code.
 
-Here, `answer` is an overlay slot whose `impl` is a tagged NUMBER cell, not a QUOTE. The spec says only QUOTE implementations are persistable. So:
+**Persistable impl_kinds in slot binding records:**
 
-- If `answer` holds `42` (a number), `save` should fail with `ERR.SNAP.NONPERSIST`.
-- The user would need to wrap it: `: answer 42 ;` makes it a quotation that returns 42.
+| impl_kind | Value type | Encoding after impl_kind byte |
+|---|---|---|
+| 0x00 | NUMBER | `cell_bytes` signed integer (the raw number) |
+| 0x01 | QUOTE | u32 `obj_id` |
+| 0x02 | SLOT | u16 `name_id` |
+| 0x03 | PATTERN | u32 `obj_id` |
+| 0x04 | BSTRING | u32 `obj_id` |
+| 0x05 | CONTRACT | u32 `obj_id` |
 
-This is a spec constraint, not a limitation to work around. The rationale: numbers-as-slot-values are essentially mutable variables, and the spec wants persistence to capture **definitions** (behavior), not runtime state.
+At restore time, each impl_kind reconstructs the appropriate tagged cell: NUMBER values are tagged with `froth_make_cell(..., FROTH_NUMBER)`, QUOTE/PATTERN/BSTRING/CONTRACT values look up the object by ID and tag with the corresponding tag, SLOT values look up the name and tag with `FROTH_SLOT`.
+
+**The only truly non-persistable things are:**
+- Function pointers (the `prim` field) — always base-layer, never overlay-owned.
+- NativeAddr values (ADR-024, FROTH-Addr) — not yet implemented; the spec explicitly flags them as non-persistable.
 
 ---
 
@@ -455,14 +459,16 @@ You're not starting from scratch. The serializer is structurally similar to `see
 
 ---
 
-## 15. Questions to resolve before coding (ADR fodder)
+## 15. Resolved decisions (ADR fodder)
 
-These are the decisions that should go into your persistence ADR:
+These decisions are resolved and should go into the persistence ADR:
 
-1. **Overlay tracking strategy**: base watermark (simpler) vs per-slot flag (handles base redefinition)?
-2. **CALL vs SLOT encoding**: single tag 0x02 with a flag bit, or two distinct tags (0x02 and 0x07)?
-3. **Magic bytes**: the spec says 8 bytes for "FROTHSNAP" (9 chars). Clarify.
-4. **Non-quotation slot values**: strict spec compliance (fail with NONPERSIST), or extend the format to handle number/string literals as slot values?
-5. **Buffer allocation for RAM round-trip**: static buffer? Stack? Heap? How big?
-6. **Deduplication**: track by heap offset? Or skip dedup for v1 (accept some wasted space)?
-7. **POSIX file paths**: hardcoded `froth_a.snap`/`froth_b.snap`? Configurable?
+1. **Overlay tracking**: per-slot flag (`uint8_t overlay` on `froth_slot_t`). Supports redefining base words. Cost: 1 byte per slot (128 bytes at current config, likely free due to struct padding). Requires a `boot_complete` flag on the VM so that `def` during stdlib loading doesn't set the overlay bit. After `main.c` finishes `froth_ffi_register` + stdlib eval, set `vm->boot_complete = 1`.
+2. **CALL vs SLOT encoding**: two distinct snapshot token tags — 0x02 for SLOT (push reference), 0x07 for CALL (invoke).
+3. **Magic bytes**: 9 bytes, literal ASCII `FROTHSNAP`. Alignment is irrelevant because the snapshot is parsed via `memcpy`/byte reads, never cast over a struct.
+4. **All value types persistable**: NUMBER, QUOTE, SLOT, PATTERN, BSTRING, CONTRACT. See section 12 for impl_kind table. Spec deviation from QUOTE-only, justified by usability.
+5. **Buffer allocation**: static buffer sized by CMake variable `FROTH_SNAPSHOT_SIZE` (default 2048). Used for RAM round-trip proof. Stage 2 writes directly to file on POSIX.
+6. **Deduplication**: tracked by heap offset during serialization. Mapping from heap offset → object ID prevents duplicate object emission.
+7. **POSIX file paths**: CMake variables `FROTH_SNAPSHOT_PATH_A` and `FROTH_SNAPSHOT_PATH_B`, defaulting to `froth_a.snap` and `froth_b.snap`.
+8. **Traversal**: explicit stack (not recursion) for safety on embedded targets. Fixed-size stack (16-32 entries) bounded by maximum quotation nesting depth.
+9. **Snapshot error codes**: new range 200–299 in the error enum. Codes: INCOMPAT, BADCRC, FORMAT, SNAP_OOM, BADNAME, UNRESOLVED, NONPERSIST.
