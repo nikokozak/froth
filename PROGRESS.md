@@ -64,8 +64,12 @@ Nothing blocked.
 ## Open Questions
 
 - CS holds `froth_cell_t` currently and is unused — will it need a different entry type for the eventual trampoline refactor? (deferred to FROTH-Perf)
-- `divmod`: INT_MIN / -1 is UB in C (result overflows). Need to decide: wrap or error? (deferred — edge case, not blocking)
+- `divmod`: INT_MIN / -1 is UB in C (result overflows). Need to decide: wrap or error? (deferred — make wrapping normative in spec, see TIMELINE deferred/near-term)
 - Tick syntax: spec grammar says `'name` (prefix, no space) but spec examples use `' name` (space-separated). Reader currently requires prefix form. Need ADR to pick one. (deferred — not blocking)
 - `while` stack discipline: too strict for REPL exploration? Revisit after `>r`/`r>`/`r@` and `times` exist — the pressure may ease naturally. (deferred)
+- Strict bare identifiers: typos create slots permanently. ADR needed before persistence ships to users. Design scheduled Mar 11, implementation deferred. (audit finding)
+- Boot error handling: `main.c` ignores return values from registration/stdlib. Scheduled Mar 10 alongside boot sequence hardening. (audit finding)
 - ~~String-Lite timing~~: moved to next-up, targeting Mar 8.
 - ~~POSIX GPIO story~~: resolved — print trace output.
+- ~~`\0` escape inconsistency~~: resolved — removed from spec. String-Lite stays `\0`-free; FROTH-String will handle binary buffers.
+- ~~Spec editorial typos~~: resolved — version headers, cross-references fixed.

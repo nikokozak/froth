@@ -1,7 +1,7 @@
 # Froth Snapshot and Overlay Dictionary Specification
 
 **Status:** Draft for review  
-**Version:** 0.5 (Candidate)ndidate)  
+**Version:** 0.5 (Candidate)
 **Date:** 2026-02-26  
 **Profiles defined:** `FROTH-Snapshot` (required for persistence), `FROTH-Overlay` (persistence model)  
 **Related specs:** `FROTH-Core`, `FROTH-Base`, `FROTH-Interactive` (Direct/Link Modes), `FROTH-FFI`

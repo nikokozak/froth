@@ -1,7 +1,7 @@
 # Froth Language Specification
 
 **Status:** Candidate (pre-freeze)  
-**Version:** 1.2 (2026-03-05)  
+**Version:** 1.1 (2026-03-05)
 **Scope:** This document specifies the *core* semantics of Froth (FROTH-Core) and a small set of optional, strictly layered profiles intended to remain stable for decades.  
 **Non-goals:** Garbage collection; implicit allocation in hot paths; a large mandatory standard library.
 
@@ -200,7 +200,8 @@ Froth MUST support:
    - `\"` for a quote
    - `\\` for a backslash
    - `\n` for newline (LF)
-   - `\0` for NUL byte (0x00)
+   - `\t` for horizontal tab
+   - `\r` for carriage return (CR)
 
    **Note:** Froth’s string operations are byte-oriented. Unicode semantics (code points, normalization, grapheme clusters) are outside this profile’s scope.  
    Produces a **SlotRef** value on DS without calling it.
@@ -216,7 +217,8 @@ Supported escape sequences (and only these):
 - `\"` → byte `0x22`
 - `\\` → byte `0x5C`
 - `\n` → byte `0x0A`
-- `\0` → byte `0x00`
+- `\t` → byte `0x09`
+- `\r` → byte `0x0D`
 
 Any other backslash escape MUST raise a reader error.
 

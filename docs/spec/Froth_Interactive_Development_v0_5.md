@@ -153,7 +153,7 @@ This provides consistent “stop runaway code” behavior in both Direct Mode an
 
 Persistence is defined by the companion profile: **FROTH-Snapshot v0.5** (overlay dictionary model).
 
-This spec defines *when* persistence actions occur; the snapshot format and restore semantics are defined in `FROTH_Snapshot_Overlay_Spec_v0_3`.
+This spec defines *when* persistence actions occur; the snapshot format and restore semantics are defined in `Froth_Snapshot_Overlay_Spec_v0_5`.
 
 ### Required persistence words
 A conforming FROTH-Interactive implementation MUST provide:

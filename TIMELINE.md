@@ -131,6 +131,7 @@
 - [ ] `save`, `restore`, `wipe` words
 - [ ] A/B image selection, header CRC, payload CRC
 - [ ] Boot sequence: restore snapshot on startup, `autorun` under `catch`
+- [ ] Boot error handling: `main.c` checks return values from `froth_ffi_register` and `froth_evaluate_input`, exits with message on failure
 - [ ] Safe boot escape (CAN window during boot)
 - [ ] ESP32 port: `platform_esp32.c`, `boards/esp32/`, ESP-IDF CMake integration
 - [ ] **Proof**: define `autorun`, `save`, restart → it runs. `wipe` resets to base.
@@ -144,6 +145,9 @@
 - [ ] `q.pack` (build quotation from stack values)
 - [ ] `mark` / `release` (FROTH-Region — heap watermark, keeps workshop experimentation tidy)
 - [ ] `arity!` (stack-effect metadata for slots — supports tooling + web editor)
+- [ ] `info` shows overlay heap usage (user code bytes vs total)
+- [ ] `see` shows stack effect for primitives (pull from `froth_ffi_entry_t`)
+- [ ] Strict bare identifiers ADR: design only — decide whether identifier execution should error on undefined slots instead of creating them (forward-reference strategy needed for quotations)
 - [ ] **Proof**: `[ 1 2 + ] q.len` → `[3]`; `mark ... release` reclaims heap
 
 ---
@@ -208,7 +212,8 @@
 
 - **CALL tag decoupling** (ADR TBD): Move CALL/literal distinction out of the value-tag layer (ADR-009 rework). Frees tag 6 for NativeAddr. Prerequisite for FROTH-Addr. Independent cleanup — benefits the tag space regardless.
 - **FROTH-Addr profile** (ADR-024): Native address type for full-width machine addresses. Fixed address pool, width-specific memory access (`@8`/`@16`/`@32`, `!8`/`!16`/`!32`), `addr+`, `addr.pack`. FFI API additions (`froth_push_addr`/`froth_pop_addr`). Board packages provide named address constants (`gpio.base`). Target: implement when doing direct register work on ESP32, after the workshop HAL-level FFI is proven.
-- FROTH-String (`s.pack` — explicit allocation from FFI buffers)
+- FROTH-String (`s.pack` — explicit allocation from FFI buffers, `\0` support for binary buffers)
+- `/mod` overflow: make wrapping behavior normative in spec (currently implementation-defined via unsigned cast, ADR-011). Align with existing code behavior.
 
 ### Medium-term: language maturation
 
