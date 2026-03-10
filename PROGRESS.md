@@ -60,6 +60,7 @@ Nothing blocked.
 ## Next Up
 
 1. Snapshot persistence (format design, serializer, deserializer, RAM round-trip)
+2. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
 
 ## Open Questions
 

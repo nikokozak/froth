@@ -139,7 +139,8 @@
 
 > **Risk**: Tue is overloaded. If persistence takes the full day, ESP32 slides to Wed.
 
-### Mar 11 (Wed) — Overflow + quotation introspection + region
+### Mar 11 (Wed) — Evaluator refactor + quotation introspection + region
+- [ ] Evaluator refactor: split `froth_evaluator.c` into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
 - [ ] ESP32 port (if slipped from Tue)
 - [ ] `q.len`, `q@` (quotation introspection — enables richer `see`)
 - [ ] `q.pack` (build quotation from stack values)
