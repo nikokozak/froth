@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.23)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(Froth)
 
@@ -55,3 +56,4 @@ add_custom_command(
   DEPENDS "${CMAKE_SOURCE_DIR}/src/lib/core.froth"
   COMMENT "Embedding .froth files as C data..."
 )
+

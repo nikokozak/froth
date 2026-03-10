@@ -18,7 +18,9 @@ froth_error_t froth_prim_def(froth_vm_t* froth_vm) {
   FROTH_TRY(froth_stack_pop(&froth_vm->ds, &slot_cell));
   if (!FROTH_CELL_IS_SLOT(slot_cell)) { return FROTH_ERROR_TYPE_MISMATCH; } 
 
-  FROTH_TRY(froth_slot_set_impl((froth_cell_u_t)FROTH_CELL_STRIP_TAG(slot_cell), impl_cell));
+  froth_cell_u_t slot_index = (froth_cell_u_t)FROTH_CELL_STRIP_TAG(slot_cell);
+  FROTH_TRY(froth_slot_set_impl(slot_index, impl_cell));
+  FROTH_TRY(froth_slot_set_overlay(slot_index, froth_vm->boot_complete ? 1 : 0));
 
   return FROTH_OK;
 }

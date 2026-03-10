@@ -13,4 +13,6 @@ froth_vm_t froth_vm = {
   .thrown = FROTH_OK,
   .last_error_slot = -1,
   .interrupted = 0,
+  .boot_complete = 0,
+  .watermark_heap_offset = 0,
 };
