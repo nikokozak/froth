@@ -18,6 +18,9 @@ typedef struct {
 
 // find_name should return an erorr if not found, otherwise write to the result
 // pointer.
+froth_error_t froth_slot_find_name_or_create(froth_heap_t *froth_heap,
+                                             const char *name,
+                                             froth_cell_u_t *slot_index);
 froth_error_t froth_slot_find_name(const char *name,
                                    froth_cell_u_t *found_slot_index);
 froth_error_t froth_slot_create(const char *name, froth_heap_t *froth_heap,
@@ -34,3 +37,4 @@ froth_error_t froth_slot_set_overlay(froth_cell_u_t slot_index,
                                      uint8_t overlay);
 froth_cell_u_t froth_slot_count(void);
 bool froth_slot_is_overlay(froth_cell_u_t slot_index);
+froth_error_t froth_slot_reset_pointer_to_overlay_watermark(void);

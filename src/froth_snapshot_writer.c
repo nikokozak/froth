@@ -1,6 +1,6 @@
-#include "froth_snapshot.h"
 #include "froth_heap.h"
 #include "froth_slot_table.h"
+#include "froth_snapshot.h"
 #include "froth_types.h"
 #include "froth_vm.h"
 #include <stdint.h>
@@ -125,7 +125,9 @@ static froth_error_t object_table_add_if_missing(object_table_t *object_table,
   return FROTH_OK;
 }
 
-static void quote_walk_stack_reset(quote_walk_stack_t *stack) { stack->depth = 0; }
+static void quote_walk_stack_reset(quote_walk_stack_t *stack) {
+  stack->depth = 0;
+}
 
 static froth_error_t quote_walk_stack_push(quote_walk_stack_t *stack,
                                            froth_cell_u_t quote_heap_offset,
@@ -198,13 +200,10 @@ static froth_error_t collect_quote_dependencies(froth_vm_t *froth_vm,
       froth_cell_t token = quote_cells[token_index];
 
       if (FROTH_CELL_IS_QUOTE(token)) {
-        if (token_index < quote_length) {
-          FROTH_TRY(quote_walk_stack_push(&walk_stack, frame.quote_heap_offset,
-                                          token_index + 1));
-        }
-
-        FROTH_TRY(quote_walk_stack_push(&walk_stack, FROTH_CELL_STRIP_TAG(token),
-                                        1));
+        FROTH_TRY(quote_walk_stack_push(&walk_stack, frame.quote_heap_offset,
+                                        token_index + 1));
+        FROTH_TRY(
+            quote_walk_stack_push(&walk_stack, FROTH_CELL_STRIP_TAG(token), 1));
         descended_into_child = true;
         break;
       }
@@ -213,17 +212,17 @@ static froth_error_t collect_quote_dependencies(froth_vm_t *froth_vm,
     }
 
     if (!descended_into_child) {
-      FROTH_TRY(object_table_add_if_missing(object_table, frame.quote_heap_offset,
-                                            FROTH_QUOTE));
+      FROTH_TRY(object_table_add_if_missing(
+          object_table, frame.quote_heap_offset, FROTH_QUOTE));
     }
   }
 
   return FROTH_OK;
 }
 
-static froth_error_t collect_snapshot_dependencies(
-    froth_vm_t *froth_vm, name_table_t *name_table,
-    object_table_t *object_table) {
+static froth_error_t
+collect_snapshot_dependencies(froth_vm_t *froth_vm, name_table_t *name_table,
+                              object_table_t *object_table) {
   froth_cell_u_t slot_count = froth_slot_count();
 
   for (froth_cell_u_t slot_index = 0; slot_index < slot_count; slot_index++) {
@@ -359,8 +358,8 @@ static froth_error_t emit_names(froth_snapshot_buffer_t *snapshot,
     }
 
     FROTH_TRY(emit_u16(snapshot, (uint16_t)name_length));
-    FROTH_TRY(
-        emit_bytes(snapshot, (const uint8_t *)entry->name, (froth_cell_u_t)name_length));
+    FROTH_TRY(emit_bytes(snapshot, (const uint8_t *)entry->name,
+                         (froth_cell_u_t)name_length));
   }
 
   return FROTH_OK;
@@ -415,14 +414,14 @@ static froth_error_t emit_quote_token(froth_snapshot_buffer_t *snapshot,
   case FROTH_BSTRING:
   case FROTH_CONTRACT:
   case FROTH_PATTERN:
-    FROTH_TRY(
-        object_table_find_id(object_table, FROTH_CELL_STRIP_TAG(token), &object_id));
+    FROTH_TRY(object_table_find_id(object_table, FROTH_CELL_STRIP_TAG(token),
+                                   &object_id));
     return emit_u32(snapshot, (uint32_t)object_id);
 
   case FROTH_CALL:
   case FROTH_SLOT:
-    FROTH_TRY(name_table_find_id(name_table, FROTH_CELL_STRIP_TAG(token),
-                                 &name_id));
+    FROTH_TRY(
+        name_table_find_id(name_table, FROTH_CELL_STRIP_TAG(token), &name_id));
     return emit_u16(snapshot, (uint16_t)name_id);
 
   default:
@@ -470,13 +469,11 @@ static froth_error_t emit_objects(froth_vm_t *froth_vm,
 
     switch (object->type) {
     case FROTH_PATTERN:
-      FROTH_TRY(
-          emit_pattern_object(snapshot, froth_vm, object->heap_offset));
+      FROTH_TRY(emit_pattern_object(snapshot, froth_vm, object->heap_offset));
       break;
 
     case FROTH_BSTRING:
-      FROTH_TRY(
-          emit_bstring_object(snapshot, froth_vm, object->heap_offset));
+      FROTH_TRY(emit_bstring_object(snapshot, froth_vm, object->heap_offset));
       break;
 
     case FROTH_QUOTE:
@@ -522,8 +519,8 @@ static froth_error_t emit_binding_impl(froth_snapshot_buffer_t *snapshot,
   case FROTH_BSTRING:
   case FROTH_CONTRACT: {
     froth_cell_u_t object_id;
-    FROTH_TRY(object_table_find_id(object_table, FROTH_CELL_STRIP_TAG(slot_impl),
-                                   &object_id));
+    FROTH_TRY(object_table_find_id(
+        object_table, FROTH_CELL_STRIP_TAG(slot_impl), &object_id));
     return emit_u32(snapshot, (uint32_t)object_id);
   }
 
@@ -558,8 +555,7 @@ static froth_error_t emit_bindings(froth_snapshot_buffer_t *snapshot,
     FROTH_TRY(name_table_find_id(name_table, slot_index, &name_id));
 
     FROTH_TRY(emit_u16(snapshot, (uint16_t)name_id));
-    FROTH_TRY(
-        emit_binding_impl(snapshot, slot_impl, name_table, object_table));
+    FROTH_TRY(emit_binding_impl(snapshot, slot_impl, name_table, object_table));
 
     FROTH_TRY(emit_u32(snapshot, 0xFFFFFFFF));
     FROTH_TRY(emit_u16(snapshot, 0));
@@ -594,9 +590,3 @@ froth_error_t froth_snapshot_save(froth_vm_t *froth_vm,
   return FROTH_OK;
 }
 
-froth_error_t froth_snapshot_load(froth_vm_t *froth_vm,
-                                  froth_snapshot_buffer_t *snapshot) {
-  (void)froth_vm;
-  (void)snapshot;
-  return FROTH_OK;
-}

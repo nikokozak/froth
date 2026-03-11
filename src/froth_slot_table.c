@@ -42,6 +42,18 @@ froth_error_t froth_slot_create(const char *name, froth_heap_t *heap,
   return FROTH_OK;
 }
 
+froth_error_t froth_slot_find_name_or_create(froth_heap_t *froth_heap,
+                                             const char *name,
+                                             froth_cell_u_t *slot_index) {
+
+  if (froth_slot_find_name(name, slot_index) == FROTH_ERROR_UNDEFINED_WORD) {
+    FROTH_TRY(froth_slot_create(name, froth_heap, slot_index));
+    return FROTH_OK;
+  } else {
+    return FROTH_OK;
+  }
+}
+
 froth_error_t froth_slot_get_impl(froth_cell_u_t slot_index,
                                   froth_cell_t *impl) {
   if (!index_has_slot_assigned(slot_index)) {
@@ -108,4 +120,16 @@ bool froth_slot_is_overlay(froth_cell_u_t slot_index) {
     return false;
   }
   return slot_table[slot_index].overlay != 0;
+}
+
+froth_error_t froth_slot_reset_pointer_to_overlay_watermark(void) {
+  // Look for the first "overlay"-labeled slot; this marks the beginning of user
+  // defs, reset pointer to just before the first.
+  for (int i = 0; i < FROTH_SLOT_TABLE_SIZE; i++) {
+    if (slot_table[i].overlay) {
+      slot_pointer = i;
+      break;
+    }
+  }
+  return FROTH_OK;
 }

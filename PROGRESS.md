@@ -4,9 +4,9 @@
 
 ## Current Status
 
-**Phase**: Snapshot serializer complete (Stage 1 pass 1 + pass 2). Deserializer + RAM round-trip next.
-**Blocking issues**: ~2 days behind original schedule but Ctrl-C landed early, buying buffer.
-**Morale check**: overlay slots serialize to a binary payload with dependency-ordered objects.
+**Phase**: Snapshot persistence Stage 1 complete. RAM round-trip proven (7/7 tests). Stage 2 (file-backed, save/restore/wipe words) next.
+**Blocking issues**: ~1 day behind original schedule. Stage 2 persistence and ESP32 port remain for this week.
+**Morale check**: define words, save, wipe, restore — they come back. All value types round-trip.
 
 ## What's Done
 
@@ -47,14 +47,15 @@
 - Evaluator error propagation fix: `froth_evaluate_input` now returns reader errors instead of silently stopping.
 - Spec fix: `times` reference definition corrected (`>r` stashes `q`, not `swap >r`).
 - String-Lite (ADR-023): `FROTH_TOKEN_BSTRING` in reader, escape sequences (`\"`, `\\`, `\n`, `\t`, `\r`), unknown escapes error. Evaluator allocates on heap (length cell via `memcpy` + bytes + null terminator). Executor pushes `FROTH_BSTRING` tag. `pop_bstring` helper extracts length and data pointer. `FROTH_BSTRING_LEN_MAX` (128) caps token-level string size.
-- `froth_snapshot.h` / `froth_snapshot.c`: snapshot serializer (Stage 1). Two-pass architecture: pass 1 discovers names + objects into lookup tables via depth-first postorder traversal; pass 2 emits LE binary payload (name table, dependency-ordered object records, slot bindings). Explicit traversal stack (no recursion). Heap offset → object ID dedup. All value types persistable (NUMBER, QUOTE, SLOT, PATTERN, BSTRING, CONTRACT). Overflow checks on all emit calls. Reserved fields (contract_obj_id, meta_flags, meta_len) for forward compatibility. `froth_snapshot_load` is a stub.
+- `froth_snapshot.h` / `froth_snapshot_writer.c` / `froth_snapshot_reader.c`: snapshot serializer + deserializer (Stage 1). Writer: two-pass architecture (pass 1 discovers names + objects via depth-first postorder traversal; pass 2 emits LE binary payload). Reader: single-pass (read names → create slots, load objects → allocate directly into heap, apply bindings → set impl + overlay flag). Explicit traversal stack (no recursion). Heap offset → object ID dedup. All value types persistable (NUMBER, QUOTE, SLOT, PATTERN, BSTRING, CONTRACT). Overflow checks on all emit/read calls. Reserved fields (contract_obj_id, meta_flags, meta_len) for forward compatibility. `FROTH_SNAPSHOT_MAX_NAME_LEN` (63) caps snapshot name entries.
 - Snapshot error codes in `froth_types.h`: FROTH_ERROR_SNAPSHOT_OVERFLOW (200), FROTH_ERROR_SNAPSHOT_FORMAT (201), FROTH_ERROR_SNAPSHOT_UNRESOLVED (202), FROTH_ERROR_SNAPSHOT_OOM (203)
 - Spec updated: snapshot token tags and obj_kind reuse `froth_tag_t` values directly (NUMBER=0 through CALL=6)
+- RAM round-trip proof: `main.c` smoketest defines 6 overlay words (quote, number, cross-word call, nested quote, string, pattern), saves to buffer, loads (wipe + restore), verifies all 7 checks pass including base word survival. 261 bytes payload.
 - ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation)
 
 ## In Progress
 
-- Snapshot persistence Stage 1: serializer done, deserializer + RAM round-trip proof remaining
+Nothing in progress.
 
 ## Blocked / Waiting
 
@@ -62,11 +63,10 @@ Nothing blocked.
 
 ## Next Up
 
-1. Snapshot deserializer (`froth_snapshot_load`) + RAM round-trip proof
-2. Fix: missing `obj_count` emission in serializer `emit_objects`
-3. Decide: `name_len` format — u8 (current) vs u16 (spec Section 8.2)
-4. Snapshot Stage 2: header with CRC, A/B file-backed persistence, `save`/`restore`/`wipe` words, boot-time restore
-5. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
+1. Snapshot Stage 2: `save`/`restore`/`wipe` primitives, file-backed persistence on POSIX, header with CRC, A/B images
+2. Boot sequence: restore snapshot on startup, `autorun` under `catch`, boot error handling
+3. ESP32 port: `platform_esp32.c`, `boards/esp32/`, ESP-IDF CMake integration
+4. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
 
 ## Open Questions
 

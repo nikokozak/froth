@@ -120,8 +120,9 @@
 - [x] Serializer: two-pass (discovery + emission), name table + dependency-ordered objects + slot bindings
 - [x] Snapshot error codes (200–203) in froth_types.h
 - [x] Spec updated: token/object tags reuse froth_tag_t values
-- [ ] Deserializer: parse payload, rebuild heap objects, apply slot bindings
-- [ ] **Proof**: def a word, serialize to buffer, wipe, restore from buffer — word still works
+- [x] Deserializer: single-pass reader (names → objects → bindings), direct-to-heap allocation, LE byte assembly
+- [x] Writer bugfix: nested quote dependency collection missed outer quote when nested quote was last token
+- [x] **Proof**: 7/7 smoketest — quote, number, cross-word call, nested quote, string, pattern, base word survival
 
 > **Timebox warning**: persistence is the highest-risk milestone. Priority order if time-constrained:
 > 1. Correctness of format and restore logic (RAM round-trip)
@@ -257,5 +258,6 @@
 | ESP32 port | Not scheduled | Mar 10–11 | Added. Platform layer + board + ESP-IDF build. |
 | Link Mode | Mar 13–15 | Mar 14–15 | Moved to Phase 2 (workshop prep), paired with web editor. |
 | Persistence Stage 1 | Mar 9 | Mar 9–11 | Serializer took full session; concepts deep-dive + two-pass design + ChatGPT cleanup pass. Deserializer + RAM round-trip still pending. |
+| Persistence Stage 1 | Mar 9–11 | Mar 9–11 | Deserializer + RAM round-trip completed Mar 11. Writer nested-quote bug found and fixed. |
 | FROTH-Region | Post-break | Mar 11 | Pulled forward — workshop heap hygiene. |
 | q.len/q@/q.pack | Post-break | Mar 11 | Pulled forward — enables richer `see`, metaprogramming. |
