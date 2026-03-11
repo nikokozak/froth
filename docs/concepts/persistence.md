@@ -109,18 +109,19 @@ In practice, this means you serialize in **depth-first postorder**: visit childr
 
 ### 3d. Tagged tokens in the snapshot
 
-The snapshot has its own token encoding, separate from the in-memory cell tags. Each token in a serialized quotation is:
+Snapshot token tags reuse `froth_tag_t` values directly — no separate encoding layer:
 
 | Tag byte | Meaning | Followed by |
 |---|---|---|
-| 0x01 | Number literal | `cell_bits/8` bytes (signed integer) |
-| 0x02 | Slot reference | u16 name_id |
-| 0x03 | Quote reference | u32 object_id |
-| 0x04 | Pattern reference | u32 object_id |
-| 0x05 | Contract reference | u32 object_id |
-| 0x06 | String reference | u32 object_id |
+| 0x00 (NUMBER) | Number literal | `cell_bits/8` bytes (signed integer) |
+| 0x01 (QUOTE) | Quote reference | u32 object_id |
+| 0x02 (SLOT) | Slot reference (push) | u16 name_id |
+| 0x03 (PATTERN) | Pattern reference | u32 object_id |
+| 0x04 (BSTRING) | String reference | u32 object_id |
+| 0x05 (CONTRACT) | Contract reference | u32 object_id |
+| 0x06 (CALL) | Call (invoke slot) | u16 name_id |
 
-The snapshot uses two distinct tags for slot references: **0x02 for SLOT** (push reference onto stack) and **0x07 for CALL** (invoke the slot). This preserves the in-memory distinction between `'foo` (SLOT, tag 2) and `foo` inside a quotation (CALL, tag 6) without any ambiguity at restore time.
+SLOT (tag 2) pushes a slot reference onto the stack (`'foo`). CALL (tag 6) invokes the slot (`foo` inside a quotation body).
 
 ---
 

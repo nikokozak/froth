@@ -22,6 +22,7 @@ target_sources(Froth
     src/froth_ffi.c
     ${CMAKE_BINARY_DIR}/froth_lib_core.h
     boards/posix/ffi_posix.c
+    src/froth_snapshot.c
 )
 
 target_include_directories(Froth PRIVATE src ${CMAKE_BINARY_DIR} boards/posix)

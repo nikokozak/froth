@@ -1,12 +1,12 @@
 # Froth Implementation Progress
 
-*Last updated: 2026-03-08*
+*Last updated: 2026-03-11*
 
 ## Current Status
 
-**Phase**: Multi-line input landed. Persistence next.
+**Phase**: Snapshot serializer complete (Stage 1 pass 1 + pass 2). Deserializer + RAM round-trip next.
 **Blocking issues**: ~2 days behind original schedule but Ctrl-C landed early, buying buffer.
-**Morale check**: `: foo ⏎ .. 1 + ⏎ .. ;` — multi-line definitions work.
+**Morale check**: overlay slots serialize to a binary payload with dependency-ordered objects.
 
 ## What's Done
 
@@ -47,11 +47,14 @@
 - Evaluator error propagation fix: `froth_evaluate_input` now returns reader errors instead of silently stopping.
 - Spec fix: `times` reference definition corrected (`>r` stashes `q`, not `swap >r`).
 - String-Lite (ADR-023): `FROTH_TOKEN_BSTRING` in reader, escape sequences (`\"`, `\\`, `\n`, `\t`, `\r`), unknown escapes error. Evaluator allocates on heap (length cell via `memcpy` + bytes + null terminator). Executor pushes `FROTH_BSTRING` tag. `pop_bstring` helper extracts length and data pointer. `FROTH_BSTRING_LEN_MAX` (128) caps token-level string size.
-- ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input)
+- `froth_snapshot.h` / `froth_snapshot.c`: snapshot serializer (Stage 1). Two-pass architecture: pass 1 discovers names + objects into lookup tables via depth-first postorder traversal; pass 2 emits LE binary payload (name table, dependency-ordered object records, slot bindings). Explicit traversal stack (no recursion). Heap offset → object ID dedup. All value types persistable (NUMBER, QUOTE, SLOT, PATTERN, BSTRING, CONTRACT). Overflow checks on all emit calls. Reserved fields (contract_obj_id, meta_flags, meta_len) for forward compatibility. `froth_snapshot_load` is a stub.
+- Snapshot error codes in `froth_types.h`: FROTH_ERROR_SNAPSHOT_OVERFLOW (200), FROTH_ERROR_SNAPSHOT_FORMAT (201), FROTH_ERROR_SNAPSHOT_UNRESOLVED (202), FROTH_ERROR_SNAPSHOT_OOM (203)
+- Spec updated: snapshot token tags and obj_kind reuse `froth_tag_t` values directly (NUMBER=0 through CALL=6)
+- ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation)
 
 ## In Progress
 
-Nothing in progress.
+- Snapshot persistence Stage 1: serializer done, deserializer + RAM round-trip proof remaining
 
 ## Blocked / Waiting
 
@@ -59,8 +62,11 @@ Nothing blocked.
 
 ## Next Up
 
-1. Snapshot persistence (format design, serializer, deserializer, RAM round-trip)
-2. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
+1. Snapshot deserializer (`froth_snapshot_load`) + RAM round-trip proof
+2. Fix: missing `obj_count` emission in serializer `emit_objects`
+3. Decide: `name_len` format — u8 (current) vs u16 (spec Section 8.2)
+4. Snapshot Stage 2: header with CRC, A/B file-backed persistence, `save`/`restore`/`wipe` words, boot-time restore
+5. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
 
 ## Open Questions
 

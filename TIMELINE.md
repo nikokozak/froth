@@ -1,6 +1,6 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-08*
+*Last reviewed: 2026-03-11*
 *Source: Froth Implementation Roadmap v0.4 (Feb 25 → Workshop week of Mar 15)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
@@ -114,10 +114,12 @@
 - [x] Multi-line input (bracket/string depth tracking, `..` continuation prompt)
 - [x] **Proof**: `: double ⏎ .. dup + ⏎ .. ; ⏎ 5 double` → `[10]`; multi-line paren comments, strings, nested brackets all accumulate correctly
 
-### Mar 9 (Mon) — Persistence stage 1: format + RAM round-trip
-- [ ] Snapshot persistence design (review spec, ADR for implementation choices)
-- [ ] Overlay ownership tracking (base watermark or per-slot flag)
-- [ ] Serializer: walk overlay slots, emit name table + objects + bindings
+### Mar 9–11 (Mon–Tue) — Persistence stage 1: format + RAM round-trip (was Mar 9)
+- [x] Snapshot persistence design (review spec, ADR-026 for implementation choices)
+- [x] Overlay ownership tracking (per-slot flag + boot_complete gate, ADR-026 §1)
+- [x] Serializer: two-pass (discovery + emission), name table + dependency-ordered objects + slot bindings
+- [x] Snapshot error codes (200–203) in froth_types.h
+- [x] Spec updated: token/object tags reuse froth_tag_t values
 - [ ] Deserializer: parse payload, rebuild heap objects, apply slot bindings
 - [ ] **Proof**: def a word, serialize to buffer, wipe, restore from buffer — word still works
 
@@ -254,5 +256,6 @@
 | Snapshot persistence | Mar 10–12 | Mar 9–10 | Compressed to 2 days. RAM round-trip first, file-backed second. |
 | ESP32 port | Not scheduled | Mar 10–11 | Added. Platform layer + board + ESP-IDF build. |
 | Link Mode | Mar 13–15 | Mar 14–15 | Moved to Phase 2 (workshop prep), paired with web editor. |
+| Persistence Stage 1 | Mar 9 | Mar 9–11 | Serializer took full session; concepts deep-dive + two-pass design + ChatGPT cleanup pass. Deserializer + RAM round-trip still pending. |
 | FROTH-Region | Post-break | Mar 11 | Pulled forward — workshop heap hygiene. |
 | q.len/q@/q.pack | Post-break | Mar 11 | Pulled forward — enables richer `see`, metaprogramming. |

@@ -274,7 +274,7 @@ Each object record begins with:
 
 | Field | Size | Meaning |
 |---|---:|---|
-| `obj_kind` | u8 | 1=QUOTE, 2=PATTERN, 3=CONTRACT, 4=STRING |
+| `obj_kind` | u8 | uses `froth_tag_t` values: 1=QUOTE, 3=PATTERN, 5=CONTRACT, 4=BSTRING |
 | `obj_id` | u32 | MUST equal the next sequential ID |
 | `obj_len` | u32 | payload length of this object record (bytes) |
 | `obj_payload` | obj_len | kind-specific payload |
@@ -287,14 +287,17 @@ Each object record begins with:
 
 Each token is encoded as:
 
+Token tags reuse `froth_tag_t` values directly:
+
 | Token tag | Meaning | Encoding |
 |---:|---|---|
-| 0x01 | CELL literal | tag + `cell_bytes` signed integer |
-| 0x02 | SLOT reference | tag + u16 `name_id` |
-| 0x03 | QUOTE reference | tag + u32 `obj_id` |
-| 0x04 | PATTERN reference | tag + u32 `obj_id` |
+| 0x00 | NUMBER literal | tag + `cell_bytes` signed integer |
+| 0x01 | QUOTE reference | tag + u32 `obj_id` |
+| 0x02 | SLOT reference (push) | tag + u16 `name_id` |
+| 0x03 | PATTERN reference | tag + u32 `obj_id` |
+| 0x04 | BSTRING reference | tag + u32 `obj_id` |
 | 0x05 | CONTRACT reference | tag + u32 `obj_id` |
-| 0x06 | STRING reference | tag + u32 `obj_id` |
+| 0x06 | CALL (invoke slot) | tag + u16 `name_id` |
 
 `cell_bytes` = `cell_bits/8` from snapshot header.
 

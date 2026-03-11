@@ -76,6 +76,12 @@ typedef enum {
   FROTH_ERROR_UNTERMINATED_STRING  = 105,
   FROTH_ERROR_INVALID_ESCAPE       = 106,
 
+  /* Snapshot errors — persistence subsystem (200–299). */
+  FROTH_ERROR_SNAPSHOT_OVERFLOW        = 200,
+  FROTH_ERROR_SNAPSHOT_FORMAT          = 201,
+  FROTH_ERROR_SNAPSHOT_UNRESOLVED      = 202,
+  FROTH_ERROR_SNAPSHOT_OOM             = 203,
+
   /* Internal sentinel — not a user-visible error code. */
   FROTH_ERROR_THROW                = -1,
 } froth_error_t;

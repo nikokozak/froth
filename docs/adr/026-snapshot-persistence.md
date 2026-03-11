@@ -23,13 +23,11 @@ Nine decisions are bundled here because they're tightly coupled — each one con
 
 **Decision: (B).** The 1-byte cost per slot is negligible (128 bytes at `FROTH_SLOT_TABLE_SIZE=128`, likely free due to struct padding). Handles base-word redefinition correctly. Requires a `boot_complete` flag on the VM so that `def` during stdlib loading doesn't mark slots as overlay.
 
-### 2. CALL vs SLOT in snapshot tokens (spec deviation)
+### 2. Snapshot token/object tags reuse `froth_tag_t` values (spec update)
 
-The spec defines token tag 0x02 as "SLOT reference" but does not define a separate CALL tag — the in-memory CALL (tag 6) vs SLOT (tag 2) distinction is implicit.
+Snapshot token tags and object kind values reuse the in-memory `froth_tag_t` enum directly (NUMBER=0, QUOTE=1, SLOT=2, PATTERN=3, BSTRING=4, CONTRACT=5, CALL=6). This eliminates a separate mapping layer between on-wire and in-memory representations.
 
-**Decision:** Use two distinct snapshot token tags: **0x02 = SLOT** (push reference onto stack, as in `'foo`) and **0x07 = CALL** (invoke, as in `foo` inside a quotation body). Both are followed by u16 `name_id`. This eliminates ambiguity at restore time — the tag directly maps to the in-memory cell tag.
-
-**Rationale for deviation:** The spec's single SLOT tag would require the deserializer to infer CALL vs SLOT from context, which is fragile and unnecessary when a single extra tag value makes it explicit. The format version (0x0004) is unchanged since tag 0x07 is in the reserved range.
+**Decision:** Both token tags and `obj_kind` use the same numeric values as `froth_tag_t`. CALL (tag 6) is used for slot invocation inside quotation bodies; SLOT (tag 2) is used for push-reference (`'foo`). The spec has been updated to reflect this.
 
 ### 3. Magic bytes: 8 bytes, `FRTHSNAP\0`
 
