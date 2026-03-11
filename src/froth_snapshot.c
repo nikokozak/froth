@@ -354,11 +354,11 @@ static froth_error_t emit_names(froth_snapshot_buffer_t *snapshot,
     const name_table_item_t *entry = &name_table->items[i];
     size_t name_length = strlen(entry->name);
 
-    if (name_length > UINT8_MAX) {
+    if (name_length > UINT16_MAX) {
       return FROTH_ERROR_SNAPSHOT_FORMAT;
     }
 
-    FROTH_TRY(emit_u8(snapshot, (uint8_t)name_length));
+    FROTH_TRY(emit_u16(snapshot, (uint16_t)name_length));
     FROTH_TRY(
         emit_bytes(snapshot, (const uint8_t *)entry->name, (froth_cell_u_t)name_length));
   }
@@ -460,6 +460,8 @@ static froth_error_t emit_objects(froth_vm_t *froth_vm,
                                   froth_snapshot_buffer_t *snapshot,
                                   const object_table_t *object_table,
                                   const name_table_t *name_table) {
+  FROTH_TRY(emit_u32(snapshot, (uint32_t)object_table->count));
+
   for (froth_cell_u_t i = 0; i < object_table->count; i++) {
     const object_table_item_t *object = &object_table->items[i];
 
