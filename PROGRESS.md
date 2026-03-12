@@ -61,7 +61,7 @@
 - Boot error handling: `main.c` checks return values from all `froth_ffi_register` calls, `platform_init`, and `froth_evaluate_input`. Failure prints step name + error code via `emit_string`/`format_number`, then `platform_fatal()`.
 - `autorun` hook: `[ 'autorun call ] catch drop` after restore. Silent on fresh boot (undefined word caught and dropped). User-defined autorun errors swallowed — stack clean on REPL entry. `autorun` slot always visible in `words` (discoverability).
 - 17/17 file-backed persistence smoke tests pass: all value types, A/B rotation, multiple saves, wipe, corrupt file rejection, cross-referencing words, mutable state, recursion.
-- ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API)
+- ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture)
 
 ## In Progress
 
