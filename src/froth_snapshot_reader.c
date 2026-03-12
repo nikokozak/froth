@@ -92,7 +92,7 @@ froth_error_t read_bytes(snapshot_reader_t *reader, froth_cell_u_t num_bytes,
 
 froth_error_t reset_overlay_to_base(froth_vm_t *froth_vm) {
   froth_vm->heap.pointer = froth_vm->watermark_heap_offset;
-  FROTH_TRY(froth_slot_reset_pointer_to_overlay_watermark());
+  FROTH_TRY(froth_slot_reset_overlay());
   return FROTH_OK;
 }
 
@@ -109,7 +109,7 @@ froth_error_t read_names(froth_vm_t *froth_vm, snapshot_reader_t *reader,
   for (int i = 0; i < name_count; i++) {
     FROTH_TRY(read_u16(reader, &name_len));
     if (name_len > FROTH_SNAPSHOT_MAX_NAME_LEN) {
-      return FROTH_ERROR_SNAPSHOT_OVERFLOW; // TODO: better error
+      return FROTH_ERROR_SNAPSHOT_BAD_NAME;
     }
 
     FROTH_TRY(read_bytes(reader, (froth_cell_u_t)name_len, name));

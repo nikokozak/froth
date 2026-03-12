@@ -97,13 +97,15 @@ Consistent with existing ranges (runtime 1-99, reader 100-199, FFI 300+).
 
 | Code | Name | Meaning |
 |---|---|---|
-| 200 | `FROTH_ERROR_SNAP_INCOMPAT` | ABI hash mismatch |
-| 201 | `FROTH_ERROR_SNAP_BADCRC` | CRC mismatch (header or payload) |
-| 202 | `FROTH_ERROR_SNAP_FORMAT` | Parse/structural error |
-| 203 | `FROTH_ERROR_SNAP_OOM` | Out of memory during restore |
-| 204 | `FROTH_ERROR_SNAP_BADNAME` | Invalid name table entry |
-| 205 | `FROTH_ERROR_SNAP_UNRESOLVED` | Unresolved object reference |
-| 206 | `FROTH_ERROR_SNAP_NONPERSIST` | Slot has non-persistable impl |
+| 200 | `FROTH_ERROR_SNAPSHOT_OVERFLOW` | Buffer read/write past end |
+| 201 | `FROTH_ERROR_SNAPSHOT_FORMAT` | Bad magic, version, or unknown tag |
+| 202 | `FROTH_ERROR_SNAPSHOT_UNRESOLVED` | Heap offset not in object table |
+| 203 | `FROTH_ERROR_SNAPSHOT_BAD_CRC` | Header or payload CRC mismatch |
+| 204 | `FROTH_ERROR_SNAPSHOT_INCOMPAT` | ABI hash mismatch |
+| 205 | `FROTH_ERROR_SNAPSHOT_NO_SNAPSHOT` | No valid snapshot in storage |
+| 206 | `FROTH_ERROR_SNAPSHOT_BAD_NAME` | Name exceeds max length |
+
+*Updated Mar 11: renumbered and clarified during Stage 2. Removed dead `SNAP_OOM` (regular `HEAP_OUT_OF_MEMORY` covers it). Added `NO_SNAPSHOT` and `BAD_NAME`. Each code now has exactly one meaning.*
 
 ## Consequences
 

@@ -77,10 +77,13 @@ typedef enum {
   FROTH_ERROR_INVALID_ESCAPE       = 106,
 
   /* Snapshot errors — persistence subsystem (200–299). */
-  FROTH_ERROR_SNAPSHOT_OVERFLOW        = 200,
-  FROTH_ERROR_SNAPSHOT_FORMAT          = 201,
-  FROTH_ERROR_SNAPSHOT_UNRESOLVED      = 202,
-  FROTH_ERROR_SNAPSHOT_OOM             = 203,
+  FROTH_ERROR_SNAPSHOT_OVERFLOW        = 200, /* buffer read/write past end */
+  FROTH_ERROR_SNAPSHOT_FORMAT          = 201, /* bad magic, version, or unknown tag */
+  FROTH_ERROR_SNAPSHOT_UNRESOLVED      = 202, /* heap offset not in object table */
+  FROTH_ERROR_SNAPSHOT_BAD_CRC         = 203, /* header or payload CRC mismatch */
+  FROTH_ERROR_SNAPSHOT_INCOMPAT        = 204, /* ABI hash mismatch */
+  FROTH_ERROR_SNAPSHOT_NO_SNAPSHOT     = 205, /* no valid snapshot in storage */
+  FROTH_ERROR_SNAPSHOT_BAD_NAME        = 206, /* name exceeds max length */
 
   /* Internal sentinel — not a user-visible error code. */
   FROTH_ERROR_THROW                = -1,

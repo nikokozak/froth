@@ -129,18 +129,23 @@
 > 2. File-backed storage for POSIX (save/restore survive process restart)
 > 3. Full A/B atomicity with CRC and generation counters
 
-### Mar 10 (Tue) — Strong push: persistence finish + ESP32 first contact
-- [ ] File-backed save/restore on POSIX (write to `froth.snap`)
-- [ ] `save`, `restore`, `wipe` words
-- [ ] A/B image selection, header CRC, payload CRC
-- [ ] Boot sequence: restore snapshot on startup, `autorun` under `catch`
-- [ ] Boot error handling: `main.c` checks return values from `froth_ffi_register` and `froth_evaluate_input`, exits with message on failure
+### Mar 10–11 (Tue–Wed) — Persistence Stage 2: file-backed save/restore/wipe (was Mar 10)
+- [x] CRC32 module: IEEE 802.3 bitwise (no lookup table), verified against canonical test vector
+- [x] Platform snapshot storage API (ADR-027): offset-based read/write/erase, `FROTH_HAS_SNAPSHOTS` opt-in
+- [x] POSIX implementation: per-call fopen/fclose, A/B files, erase via remove()
+- [x] Snapshot header: 50-byte envelope with magic, format version, ABI hash, generation counter, CRC32 (header + payload)
+- [x] A/B slot selection: pick active (restore), pick inactive (save), generation-based winner
+- [x] `save`, `restore`, `wipe` primitives in `froth_snapshot_prims.c`
+- [x] Boot-time restore: `main.c` attempts restore after boot_complete, failure non-fatal
+- [x] Snapshot error codes cleaned up: 200–206, each with exactly one meaning
+- [x] `froth_slot_reset_overlay` properly clears all overlay slot fields
+- [x] **Proof**: 17/17 smoke tests — all value types, A/B rotation, wipe, corrupt file rejection, cross-refs, mutable state, recursion
+- [ ] `autorun` under `catch`: execute if bound after restore
+- [ ] Boot error handling: `main.c` checks return values from `froth_ffi_register` and `froth_evaluate_input`
 - [ ] Safe boot escape (CAN window during boot)
 - [ ] ESP32 port: `platform_esp32.c`, `boards/esp32/`, ESP-IDF CMake integration
 - [ ] **Proof**: define `autorun`, `save`, restart → it runs. `wipe` resets to base.
 - [ ] **Proof**: LED blink from Froth REPL on real ESP32 hardware
-
-> **Risk**: Tue is overloaded. If persistence takes the full day, ESP32 slides to Wed.
 
 ### Mar 11 (Wed) — Evaluator refactor + quotation introspection + region
 - [ ] Evaluator refactor: split `froth_evaluator.c` into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
@@ -261,3 +266,4 @@
 | Persistence Stage 1 | Mar 9–11 | Mar 9–11 | Deserializer + RAM round-trip completed Mar 11. Writer nested-quote bug found and fixed. |
 | FROTH-Region | Post-break | Mar 11 | Pulled forward — workshop heap hygiene. |
 | q.len/q@/q.pack | Post-break | Mar 11 | Pulled forward — enables richer `see`, metaprogramming. |
+| Persistence Stage 2 | Mar 10 | Mar 10–11 | CRC32, platform API, header, A/B selection, prims, boot restore. 17/17 smoke tests. autorun still pending. |

@@ -4,9 +4,9 @@
 
 ## Current Status
 
-**Phase**: Snapshot persistence Stage 1 complete. RAM round-trip proven (7/7 tests). Stage 2 (file-backed, save/restore/wipe words) next.
-**Blocking issues**: ~1 day behind original schedule. Stage 2 persistence and ESP32 port remain for this week.
-**Morale check**: define words, save, wipe, restore — they come back. All value types round-trip.
+**Phase**: Snapshot persistence Stage 2 complete. File-backed `save`/`restore`/`wipe` working. Boot-time restore working. `autorun` under `catch` next.
+**Blocking issues**: ~1.5 days behind original schedule. `autorun`, boot hardening, ESP32 port remain for this week.
+**Morale check**: define words, save, kill process, restart — they come back. 17/17 smoke tests pass.
 
 ## What's Done
 
@@ -48,10 +48,18 @@
 - Spec fix: `times` reference definition corrected (`>r` stashes `q`, not `swap >r`).
 - String-Lite (ADR-023): `FROTH_TOKEN_BSTRING` in reader, escape sequences (`\"`, `\\`, `\n`, `\t`, `\r`), unknown escapes error. Evaluator allocates on heap (length cell via `memcpy` + bytes + null terminator). Executor pushes `FROTH_BSTRING` tag. `pop_bstring` helper extracts length and data pointer. `FROTH_BSTRING_LEN_MAX` (128) caps token-level string size.
 - `froth_snapshot.h` / `froth_snapshot_writer.c` / `froth_snapshot_reader.c`: snapshot serializer + deserializer (Stage 1). Writer: two-pass architecture (pass 1 discovers names + objects via depth-first postorder traversal; pass 2 emits LE binary payload). Reader: single-pass (read names → create slots, load objects → allocate directly into heap, apply bindings → set impl + overlay flag). Explicit traversal stack (no recursion). Heap offset → object ID dedup. All value types persistable (NUMBER, QUOTE, SLOT, PATTERN, BSTRING, CONTRACT). Overflow checks on all emit/read calls. Reserved fields (contract_obj_id, meta_flags, meta_len) for forward compatibility. `FROTH_SNAPSHOT_MAX_NAME_LEN` (63) caps snapshot name entries.
-- Snapshot error codes in `froth_types.h`: FROTH_ERROR_SNAPSHOT_OVERFLOW (200), FROTH_ERROR_SNAPSHOT_FORMAT (201), FROTH_ERROR_SNAPSHOT_UNRESOLVED (202), FROTH_ERROR_SNAPSHOT_OOM (203)
+- Snapshot error codes in `froth_types.h`: OVERFLOW (200), FORMAT (201), UNRESOLVED (202), BAD_CRC (203), INCOMPAT (204), NO_SNAPSHOT (205), BAD_NAME (206). Each code has exactly one meaning.
 - Spec updated: snapshot token tags and obj_kind reuse `froth_tag_t` values directly (NUMBER=0 through CALL=6)
-- RAM round-trip proof: `main.c` smoketest defines 6 overlay words (quote, number, cross-word call, nested quote, string, pattern), saves to buffer, loads (wipe + restore), verifies all 7 checks pass including base word survival. 261 bytes payload.
-- ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation)
+- RAM round-trip proof: 7/7 smoketest (quote, number, cross-word call, nested quote, string, pattern, base word survival). 261 bytes payload.
+- `froth_crc32.h` / `froth_crc32.c`: IEEE 802.3 CRC32, bitwise (no lookup table). Verified against canonical test vector.
+- Platform snapshot storage API (ADR-027): offset-based `platform_snapshot_read`/`write`/`erase`. Board opt-in via `FROTH_HAS_SNAPSHOTS` CMake define with linker enforcement. Capacity check: kernel-owned, compile-time `FROTH_SNAPSHOT_BLOCK_SIZE` with optional runtime override.
+- `platform_posix.c`: POSIX implementation of snapshot storage. Per-call `fopen`/`fclose` (no held handles). A/B files via `FROTH_SNAPSHOT_PATH_A`/`_B` CMake vars.
+- `froth_snapshot.c`: header build/parse, ABI hash (CRC32 over cell_bits + endian + format version), A/B slot selection (pick active for restore, pick inactive for save, generation counter).
+- `froth_snapshot_prims.c`: `save`, `restore`, `wipe` primitives. Guarded by `#ifdef FROTH_HAS_SNAPSHOTS`. Registered via `froth_ffi_register` in `main.c`.
+- `froth_slot_table.c`: `froth_slot_reset_overlay` (renamed from `reset_pointer_to_overlay_watermark`) now clears name, impl, prim, and overlay flag on all overlay slots.
+- Boot-time restore: `main.c` attempts `restore` after `boot_complete`. Failure is non-fatal (first boot, corrupt snapshots silently skipped).
+- 17/17 file-backed persistence smoke tests pass: all value types, A/B rotation, multiple saves, wipe, corrupt file rejection, cross-referencing words, mutable state, recursion.
+- ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API)
 
 ## In Progress
 
@@ -63,8 +71,8 @@ Nothing blocked.
 
 ## Next Up
 
-1. Snapshot Stage 2: `save`/`restore`/`wipe` primitives, file-backed persistence on POSIX, header with CRC, A/B images
-2. Boot sequence: restore snapshot on startup, `autorun` under `catch`, boot error handling
+1. `autorun` under `catch`: if slot `autorun` is bound after restore, execute `[ 'autorun call ] catch`. Errors reported, never prevent REPL entry.
+2. Boot error handling: `main.c` checks return values from `froth_ffi_register` and `froth_evaluate_input`, exits with message on failure.
 3. ESP32 port: `platform_esp32.c`, `boards/esp32/`, ESP-IDF CMake integration
 4. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
 
@@ -76,6 +84,7 @@ Nothing blocked.
 - `while` stack discipline: too strict for REPL exploration? Revisit after `>r`/`r>`/`r@` and `times` exist — the pressure may ease naturally. (deferred)
 - Strict bare identifiers: typos create slots permanently. ADR needed before persistence ships to users. Design scheduled Mar 11, implementation deferred. (audit finding)
 - Boot error handling: `main.c` ignores return values from registration/stdlib. Scheduled Mar 10 alongside boot sequence hardening. (audit finding)
+- `wipe` does not restore redefined base words: `froth_slot_reset_overlay` clears overlay slots entirely — if a user redefined a base word (e.g., `: + 42 ;`), it's gone until reboot. Fix: `wipe` should trigger reboot (embedded) or full re-init (POSIX). For now, user must power cycle after `wipe`. Needs ADR before shipping to users. (audit finding)
 - ~~String-Lite timing~~: moved to next-up, targeting Mar 8.
 - ~~POSIX GPIO story~~: resolved — print trace output.
 - ~~`\0` escape inconsistency~~: resolved — removed from spec. String-Lite stays `\0`-free; FROTH-String will handle binary buffers.

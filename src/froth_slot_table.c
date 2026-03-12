@@ -122,14 +122,17 @@ bool froth_slot_is_overlay(froth_cell_u_t slot_index) {
   return slot_table[slot_index].overlay != 0;
 }
 
-froth_error_t froth_slot_reset_pointer_to_overlay_watermark(void) {
-  // Look for the first "overlay"-labeled slot; this marks the beginning of user
-  // defs, reset pointer to just before the first.
-  for (int i = 0; i < FROTH_SLOT_TABLE_SIZE; i++) {
+froth_error_t froth_slot_reset_overlay(void) {
+  froth_cell_u_t new_pointer = slot_pointer;
+  for (froth_cell_u_t i = 0; i < slot_pointer; i++) {
     if (slot_table[i].overlay) {
-      slot_pointer = i;
-      break;
+      if (i < new_pointer) new_pointer = i;
+      slot_table[i].name = NULL;
+      slot_table[i].impl = 0;
+      slot_table[i].prim = NULL;
+      slot_table[i].overlay = 0;
     }
   }
+  slot_pointer = new_pointer;
   return FROTH_OK;
 }

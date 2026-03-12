@@ -40,6 +40,14 @@ static const char* error_name(froth_error_t err) {
     case FROTH_ERROR_BSTRING_TOO_LONG:     return "string too long";
     case FROTH_ERROR_UNTERMINATED_STRING:  return "unterminated string";
     case FROTH_ERROR_INVALID_ESCAPE:       return "invalid escape sequence";
+    /* Snapshot errors */
+    case FROTH_ERROR_SNAPSHOT_OVERFLOW:    return "snapshot buffer overflow";
+    case FROTH_ERROR_SNAPSHOT_FORMAT:      return "snapshot format error";
+    case FROTH_ERROR_SNAPSHOT_UNRESOLVED:  return "snapshot unresolved reference";
+    case FROTH_ERROR_SNAPSHOT_BAD_CRC:     return "snapshot CRC mismatch";
+    case FROTH_ERROR_SNAPSHOT_INCOMPAT:    return "snapshot incompatible ABI";
+    case FROTH_ERROR_SNAPSHOT_NO_SNAPSHOT: return "no saved snapshot";
+    case FROTH_ERROR_SNAPSHOT_BAD_NAME:    return "snapshot name too long";
     /* Internal */
     case FROTH_ERROR_THROW:                return "unhandled throw";
     default:                               return "unknown error";
