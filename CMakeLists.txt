@@ -5,11 +5,15 @@ project(Froth)
 
 add_executable(Froth)
 
+# Board and platform selection
+set(FROTH_BOARD "posix" CACHE STRING "Target board (directory name under boards/)")
+set(FROTH_PLATFORM "posix" CACHE STRING "Target platform (directory name under platforms/)")
+
 target_sources(Froth
   PRIVATE
     src/main.c
+    src/froth_boot.c
     src/froth_stack.c
-    src/platform_posix.c
     src/froth_heap.c
     src/froth_slot_table.c
     src/froth_reader.c
@@ -20,16 +24,22 @@ target_sources(Froth
     src/froth_primitives.c
     src/froth_fmt.c
     src/froth_ffi.c
-    ${CMAKE_BINARY_DIR}/froth_lib_core.h
-    boards/posix/ffi_posix.c
     src/froth_snapshot.c
     src/froth_snapshot_reader.c
     src/froth_snapshot_writer.c
     src/froth_crc32.c
     src/froth_snapshot_prims.c
+    ${CMAKE_BINARY_DIR}/froth_lib_core.h
+    platforms/${FROTH_PLATFORM}/platform.c
+    boards/${FROTH_BOARD}/ffi.c
 )
 
-target_include_directories(Froth PRIVATE src ${CMAKE_BINARY_DIR} boards/posix)
+target_include_directories(Froth PRIVATE
+  src
+  ${CMAKE_BINARY_DIR}
+  boards/${FROTH_BOARD}
+  platforms/${FROTH_PLATFORM}
+)
 
 set_property(TARGET Froth PROPERTY C_STANDARD 11)
 set_property(TARGET Froth PROPERTY C_STANDARD_REQUIRED ON)
@@ -57,7 +67,7 @@ target_compile_definitions(Froth PRIVATE FROTH_SLOT_TABLE_SIZE=${FROTH_SLOT_TABL
 target_compile_definitions(Froth PRIVATE FROTH_LINE_BUFFER_SIZE=${FROTH_LINE_BUFFER_SIZE})
 target_compile_definitions(Froth PRIVATE FROTH_MAX_PERM_SIZE=${FROTH_MAX_PERM_SIZE})
 target_compile_definitions(Froth PRIVATE FROTH_VERSION="${FROTH_VERSION}")
-if(${FROTH_HAS_SNAPSHOTS}) 
+if(${FROTH_HAS_SNAPSHOTS})
   target_compile_definitions(Froth PRIVATE FROTH_HAS_SNAPSHOTS)
   target_compile_definitions(Froth PRIVATE FROTH_SNAPSHOT_BLOCK_SIZE=${FROTH_SNAPSHOT_BLOCK_SIZE})
   target_compile_definitions(Froth PRIVATE FROTH_SNAPSHOT_PATH_A="${FROTH_SNAPSHOT_PATH_A}")
@@ -71,4 +81,3 @@ add_custom_command(
   DEPENDS "${CMAKE_SOURCE_DIR}/src/lib/core.froth"
   COMMENT "Embedding .froth files as C data..."
 )
-

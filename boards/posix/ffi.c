@@ -1,4 +1,4 @@
-#include "ffi_posix.h"
+#include "ffi.h"
 #include "froth_fmt.h"
 #include <unistd.h>
 
