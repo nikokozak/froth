@@ -140,8 +140,8 @@
 - [x] Snapshot error codes cleaned up: 200–206, each with exactly one meaning
 - [x] `froth_slot_reset_overlay` properly clears all overlay slot fields
 - [x] **Proof**: 17/17 smoke tests — all value types, A/B rotation, wipe, corrupt file rejection, cross-refs, mutable state, recursion
-- [ ] `autorun` under `catch`: execute if bound after restore
-- [ ] Boot error handling: `main.c` checks return values from `froth_ffi_register` and `froth_evaluate_input`
+- [x] `autorun` under `catch`: `[ 'autorun call ] catch drop` — silent on fresh boot, errors swallowed, clean stack
+- [x] Boot error handling: `boot_fail()` prints step + error code, `platform_fatal()` halts. All init calls checked.
 - [ ] Safe boot escape (CAN window during boot)
 - [ ] ESP32 port: `platform_esp32.c`, `boards/esp32/`, ESP-IDF CMake integration
 - [ ] **Proof**: define `autorun`, `save`, restart → it runs. `wipe` resets to base.
@@ -216,6 +216,10 @@
 - [ ] 15 pre-flashed ESP32 boards ready
 
 ## Deferred (post-workshop)
+
+### IMPORTANT: `catch` return value vs Froth truth convention
+
+`catch` returns 0 on success, nonzero (error code) on failure — C/POSIX convention. But Froth's truth values are 0 = false, -1 = true. This means "success is falsy": you can't branch on a `catch` result with `if`/`choose` without inverting it. This affects any user code that wants to react to catch outcomes idiomatically. Needs an ADR to decide: do we flip `catch` to return Froth-truthy values (0 = error, -1 = success)? Return a flag + error code pair? Or accept the C convention and document it? Must also audit the spec for consistency — `key?` returns Froth-style true/false, so there's already a split if `catch` stays C-style. Resolve before shipping to users.
 
 ### Near-term: ESP32 hardware deepening
 

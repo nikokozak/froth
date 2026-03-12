@@ -1,12 +1,12 @@
 # Froth Implementation Progress
 
-*Last updated: 2026-03-11*
+*Last updated: 2026-03-12*
 
 ## Current Status
 
-**Phase**: Snapshot persistence Stage 2 complete. File-backed `save`/`restore`/`wipe` working. Boot-time restore working. `autorun` under `catch` next.
-**Blocking issues**: ~1.5 days behind original schedule. `autorun`, boot hardening, ESP32 port remain for this week.
-**Morale check**: define words, save, kill process, restart — they come back. 17/17 smoke tests pass.
+**Phase**: Boot sequence hardened. `autorun`, `platform_fatal`, boot error checking all landed. ESP32 port + evaluator refactor next.
+**Blocking issues**: ~1.5 days behind original schedule. ESP32 port, evaluator refactor, quotation introspection, region remain.
+**Morale check**: define words, save, kill process, restart — they come back. Boot is robust.
 
 ## What's Done
 
@@ -14,7 +14,7 @@
 - `froth_types.h`: cell typedefs, format macros, error enum with stable explicit numbering (ADR-016), 3-bit LSB value tagging (7 tags assigned, 1 reserved), `froth_make_cell`, `froth_wrap_payload` (ADR-011), `FROTH_TRUE`/`FROTH_FALSE`, `FROTH_TRY` error propagation macro, `FROTH_CELL_*` macro naming convention, `FROTH_MAX_CELL_VALUE`/`FROTH_MIN_CELL_VALUE` payload range macros, `froth_native_word_t` typedef for C functions implementing Froth words
 - `froth_vm.h` / `froth_vm.c`: VM struct bundling DS, RS, CS, heap, `thrown` field, `last_error_slot` field. Static backing arrays, global `froth_vm` instance.
 - `froth_stack.h` / `froth_stack.c`: reusable stack struct, push/pop/peek/depth with bounds checking (no longer owns global instances — moved to VM)
-- `platform.h` / `platform_posix.c`: console I/O (`platform_emit`, `platform_key`, `platform_key_ready`) using fputc/fgetc/poll
+- `platform.h` / `platform_posix.c`: console I/O (`platform_emit`, `platform_key`, `platform_key_ready`) using fputc/fgetc/poll. `platform_fatal()` (`_Noreturn`) for unrecoverable boot failures — POSIX: `exit(1)`.
 - `froth_heap.h` / `froth_heap.c`: single linear heap (uint8_t backing), `froth_heap_allocate_bytes`, `froth_heap_allocate_cells` (returns `froth_cell_t*` directly), `froth_heap_cell_ptr` accessor (no longer owns global instance — moved to VM)
 - `froth_slot_table.h` / `froth_slot_table.c`: flat array with linear scan, find/create/get/set for impl and prim, name lookup by index, name storage in heap. Null/0 guards on get_impl/get_prim. Prim field now uses `froth_native_word_t`.
 - `froth_reader.h` / `froth_reader.c`: tokenizer — numbers (decimal, hex `0x`, binary `0b`; ADR-021), identifiers, tick-identifiers, brackets, `p[` pattern opener, string literals `"..."` with escape sequences (ADR-023), line comments (`\`), nested paren comments (`( ... )`), EOF. `froth_reader_peek` for lookahead.
@@ -58,6 +58,8 @@
 - `froth_snapshot_prims.c`: `save`, `restore`, `wipe` primitives. Guarded by `#ifdef FROTH_HAS_SNAPSHOTS`. Registered via `froth_ffi_register` in `main.c`.
 - `froth_slot_table.c`: `froth_slot_reset_overlay` (renamed from `reset_pointer_to_overlay_watermark`) now clears name, impl, prim, and overlay flag on all overlay slots.
 - Boot-time restore: `main.c` attempts `restore` after `boot_complete`. Failure is non-fatal (first boot, corrupt snapshots silently skipped).
+- Boot error handling: `main.c` checks return values from all `froth_ffi_register` calls, `platform_init`, and `froth_evaluate_input`. Failure prints step name + error code via `emit_string`/`format_number`, then `platform_fatal()`.
+- `autorun` hook: `[ 'autorun call ] catch drop` after restore. Silent on fresh boot (undefined word caught and dropped). User-defined autorun errors swallowed — stack clean on REPL entry. `autorun` slot always visible in `words` (discoverability).
 - 17/17 file-backed persistence smoke tests pass: all value types, A/B rotation, multiple saves, wipe, corrupt file rejection, cross-referencing words, mutable state, recursion.
 - ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API)
 
@@ -71,10 +73,10 @@ Nothing blocked.
 
 ## Next Up
 
-1. `autorun` under `catch`: if slot `autorun` is bound after restore, execute `[ 'autorun call ] catch`. Errors reported, never prevent REPL entry.
-2. Boot error handling: `main.c` checks return values from `froth_ffi_register` and `froth_evaluate_input`, exits with message on failure.
-3. ESP32 port: `platform_esp32.c`, `boards/esp32/`, ESP-IDF CMake integration
-4. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
+1. ESP32 port: `platform_esp32.c`, `boards/esp32/`, ESP-IDF CMake integration
+2. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
+3. `q.len`, `q@`, `q.pack` (quotation introspection)
+4. `mark` / `release` (FROTH-Region)
 
 ## Open Questions
 
@@ -83,7 +85,7 @@ Nothing blocked.
 - Tick syntax: spec grammar says `'name` (prefix, no space) but spec examples use `' name` (space-separated). Reader currently requires prefix form. Need ADR to pick one. (deferred — not blocking)
 - `while` stack discipline: too strict for REPL exploration? Revisit after `>r`/`r>`/`r@` and `times` exist — the pressure may ease naturally. (deferred)
 - Strict bare identifiers: typos create slots permanently. ADR needed before persistence ships to users. Design scheduled Mar 11, implementation deferred. (audit finding)
-- Boot error handling: `main.c` ignores return values from registration/stdlib. Scheduled Mar 10 alongside boot sequence hardening. (audit finding)
+- ~~Boot error handling~~: resolved — `boot_fail()` + `platform_fatal()` in main.c.
 - `wipe` does not restore redefined base words: `froth_slot_reset_overlay` clears overlay slots entirely — if a user redefined a base word (e.g., `: + 42 ;`), it's gone until reboot. Fix: `wipe` should trigger reboot (embedded) or full re-init (POSIX). For now, user must power cycle after `wipe`. Needs ADR before shipping to users. (audit finding)
 - ~~String-Lite timing~~: moved to next-up, targeting Mar 8.
 - ~~POSIX GPIO story~~: resolved — print trace output.

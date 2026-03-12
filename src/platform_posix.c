@@ -5,6 +5,7 @@
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -42,6 +43,10 @@ froth_error_t platform_key(uint8_t *byte) {
 bool platform_key_ready(void) {
   struct pollfd pfd = {.fd = STDIN_FILENO, .events = POLLIN};
   return poll(&pfd, 1, 0) > 0;
+}
+
+_Noreturn void platform_fatal(void) {
+  exit(1);
 }
 
 #ifdef FROTH_HAS_SNAPSHOTS
