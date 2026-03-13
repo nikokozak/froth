@@ -69,6 +69,10 @@ bool platform_key_ready(void) {
   return poll(&pfd, 1, 0) > 0;
 }
 
+void platform_check_interrupt(struct froth_vm_t *vm) {
+  (void)vm; // SIGINT handler sets vm->interrupted asynchronously
+}
+
 void platform_fatal(void) { exit(1); }
 
 #ifdef FROTH_HAS_SNAPSHOTS

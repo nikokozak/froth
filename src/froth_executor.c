@@ -1,6 +1,7 @@
 #include "froth_executor.h"
 #include "froth_slot_table.h"
 #include "froth_stack.h"
+#include "platform.h"
 
 /* Look up a slot and invoke whatever's in it — prim or quotation. 
  * If the slot instead holds a value, (it might, in the 'impl' field), then simply push it. */
@@ -31,8 +32,9 @@ froth_error_t froth_execute_quote(froth_vm_t* vm, froth_cell_t quote_cell) {
   froth_cell_u_t rs_length = froth_stack_depth(&vm->rs); // For RS operator quote balance checks
 
   for (froth_cell_u_t i = 1; i <= quote_length; i++) {
-    if (vm->interrupted != 0) { 
-      vm->interrupted = 0; // Clear the flag so that if the user re-issues the command, it will run instead of immediately interrupting again.
+    platform_check_interrupt(vm);
+    if (vm->interrupted != 0) {
+      vm->interrupted = 0;
       vm->thrown = FROTH_ERROR_PROGRAM_INTERRUPTED;
       return FROTH_ERROR_THROW; }
 

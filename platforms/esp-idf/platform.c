@@ -1,5 +1,6 @@
 /* TODO: ESP-IDF platform implementation */
 #include "platform.h"
+#include "froth_vm.h"
 #include "driver/uart.h"
 #include "esp_system.h"
 #include "esp_vfs_dev.h" /* uart_vfs_dev_use_driver */
@@ -31,6 +32,10 @@ froth_error_t platform_key(uint8_t *byte) {
   if (c == EOF) {
     return FROTH_ERROR_IO;
   }
+  if (c == 0x03) {
+    froth_vm.interrupted = 1;
+    return FROTH_ERROR_IO;
+  }
   *byte = (uint8_t)c;
   return FROTH_OK;
 }
@@ -47,6 +52,17 @@ bool platform_key_ready(void) {
   } // we have a byte
   else {
     return false;
+  }
+}
+
+void platform_check_interrupt(struct froth_vm_t *vm) {
+  if (platform_key_ready()) {
+    int c = fgetc(stdin);
+    if (c == 0x03) {
+      vm->interrupted = 1;
+    } else {
+      ungetc(c, stdin);
+    }
   }
 }
 
