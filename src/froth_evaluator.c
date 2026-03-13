@@ -44,27 +44,35 @@ static froth_error_t froth_evaluator_handle_tick_identifier(froth_token_t token,
 
 /* Count direct body cells in a quotation without consuming the reader.
  * Called after "[" has been consumed. Counts each nested quotation as 1.
- * Saves and restores reader position so the build pass can re-read. */
-static froth_cell_u_t count_quote_body(froth_reader_t* reader) {
+ * Saves and restores reader position so the build pass can re-read.
+ * Propagates reader errors so callers get the real error, not "unterminated". */
+static froth_error_t count_quote_body(froth_reader_t* reader, froth_cell_u_t* out_count) {
   froth_reader_t saved = *reader;
   froth_cell_u_t count = 0;
   froth_token_t token;
+  froth_error_t err;
 
-  while (froth_reader_next_token(reader, &token) == FROTH_OK && token.type != FROTH_TOKEN_EOF && token.type != FROTH_TOKEN_CLOSE_BRACKET) {
+  for (;;) {
+    err = froth_reader_next_token(reader, &token);
+    if (err != FROTH_OK) { *reader = saved; return err; }
+    if (token.type == FROTH_TOKEN_EOF || token.type == FROTH_TOKEN_CLOSE_BRACKET) break;
     count++;
     if (token.type == FROTH_TOKEN_OPEN_BRACKET || token.type == FROTH_TOKEN_OPEN_PAT) {
-      // Skip to matching "]" by tracking depth
       froth_cell_u_t depth = 1;
-      while (depth > 0 && froth_reader_next_token(reader, &token) == FROTH_OK && token.type != FROTH_TOKEN_EOF) {
+      while (depth > 0) {
+        err = froth_reader_next_token(reader, &token);
+        if (err != FROTH_OK) { *reader = saved; return err; }
+        if (token.type == FROTH_TOKEN_EOF) break;
         if (token.type == FROTH_TOKEN_OPEN_BRACKET)  { depth++; }
-        if (token.type == FROTH_TOKEN_OPEN_PAT)      { depth++; } // Also skip pattern bodies
+        if (token.type == FROTH_TOKEN_OPEN_PAT)      { depth++; }
         if (token.type == FROTH_TOKEN_CLOSE_BRACKET) { depth--; }
       }
     }
   }
 
   *reader = saved;
-  return count;
+  *out_count = count;
+  return FROTH_OK;
 }
 
 static froth_error_t count_and_typecheck_pattern_body(froth_reader_t* reader, froth_cell_u_t* out_count) {
@@ -167,7 +175,8 @@ static froth_error_t froth_evaluator_handle_open_bracket(froth_reader_t* reader,
   froth_token_t token;
 
   // Pass 1: count direct children
-  froth_cell_u_t body_count = count_quote_body(reader);
+  froth_cell_u_t body_count;
+  FROTH_TRY(count_quote_body(reader, &body_count));
 
   // Allocate contiguous block: 1 length cell + body_count body cells
   froth_cell_t* block;
@@ -259,7 +268,7 @@ froth_error_t froth_evaluate_input(const char* input, froth_vm_t* vm) {
           if (froth_reader_next_token(&reader, &next_token) != FROTH_OK || next_token.type != FROTH_TOKEN_IDENTIFIER) {
             return FROTH_ERROR_TYPE_MISMATCH; // Expect a slot name after ":"
           }
-          froth_slot_create(next_token.name, &vm->heap, &slot_index); // Create the slot if it doesn't exist
+          FROTH_TRY(resolve_or_create_slot(next_token.name, &vm->heap, &slot_index));
           FROTH_TRY(froth_make_cell(slot_index, FROTH_SLOT, &slot_cell)); // Create a Slot cell with the slot index
           FROTH_TRY(froth_stack_push(&vm->ds, slot_cell)); // Push slot name as string for definition
 
@@ -295,6 +304,8 @@ froth_error_t froth_evaluate_input(const char* input, froth_vm_t* vm) {
         FROTH_TRY(froth_stack_push(&vm->ds, string_cell));
         break;
       }
+      case FROTH_TOKEN_CLOSE_BRACKET:
+        return FROTH_ERROR_UNEXPECTED_BRACKET;
       default:
         break;
     }

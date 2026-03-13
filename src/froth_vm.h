@@ -13,6 +13,7 @@ struct froth_vm_t {
   froth_cell_t last_error_slot; /* slot index at point of error, or -1 */
   volatile int interrupted;
   uint8_t boot_complete;
+  froth_cell_u_t call_depth;
   froth_cell_u_t watermark_heap_offset;
 };
 

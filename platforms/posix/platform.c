@@ -1,4 +1,5 @@
 #include "platform.h"
+#include "froth_types.h"
 #include "froth_vm.h"
 
 #include <errno.h>
@@ -21,6 +22,8 @@ static void interrupt_handler(int signum) {
   froth_vm.interrupted = 1;
   return;
 }
+
+void platform_delay_ms(froth_cell_u_t ms) { usleep((useconds_t)ms * 1000); }
 
 static void cleanup_term(void) { tcsetattr(STDIN_FILENO, TCSANOW, &original); }
 

@@ -17,8 +17,28 @@ static void boot_fail(const char *step, froth_error_t err) {
   platform_fatal();
 }
 
+static bool poll_for_safe_boot() {
+  emit_string("boot: CTRL-C for safe boot\n");
+  bool safe_boot = false;
+  for (int i = 0; i < 75; i++) {
+    platform_delay_ms(10);
+    while (platform_key_ready()) {
+      uint8_t byte;
+      platform_key(&byte);
+      if (byte == 0x03)
+        safe_boot = true;
+      if (froth_vm.interrupted) {
+        froth_vm.interrupted = 0;
+        safe_boot = true;
+      }
+    }
+  }
+  return safe_boot;
+}
+
 void froth_boot(const froth_ffi_entry_t *board_bindings) {
   froth_error_t err;
+  bool safe_boot = false; // Whether we skip restore & autorun
 
   err = froth_ffi_register(&froth_vm, froth_primitives);
   if (err)
@@ -45,16 +65,22 @@ void froth_boot(const froth_ffi_entry_t *board_bindings) {
   froth_vm.boot_complete = 1;
   froth_vm.watermark_heap_offset = froth_vm.heap.pointer;
 
+  safe_boot = poll_for_safe_boot();
+  if (!safe_boot) {
+
 #ifdef FROTH_HAS_SNAPSHOTS
-  /* Attempt restore from snapshot storage. Failure is not fatal —
-   * first boot has no snapshot, corrupt snapshots are skipped. */
-  froth_error_t snap_err = froth_evaluate_input("restore", &froth_vm);
-  if (snap_err != FROTH_OK) {
-    froth_vm.ds.pointer = 0;
-  }
+    /* Attempt restore from snapshot storage. Failure is not fatal —
+     * first boot has no snapshot, corrupt snapshots are skipped. */
+    froth_error_t snap_err = froth_evaluate_input("restore", &froth_vm);
+    if (snap_err != FROTH_OK) {
+      froth_vm.ds.pointer = 0;
+    }
 #endif
 
-  froth_evaluate_input("[ 'autorun call ] catch drop", &froth_vm);
+    froth_evaluate_input("[ 'autorun call ] catch drop", &froth_vm);
+  } else {
+    emit_string("boot: Safe Boot, skipped restore and autorun.");
+  }
 
   froth_repl_start(&froth_vm);
 }

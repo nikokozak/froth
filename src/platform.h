@@ -10,6 +10,7 @@ froth_error_t platform_emit(uint8_t byte);
 froth_error_t platform_key(uint8_t *byte);
 bool platform_key_ready(void);
 void platform_check_interrupt(struct froth_vm_t *vm);
+void platform_delay_ms(froth_cell_u_t ms);
 
 _Noreturn void platform_fatal(void);
 

@@ -1,6 +1,6 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-13*
+*Last reviewed: 2026-03-13 (hardening session)*
 *Source: Froth Implementation Roadmap v0.4 (Feb 25 → Workshop week of Mar 15)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
@@ -169,15 +169,21 @@
 > Phase 2 leans heavily on AI-assisted porting and frontend work.
 > The kernel is feature-complete after Phase 1. Phase 2 is ecosystem.
 
-### Mar 14 (Fri) — Hardening + small wins
-- [ ] ADR-030: `platform_check_interrupt` design
-- [ ] ESP32 flash death spiral diagnosis
-- [ ] Smoke tests: edge cases, bad input, heap exhaustion, deep nesting
+### Mar 13 (Thu) — Hardening day (started early, originally Mar 14)
+- [x] ADR-030: `platform_check_interrupt` + safe boot window design
+- [x] ADR-031: hardening error codes and guards
+- [x] ESP32 flash death spiral: diagnosed (DTR reset + UART RX noise), mitigated (flush, settle, halt-not-restart)
+- [x] Safe boot escape: 750ms Ctrl-C window, skips restore + autorun
+- [x] Smoke tests: edge cases, bad input, heap exhaustion, deep nesting, recursion
+- [x] Call depth guard: prevents segfault on infinite recursion (catchable error 18)
+- [x] Primitive redefinition forbidden (error 17), colon-sugar duplicate slot bug fixed
+- [x] Bare `]` error, reader error propagation in quotation builder, slot table full error
+- [x] Spec updated: CAN → ETX for interrupt byte, boot sequence with safe boot step
+- [x] `platform_delay_ms` added to platform API
+- [x] **Proof**: comprehensive smoke test battery, all findings fixed, persistence still works
 - [ ] `q.len`, `q@` (quotation introspection)
 - [ ] `mark` / `release` (FROTH-Region)
 - [ ] `see` shows stack effects, `info` shows overlay heap usage
-- [ ] Safe boot escape (CAN window)
-- [ ] **Proof**: break it, fix it, confidence up
 
 ### Mar 12–13 (Thu–Fri) — ESP32 dual-core architecture + audio FFI
 - [ ] Dual-core architecture ADR (Froth VM on Core 1, audio engine on Core 0)
@@ -286,4 +292,5 @@
 | q.len/q@/q.pack | Post-break | Mar 11 | Pulled forward — enables richer `see`, metaprogramming. |
 | Persistence Stage 2 | Mar 10 | Mar 10–11 | CRC32, platform API, header, A/B selection, prims, boot restore. 17/17 smoke tests. autorun still pending. |
 | Evaluator refactor + small wins | Mar 11 | Mar 14 | Mar 12–13 spent on ESP32 REPL debugging (UART buffering, line endings, Ctrl-C, raw terminal). Hardening day inserted. |
+| Hardening day | Mar 14 | Mar 13 | Started early. Death spiral, safe boot, smoke tests, 5 bug fixes, 2 ADRs. |
 | Dual-core + audio | Mar 12–13 | Mar 15–16 | Pushed by REPL debugging and hardening day insertion. |

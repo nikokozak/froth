@@ -3,6 +3,10 @@
 #include "froth_stack.h"
 #include "platform.h"
 
+#ifndef FROTH_CALL_DEPTH_MAX
+#define FROTH_CALL_DEPTH_MAX 64
+#endif
+
 /* Look up a slot and invoke whatever's in it — prim or quotation. 
  * If the slot instead holds a value, (it might, in the 'impl' field), then simply push it. */
 froth_error_t froth_execute_slot(froth_vm_t* vm, froth_cell_u_t slot_index) {
@@ -27,16 +31,24 @@ froth_error_t froth_execute_slot(froth_vm_t* vm, froth_cell_u_t slot_index) {
 
 /* Execute a quotation body from the heap. */
 froth_error_t froth_execute_quote(froth_vm_t* vm, froth_cell_t quote_cell) {
+  if (vm->call_depth >= FROTH_CALL_DEPTH_MAX) {
+    return FROTH_ERROR_CALL_DEPTH;
+  }
+  vm->call_depth++;
+
+  froth_error_t err = FROTH_OK;
   froth_cell_t* heap_cell = froth_heap_cell_ptr(&vm->heap, FROTH_CELL_STRIP_TAG(quote_cell));
   froth_cell_u_t quote_length = heap_cell[0];
-  froth_cell_u_t rs_length = froth_stack_depth(&vm->rs); // For RS operator quote balance checks
+  froth_cell_u_t rs_length = froth_stack_depth(&vm->rs);
 
   for (froth_cell_u_t i = 1; i <= quote_length; i++) {
     platform_check_interrupt(vm);
     if (vm->interrupted != 0) {
       vm->interrupted = 0;
       vm->thrown = FROTH_ERROR_PROGRAM_INTERRUPTED;
-      return FROTH_ERROR_THROW; }
+      err = FROTH_ERROR_THROW;
+      break;
+    }
 
     froth_cell_t current_cell = heap_cell[i];
 
@@ -46,22 +58,25 @@ froth_error_t froth_execute_quote(froth_vm_t* vm, froth_cell_t quote_cell) {
       case FROTH_SLOT:
       case FROTH_BSTRING:
       case FROTH_PATTERN:
-        FROTH_TRY(froth_stack_push(&vm->ds, current_cell));
+        err = froth_stack_push(&vm->ds, current_cell);
         break;
 
       case FROTH_CALL:
-        FROTH_TRY(froth_execute_slot(vm, FROTH_CELL_STRIP_TAG(current_cell)));
+        err = froth_execute_slot(vm, FROTH_CELL_STRIP_TAG(current_cell));
         break;
 
       default:
-        return FROTH_ERROR_TYPE_MISMATCH;
+        err = FROTH_ERROR_TYPE_MISMATCH;
+        break;
     }
+    if (err != FROTH_OK) break;
   }
 
-  if (froth_stack_depth(&vm->rs) != rs_length) {
+  if (err == FROTH_OK && froth_stack_depth(&vm->rs) != rs_length) {
     vm->last_error_slot = -1;
-    return FROTH_ERROR_UNBALANCED_RETURN_STACK_CALLS;
+    err = FROTH_ERROR_UNBALANCED_RETURN_STACK_CALLS;
   }
 
-  return FROTH_OK;
+  vm->call_depth--;
+  return err;
 }

@@ -16,9 +16,16 @@ froth_error_t froth_prim_def(froth_vm_t* froth_vm) {
   FROTH_TRY(froth_stack_pop(&froth_vm->ds, &impl_cell));
 
   FROTH_TRY(froth_stack_pop(&froth_vm->ds, &slot_cell));
-  if (!FROTH_CELL_IS_SLOT(slot_cell)) { return FROTH_ERROR_TYPE_MISMATCH; } 
+  if (!FROTH_CELL_IS_SLOT(slot_cell)) { return FROTH_ERROR_TYPE_MISMATCH; }
 
   froth_cell_u_t slot_index = (froth_cell_u_t)FROTH_CELL_STRIP_TAG(slot_cell);
+
+  /* Reject redefinition of slots that have a C primitive bound. */
+  froth_native_word_t existing_prim;
+  if (froth_slot_get_prim(slot_index, &existing_prim) == FROTH_OK) {
+    return FROTH_ERROR_REDEF_PRIMITIVE;
+  }
+
   FROTH_TRY(froth_slot_set_impl(slot_index, impl_cell));
   FROTH_TRY(froth_slot_set_overlay(slot_index, froth_vm->boot_complete ? 1 : 0));
 

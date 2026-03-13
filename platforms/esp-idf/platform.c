@@ -1,12 +1,19 @@
 /* TODO: ESP-IDF platform implementation */
 #include "platform.h"
-#include "froth_vm.h"
 #include "driver/uart.h"
 #include "esp_system.h"
 #include "esp_vfs_dev.h" /* uart_vfs_dev_use_driver */
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "froth_types.h"
+#include "froth_vm.h"
 #include <stdio.h>
 #include <sys/select.h>
 #include <unistd.h>
+
+void platform_delay_ms(froth_cell_u_t ms) {
+  vTaskDelay(pdMS_TO_TICKS(ms)); // sleep
+}
 
 froth_error_t platform_init(void) {
   // Disable stdio buffering before installing driver.
@@ -17,6 +24,9 @@ froth_error_t platform_init(void) {
   if (err != ESP_OK) {
     return FROTH_ERROR_IO;
   }
+  uart_flush(UART_NUM_0); // Get rid of dirty RX data
+  vTaskDelay(pdMS_TO_TICKS(50));
+  uart_flush(UART_NUM_0); // Get rid of dirty RX data
   esp_vfs_dev_uart_use_driver(UART_NUM_0);
   esp_vfs_dev_uart_port_set_rx_line_endings(UART_NUM_0, ESP_LINE_ENDINGS_CR);
   return FROTH_OK;
@@ -67,7 +77,7 @@ void platform_check_interrupt(struct froth_vm_t *vm) {
 }
 
 _Noreturn void platform_fatal(void) {
-  esp_restart();
+  // esp_restart(); // Avoid this, it will result in an infinite loop.
   while (1) {
   };
 }

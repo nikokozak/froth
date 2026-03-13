@@ -4,9 +4,9 @@
 
 ## Current Status
 
-**Phase**: ESP32 blink proven end-to-end with Ctrl-C interrupt. POSIX and ESP32 REPLs both functional. Tomorrow (Mar 14): hardening day, smoke tests, small wins, death spiral diagnosis.
-**Blocking issues**: Evaluator refactor, quotation introspection, region, ESP32 snapshots remain. ESP32 flash-then-connect death spiral needs diagnosis. Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues).
-**Morale check**: LED blinks from a `while` loop. Ctrl-C stops it. `minicom` works great.
+**Phase**: Hardening day complete. Death spiral diagnosed and mitigated, safe boot implemented, smoke tests passed (5 bugs found and fixed). Next: quotation introspection, FROTH-Region, `see`/`info` polish.
+**Blocking issues**: Evaluator refactor, quotation introspection, region, ESP32 snapshots remain. Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues).
+**Morale check**: Every crash and bad error message from smoke testing is fixed. Kernel feels solid.
 
 ## What's Done
 
@@ -69,9 +69,19 @@
 - `froth_boot.h` / `froth_boot.c`: extracted shared boot sequence from `main.c`. Used by both POSIX `main()` and ESP-IDF `app_main()`.
 - GPIO proven on ESP32 hardware: `2 1 gpio.mode` + `2 1 gpio.write` turns on LED_BUILTIN.
 - LED blink loop on ESP32: `[ -1 ] [ 2 1 gpio.write 500 ms 2 0 gpio.write 500 ms ] while` — real hardware blink, interruptible with Ctrl-C.
-- `platform_check_interrupt()`: platform-agnostic interrupt polling at executor safe points (ADR-030 pending). ESP-IDF: polls UART for 0x03, uses `ungetc` for non-interrupt bytes. POSIX: no-op (SIGINT handler sets flag asynchronously). Called once per quotation body cell in `froth_execute_quote`.
+- `platform_check_interrupt()`: platform-agnostic interrupt polling at executor safe points (ADR-030). ESP-IDF: polls UART for 0x03, uses `ungetc` for non-interrupt bytes. POSIX: no-op (SIGINT handler sets flag asynchronously). Called once per quotation body cell in `froth_execute_quote`.
 - ESP-IDF Ctrl-C in `platform_key()`: byte 0x03 detected at REPL level, sets `vm->interrupted`.
-- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management)
+- ESP-IDF UART hardening: `uart_flush` + 50ms settle after driver install, double flush. `platform_fatal` halts (spin loop) instead of `esp_restart` to prevent boot-failure reboot loops.
+- Safe boot window (ADR-030): 750ms poll after stdlib load. Ctrl-C during window skips restore and autorun. Dual check (byte + interrupt flag) works on both POSIX and ESP32. User sees `boot: CTRL-C for safe boot` on every boot.
+- `platform_delay_ms`: new platform API function. POSIX: `usleep`. ESP-IDF: `vTaskDelay`.
+- Call depth guard (ADR-031): `call_depth` counter on VM, checked in `froth_execute_quote`. Default limit 64 (`FROTH_CALL_DEPTH_MAX`). Prevents C stack overflow on infinite recursion. Catchable error (code 18). Executor restructured from `FROTH_TRY` early-returns to `err` variable + break, ensuring `call_depth--` always executes.
+- Primitive redefinition forbidden (ADR-031): `def` rejects slots with existing C prim. Error code 17.
+- Colon-sugar fix (ADR-031): `: foo ...` now uses `resolve_or_create_slot` instead of `froth_slot_create`. Previously created duplicate slot entries; now correctly updates the existing slot.
+- Bare `]` at top level is now an error (code 107) instead of silently producing an empty quotation.
+- `count_quote_body` now propagates reader errors. Previously swallowed errors from pass 1, causing misleading "unterminated quotation" when the real error was e.g. "string too long."
+- Slot table full now returns `FROTH_ERROR_SLOT_TABLE_FULL` (code 16) instead of `FROTH_ERROR_HEAP_OUT_OF_MEMORY`.
+- Spec updated: interrupt byte changed from CAN (0x18) to ETX (0x03, Ctrl-C). Boot sequence updated with safe boot step.
+- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards)
 
 ## In Progress
 
@@ -79,19 +89,15 @@ Nothing in progress.
 
 ## Blocked / Waiting
 
-- ESP32 flash death spiral: connecting serial immediately after flash causes crash/reboot loop (wrong baud rate garbage output). Must power cycle after every flash. Root cause unknown, needs diagnosis.
+- ~~ESP32 flash death spiral~~: diagnosed (DTR-triggered reset + UART RX contamination). Mitigated with UART flush, settle window, halt-not-restart. Clean workflow: `idf.py monitor --no-reset` + manual EN reset.
 - `screen` unusable on macOS: "Sorry Could not find a PTY" error. Not a Froth issue, but limits serial monitor options.
 
-## Next Up (Mar 14 — hardening + small wins)
+## Next Up
 
-1. ADR-030: `platform_check_interrupt` design
-2. ESP32 death spiral diagnosis
-3. Smoke tests: try to break the REPL (edge cases, bad input, heap exhaustion, deep nesting)
-4. `q.len`, `q@` (quotation introspection) — small win
-5. `mark` / `release` (FROTH-Region) — small win, high workshop value
-6. `see` shows stack effects, `info` shows overlay heap usage — trivial wins
-7. Safe boot escape (CAN window)
-8. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
+1. `q.len`, `q@` (quotation introspection) — small win
+2. `mark` / `release` (FROTH-Region) — small win, high workshop value
+3. `see` shows stack effects, `info` shows overlay heap usage — trivial wins
+4. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
 
 ## Open Questions
 
@@ -101,7 +107,7 @@ Nothing in progress.
 - `while` stack discipline: too strict for REPL exploration? Revisit after `>r`/`r>`/`r@` and `times` exist — the pressure may ease naturally. (deferred)
 - Strict bare identifiers: typos create slots permanently. ADR needed before persistence ships to users. Design scheduled Mar 11, implementation deferred. (audit finding)
 - ~~Boot error handling~~: resolved — `boot_fail()` + `platform_fatal()` in main.c.
-- `wipe` does not restore redefined base words: `froth_slot_reset_overlay` clears overlay slots entirely — if a user redefined a base word (e.g., `: + 42 ;`), it's gone until reboot. Fix: `wipe` should trigger reboot (embedded) or full re-init (POSIX). For now, user must power cycle after `wipe`. Needs ADR before shipping to users. (audit finding)
+- ~~`wipe` does not restore redefined base words~~: resolved — primitive redefinition is now forbidden (ADR-031). `def` rejects slots with existing prims. Stdlib words defined via `: ;` can still be redefined (they're impl-only, no prim).
 - ~~String-Lite timing~~: moved to next-up, targeting Mar 8.
 - ~~POSIX GPIO story~~: resolved — print trace output.
 - ~~`\0` escape inconsistency~~: resolved — removed from spec. String-Lite stays `\0`-free; FROTH-String will handle binary buffers.

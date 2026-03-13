@@ -133,8 +133,8 @@ After Link Mode ends, the device returns to Direct Mode.
 
 ## Interrupt / “Ctrl-C” semantics
 
-### CAN interrupt flag
-If the console stream receives `CAN` (0x18), the implementation MUST set a VM-local **interrupt flag**.
+### ETX interrupt flag
+If the console stream receives `ETX` (0x03, Ctrl-C), the implementation MUST set a VM-local **interrupt flag**.
 
 ### Safe points
 The VM SHOULD check the interrupt flag at safe points:
@@ -167,15 +167,17 @@ On power-up:
 
 1. Initialize Froth VM.
 2. Register base words/primitives and FFI.
-3. If a valid snapshot exists: restore overlay (FROTH-Snapshot v0.5).
-4. If `autorun` is bound: execute `[ 'autorun call ] catch`.
-5. Enter Direct Mode prompt.
+3. Load stdlib.
+4. Open safe boot window (see below). If triggered, skip steps 5-6.
+5. If a valid snapshot exists: restore overlay (FROTH-Snapshot v0.5).
+6. If `autorun` is bound: execute `[ 'autorun call ] catch`.
+7. Enter Direct Mode prompt.
 
 ### Safe boot / autorun rescue (recommended)
 To rescue from a bad `autorun` (infinite loop), implementations SHOULD provide at least one of:
 
 - a hardware safe-boot strap/pin to skip autorun,
-- a short “serial break window” where CAN interrupts autorun,
+- a short “serial break window” where ETX (Ctrl-C) skips restore and autorun,
 - a watchdog escape to prompt.
 
 ---

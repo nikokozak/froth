@@ -66,6 +66,9 @@ typedef enum {
   FROTH_ERROR_BOUNDS               = 13,
   FROTH_ERROR_PROGRAM_INTERRUPTED  = 14,
   FROTH_ERROR_UNBALANCED_RETURN_STACK_CALLS = 15,
+  FROTH_ERROR_SLOT_TABLE_FULL     = 16,
+  FROTH_ERROR_REDEF_PRIMITIVE     = 17,
+  FROTH_ERROR_CALL_DEPTH          = 18,
   /* Reader/evaluator errors — occur before execution.
    * Stable numbers, but programs won't typically catch these. */
   FROTH_ERROR_TOKEN_TOO_LONG       = 100,
@@ -75,6 +78,7 @@ typedef enum {
   FROTH_ERROR_BSTRING_TOO_LONG     = 104,
   FROTH_ERROR_UNTERMINATED_STRING  = 105,
   FROTH_ERROR_INVALID_ESCAPE       = 106,
+  FROTH_ERROR_UNEXPECTED_BRACKET   = 107,
 
   /* Snapshot errors — persistence subsystem (200–299). */
   FROTH_ERROR_SNAPSHOT_OVERFLOW        = 200, /* buffer read/write past end */

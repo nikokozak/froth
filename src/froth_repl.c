@@ -48,6 +48,12 @@ static const char *error_name(froth_error_t err) {
     return "interrupted";
   case FROTH_ERROR_UNBALANCED_RETURN_STACK_CALLS:
     return "unbalanced return stack";
+  case FROTH_ERROR_SLOT_TABLE_FULL:
+    return "slot table full";
+  case FROTH_ERROR_REDEF_PRIMITIVE:
+    return "cannot redefine primitive";
+  case FROTH_ERROR_CALL_DEPTH:
+    return "call depth exceeded";
   /* Reader/evaluator errors */
   case FROTH_ERROR_TOKEN_TOO_LONG:
     return "token too long";
@@ -63,6 +69,8 @@ static const char *error_name(froth_error_t err) {
     return "unterminated string";
   case FROTH_ERROR_INVALID_ESCAPE:
     return "invalid escape sequence";
+  case FROTH_ERROR_UNEXPECTED_BRACKET:
+    return "unexpected ]";
   /* Snapshot errors */
   case FROTH_ERROR_SNAPSHOT_OVERFLOW:
     return "snapshot buffer overflow";

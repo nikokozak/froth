@@ -22,7 +22,7 @@ froth_error_t froth_slot_find_name(const char *name,
 froth_error_t froth_slot_create(const char *name, froth_heap_t *heap,
                                 froth_cell_u_t *created_slot_index) {
   if (slot_pointer >= FROTH_SLOT_TABLE_SIZE) {
-    return FROTH_ERROR_HEAP_OUT_OF_MEMORY;
+    return FROTH_ERROR_SLOT_TABLE_FULL;
   }
 
   froth_cell_u_t name_heap_location;
