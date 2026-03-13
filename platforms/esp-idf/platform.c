@@ -5,24 +5,24 @@
 #include "esp_vfs_dev.h" /* uart_vfs_dev_use_driver */
 #include <stdio.h>
 #include <sys/select.h>
+#include <unistd.h>
 
 froth_error_t platform_init(void) {
+  // Disable stdio buffering before installing driver.
+  setvbuf(stdin, NULL, _IONBF, 0);
   setvbuf(stdout, NULL, _IONBF, 0);
-  // UART automatically configured, stdout and stdin routed to UART0 through
-  // VFS.
+  // Install UART driver so fgetc(stdin) blocks properly.
   esp_err_t err = uart_driver_install(UART_NUM_0, 256, 0, 0, NULL, 0);
   if (err != ESP_OK) {
     return FROTH_ERROR_IO;
   }
   esp_vfs_dev_uart_use_driver(UART_NUM_0);
-  esp_vfs_dev_uart_port_set_rx_line_endings(UART_NUM_0, ESP_LINE_ENDINGS_CRLF);
+  esp_vfs_dev_uart_port_set_rx_line_endings(UART_NUM_0, ESP_LINE_ENDINGS_CR);
   return FROTH_OK;
 }
 
 froth_error_t platform_emit(uint8_t byte) {
-  if (fputc(byte, stdout) == EOF) {
-    return FROTH_ERROR_IO;
-  }
+  fputc(byte, stdout);
   return FROTH_OK;
 }
 
