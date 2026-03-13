@@ -1,5 +1,5 @@
-#include "froth_vm.h"
 #include "platform.h"
+#include "froth_vm.h"
 
 #include <errno.h>
 #include <poll.h>
@@ -7,7 +7,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <termios.h>
 #include <unistd.h>
+
+// Keep term state so we can reset at end.
+static struct termios original;
+static struct termios modified;
 
 static void interrupt_handler(int signum) {
   if (signum != SIGINT) {
@@ -17,10 +22,29 @@ static void interrupt_handler(int signum) {
   return;
 }
 
+static void cleanup_term(void) { tcsetattr(STDIN_FILENO, TCSANOW, &original); }
+
 froth_error_t platform_init(void) {
-  if (signal(SIGINT, interrupt_handler) == SIG_ERR) {
+  static struct sigaction sig;
+  sigemptyset(&sig.sa_mask);
+  sig.sa_flags = 0;
+  sig.sa_handler = interrupt_handler;
+
+  if (sigaction(SIGINT, &sig, NULL) == -1) {
     return FROTH_ERROR_IO;
   }
+
+  // We need to set term behavior so that it matches
+  // a "raw" state that most embedded devices have, and so
+  // we can build on it for things like multiline, etc.
+  tcgetattr(STDIN_FILENO, &original);
+  modified = original;
+  modified.c_lflag &= ~ECHO;
+  modified.c_lflag &= ~ICANON;
+  tcsetattr(STDIN_FILENO, TCSANOW, &modified);
+
+  atexit(cleanup_term);
+
   return FROTH_OK;
 }
 
@@ -45,9 +69,7 @@ bool platform_key_ready(void) {
   return poll(&pfd, 1, 0) > 0;
 }
 
-_Noreturn void platform_fatal(void) {
-  exit(1);
-}
+void platform_fatal(void) { exit(1); }
 
 #ifdef FROTH_HAS_SNAPSHOTS
 static const char *snap_path(uint8_t slot) {

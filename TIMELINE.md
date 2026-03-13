@@ -143,9 +143,11 @@
 - [x] `autorun` under `catch`: `[ 'autorun call ] catch drop` — silent on fresh boot, errors swallowed, clean stack
 - [x] Boot error handling: `boot_fail()` prints step + error code, `platform_fatal()` halts. All init calls checked.
 - [ ] Safe boot escape (CAN window during boot)
-- [ ] ESP32 port: `platform_esp32.c`, `boards/esp32/`, ESP-IDF CMake integration
+- [x] ESP32 port: `platforms/esp-idf/platform.c`, `boards/esp32-devkit-v1/`, `targets/esp-idf/`, `tools/setup-esp-idf.sh` (ADR-029)
+- [x] POSIX raw terminal mode: `tcgetattr`/`tcsetattr` disables ECHO+ICANON, `sigaction` for SIGINT, REPL owns echo/backspace/Ctrl-D
+- [x] `froth_boot.c`: shared boot sequence extracted from `main.c`
 - [ ] **Proof**: define `autorun`, `save`, restart → it runs. `wipe` resets to base.
-- [ ] **Proof**: LED blink from Froth REPL on real ESP32 hardware
+- [~] **Proof**: LED blink from Froth REPL on real ESP32 hardware — GPIO on/off proven (`2 1 gpio.mode`, `2 1 gpio.write`), blink loop pending serial terminal fix
 
 ### Mar 11 (Wed) — Evaluator refactor + quotation introspection + region
 - [ ] Evaluator refactor: split `froth_evaluator.c` into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
@@ -187,6 +189,7 @@
 - [ ] Save/restore survives power cycle on real hardware
 - [ ] Safe boot escape (GPIO pin or CAN window)
 - [ ] End-to-end test: flash → REPL → define synth → save → power cycle → autorun
+- [ ] UART monitor task for Ctrl-C during Froth execution (background FreeRTOS task watches for 0x03, sets `vm.interrupted`)
 - [ ] Workshop failure mode testing (bad input, heap exhaustion, bricked recovery)
 
 ### Mar 18 (Wed) — Workshop prep

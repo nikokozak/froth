@@ -4,9 +4,9 @@
 
 ## Current Status
 
-**Phase**: Boot sequence hardened. `autorun`, `platform_fatal`, boot error checking all landed. ESP32 port + evaluator refactor next.
-**Blocking issues**: ~1.5 days behind original schedule. ESP32 port, evaluator refactor, quotation introspection, region remain.
-**Morale check**: define words, save, kill process, restart — they come back. Boot is robust.
+**Phase**: ESP32 port running. REPL works on hardware, GPIO proven. POSIX terminal in raw mode. Evaluator refactor + quotation introspection next.
+**Blocking issues**: ~2 days behind original schedule. Evaluator refactor, quotation introspection, region, ESP32 snapshots remain. Serial terminal compatibility needs investigation (backspace display in non-VT100 monitors).
+**Morale check**: Froth runs on an ESP32. LED turns on from the REPL. `2 1 gpio.mode 2 1 gpio.write` — real hardware.
 
 ## What's Done
 
@@ -61,7 +61,14 @@
 - Boot error handling: `main.c` checks return values from all `froth_ffi_register` calls, `platform_init`, and `froth_evaluate_input`. Failure prints step name + error code via `emit_string`/`format_number`, then `platform_fatal()`.
 - `autorun` hook: `[ 'autorun call ] catch drop` after restore. Silent on fresh boot (undefined word caught and dropped). User-defined autorun errors swallowed — stack clean on REPL entry. `autorun` slot always visible in `words` (discoverability).
 - 17/17 file-backed persistence smoke tests pass: all value types, A/B rotation, multiple saves, wipe, corrupt file rejection, cross-referencing words, mutable state, recursion.
-- ADRs: 001–014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture)
+- ESP32 DevKit V1 port: `platforms/esp-idf/platform.c` (UART driver install, VFS line-ending config, unbuffered stdout), `boards/esp32-devkit-v1/ffi.c` (`gpio.mode`, `gpio.write`, `gpio.read`, `ms` via FreeRTOS `vTaskDelay`), `targets/esp-idf/` (CMake project scaffolding, sdkconfig.defaults). Builds, flashes, runs REPL on real hardware.
+- `tools/setup-esp-idf.sh`: fetches ESP-IDF v5.4 to `~/.froth/sdk/esp-idf/`, installs esp32 toolchain. `--force` for reinstall.
+- POSIX raw terminal mode: `tcgetattr`/`tcsetattr` disables `ECHO` and `ICANON` in `platform_init()`. `atexit` restores original settings. REPL now owns echo and backspace on all platforms.
+- `sigaction` replaces `signal` for SIGINT: no `SA_RESTART`, so `fgetc` returns on interrupt (Ctrl-C escapes multiline input).
+- REPL character echo: `platform_emit(byte)` on every regular character, `\n` echo on line terminator. Ctrl-D (0x04) returns `FROTH_ERROR_IO` to exit REPL cleanly.
+- `froth_boot.h` / `froth_boot.c`: extracted shared boot sequence from `main.c`. Used by both POSIX `main()` and ESP-IDF `app_main()`.
+- GPIO proven on ESP32 hardware: `2 1 gpio.mode` + `2 1 gpio.write` turns on LED_BUILTIN.
+- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management)
 
 ## In Progress
 
@@ -69,14 +76,15 @@ Nothing in progress.
 
 ## Blocked / Waiting
 
-Nothing blocked.
+- Serial terminal compatibility: backspace display (`\b space \b`) not interpreted by non-VT100 serial monitors (e.g. SerialTools). `screen` and `minicom` have connection issues on macOS with USB-serial adapters. `idf.py monitor` works but needs TTY. Needs investigation.
 
 ## Next Up
 
-1. ESP32 port: `platform_esp32.c`, `boards/esp32/`, ESP-IDF CMake integration
-2. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
-3. `q.len`, `q@`, `q.pack` (quotation introspection)
-4. `mark` / `release` (FROTH-Region)
+1. Serial terminal diagnosis (blocking for workshop usability)
+2. LED blink loop proof on ESP32 (`while` + `gpio.write` + `ms`)
+3. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
+4. `q.len`, `q@`, `q.pack` (quotation introspection)
+5. `mark` / `release` (FROTH-Region)
 
 ## Open Questions
 

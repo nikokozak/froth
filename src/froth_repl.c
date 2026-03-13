@@ -1,63 +1,97 @@
 #include "froth_repl.h"
-#include "froth_vm.h"
 #include "froth_evaluator.h"
-#include "froth_slot_table.h"
-#include "froth_primitives.h"
-#include "platform.h"
 #include "froth_fmt.h"
-#include <stdio.h>
+#include "froth_primitives.h"
+#include "froth_slot_table.h"
+#include "froth_vm.h"
+#include "platform.h"
 #include <stdbool.h>
+#include <stdio.h>
 
 static char repl_buffer[FROTH_LINE_BUFFER_SIZE];
-static const char* prompt_normal = "froth> ";
-static const char* prompt_cont   = ".. ";
+static const char *prompt_normal = "froth> ";
+static const char *prompt_cont = ".. ";
 
 /* Return a human-readable name for an error code. */
-static const char* error_name(froth_error_t err) {
+static const char *error_name(froth_error_t err) {
   switch (err) {
-    case FROTH_OK:                         return "ok";
-    /* Runtime errors */
-    case FROTH_ERROR_STACK_OVERFLOW:       return "stack overflow";
-    case FROTH_ERROR_STACK_UNDERFLOW:      return "stack underflow";
-    case FROTH_ERROR_TYPE_MISMATCH:        return "type mismatch";
-    case FROTH_ERROR_UNDEFINED_WORD:       return "undefined word";
-    case FROTH_ERROR_DIVISION_BY_ZERO:     return "division by zero";
-    case FROTH_ERROR_HEAP_OUT_OF_MEMORY:   return "heap out of memory";
-    case FROTH_ERROR_PATTERN_INVALID:      return "invalid pattern";
-    case FROTH_ERROR_PATTERN_TOO_LARGE:    return "pattern too large";
-    case FROTH_ERROR_IO:                   return "i/o error";
-    case FROTH_ERROR_NOCATCH:              return "throw with no catch";
-    case FROTH_ERROR_WHILE_STACK:          return "while: stack discipline violation";
-    case FROTH_ERROR_VALUE_OVERFLOW:       return "value overflow";
-    case FROTH_ERROR_BOUNDS:               return "index out of bounds";
-    case FROTH_ERROR_PROGRAM_INTERRUPTED:          return "interrupted";
-    case FROTH_ERROR_UNBALANCED_RETURN_STACK_CALLS: return "unbalanced return stack";
-    /* Reader/evaluator errors */
-    case FROTH_ERROR_TOKEN_TOO_LONG:       return "token too long";
-    case FROTH_ERROR_UNTERMINATED_QUOTE:   return "unterminated quotation";
-    case FROTH_ERROR_UNTERMINATED_COMMENT: return "unterminated comment";
-    case FROTH_ERROR_UNEXPECTED_PAREN:     return "unexpected )";
-    case FROTH_ERROR_BSTRING_TOO_LONG:     return "string too long";
-    case FROTH_ERROR_UNTERMINATED_STRING:  return "unterminated string";
-    case FROTH_ERROR_INVALID_ESCAPE:       return "invalid escape sequence";
-    /* Snapshot errors */
-    case FROTH_ERROR_SNAPSHOT_OVERFLOW:    return "snapshot buffer overflow";
-    case FROTH_ERROR_SNAPSHOT_FORMAT:      return "snapshot format error";
-    case FROTH_ERROR_SNAPSHOT_UNRESOLVED:  return "snapshot unresolved reference";
-    case FROTH_ERROR_SNAPSHOT_BAD_CRC:     return "snapshot CRC mismatch";
-    case FROTH_ERROR_SNAPSHOT_INCOMPAT:    return "snapshot incompatible ABI";
-    case FROTH_ERROR_SNAPSHOT_NO_SNAPSHOT: return "no saved snapshot";
-    case FROTH_ERROR_SNAPSHOT_BAD_NAME:    return "snapshot name too long";
-    /* Internal */
-    case FROTH_ERROR_THROW:                return "unhandled throw";
-    default:                               return "unknown error";
+  case FROTH_OK:
+    return "ok";
+  /* Runtime errors */
+  case FROTH_ERROR_STACK_OVERFLOW:
+    return "stack overflow";
+  case FROTH_ERROR_STACK_UNDERFLOW:
+    return "stack underflow";
+  case FROTH_ERROR_TYPE_MISMATCH:
+    return "type mismatch";
+  case FROTH_ERROR_UNDEFINED_WORD:
+    return "undefined word";
+  case FROTH_ERROR_DIVISION_BY_ZERO:
+    return "division by zero";
+  case FROTH_ERROR_HEAP_OUT_OF_MEMORY:
+    return "heap out of memory";
+  case FROTH_ERROR_PATTERN_INVALID:
+    return "invalid pattern";
+  case FROTH_ERROR_PATTERN_TOO_LARGE:
+    return "pattern too large";
+  case FROTH_ERROR_IO:
+    return "i/o error";
+  case FROTH_ERROR_NOCATCH:
+    return "throw with no catch";
+  case FROTH_ERROR_WHILE_STACK:
+    return "while: stack discipline violation";
+  case FROTH_ERROR_VALUE_OVERFLOW:
+    return "value overflow";
+  case FROTH_ERROR_BOUNDS:
+    return "index out of bounds";
+  case FROTH_ERROR_PROGRAM_INTERRUPTED:
+    return "interrupted";
+  case FROTH_ERROR_UNBALANCED_RETURN_STACK_CALLS:
+    return "unbalanced return stack";
+  /* Reader/evaluator errors */
+  case FROTH_ERROR_TOKEN_TOO_LONG:
+    return "token too long";
+  case FROTH_ERROR_UNTERMINATED_QUOTE:
+    return "unterminated quotation";
+  case FROTH_ERROR_UNTERMINATED_COMMENT:
+    return "unterminated comment";
+  case FROTH_ERROR_UNEXPECTED_PAREN:
+    return "unexpected )";
+  case FROTH_ERROR_BSTRING_TOO_LONG:
+    return "string too long";
+  case FROTH_ERROR_UNTERMINATED_STRING:
+    return "unterminated string";
+  case FROTH_ERROR_INVALID_ESCAPE:
+    return "invalid escape sequence";
+  /* Snapshot errors */
+  case FROTH_ERROR_SNAPSHOT_OVERFLOW:
+    return "snapshot buffer overflow";
+  case FROTH_ERROR_SNAPSHOT_FORMAT:
+    return "snapshot format error";
+  case FROTH_ERROR_SNAPSHOT_UNRESOLVED:
+    return "snapshot unresolved reference";
+  case FROTH_ERROR_SNAPSHOT_BAD_CRC:
+    return "snapshot CRC mismatch";
+  case FROTH_ERROR_SNAPSHOT_INCOMPAT:
+    return "snapshot incompatible ABI";
+  case FROTH_ERROR_SNAPSHOT_NO_SNAPSHOT:
+    return "no saved snapshot";
+  case FROTH_ERROR_SNAPSHOT_BAD_NAME:
+    return "snapshot name too long";
+  /* Internal */
+  case FROTH_ERROR_THROW:
+    return "unhandled throw";
+  default:
+    return "unknown error";
   }
 }
 
 /* Return true if the buffer contains only whitespace or is empty. */
-static bool is_blank(const char* str) {
-  for (const char* p = str; *p != '\0'; p++) {
-    if (*p != ' ' && *p != '\t' && *p != '\r') { return false; }
+static bool is_blank(const char *str) {
+  for (const char *p = str; *p != '\0'; p++) {
+    if (*p != ' ' && *p != '\t' && *p != '\r') {
+      return false;
+    }
   }
   return true;
 }
@@ -69,41 +103,54 @@ static bool is_blank(const char* str) {
  * only the newly appended portion needs to be scanned each time.       */
 
 static int is_scan_delimiter(char c) {
-  return c == '[' || c == ']' || c == ';' || c == '(' || c == ')' ||
-         c == '"' || c == '\'' || c == '\0' ||
-         c == ' ' || c == '\t' || c == '\r' || c == '\n';
+  return c == '[' || c == ']' || c == ';' || c == '(' || c == ')' || c == '"' ||
+         c == '\'' || c == '\0' || c == ' ' || c == '\t' || c == '\r' ||
+         c == '\n';
 }
 
-static void scan_line_depth(const char* text,
-                            int* bracket_depth,
-                            int* paren_depth,
-                            int* in_string) {
+static void scan_line_depth(const char *text, int *bracket_depth,
+                            int *paren_depth, int *in_string) {
   int i = 0;
 
   while (text[i] != '\0') {
     /* Inside an unclosed string from a previous line */
     if (*in_string) {
-      if (text[i] == '\\' && text[i + 1] != '\0') { i += 2; continue; }
-      if (text[i] == '"') { *in_string = 0; i++; continue; }
+      if (text[i] == '\\' && text[i + 1] != '\0') {
+        i += 2;
+        continue;
+      }
+      if (text[i] == '"') {
+        *in_string = 0;
+        i++;
+        continue;
+      }
       i++;
       continue;
     }
 
     /* Inside an unclosed paren comment from a previous line */
     if (*paren_depth > 0) {
-      if (text[i] == '(') { (*paren_depth)++; }
-      else if (text[i] == ')') { (*paren_depth)--; }
+      if (text[i] == '(') {
+        (*paren_depth)++;
+      } else if (text[i] == ')') {
+        (*paren_depth)--;
+      }
       i++;
       continue;
     }
 
     char c = text[i];
 
-    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') { i++; continue; }
+    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+      i++;
+      continue;
+    }
 
     /* Line comment — skip to newline or end */
     if (c == '\\') {
-      while (text[i] != '\0' && text[i] != '\n') { i++; }
+      while (text[i] != '\0' && text[i] != '\n') {
+        i++;
+      }
       continue;
     }
 
@@ -112,8 +159,11 @@ static void scan_line_depth(const char* text,
       *paren_depth = 1;
       i++;
       while (text[i] != '\0' && *paren_depth > 0) {
-        if (text[i] == '(') { (*paren_depth)++; }
-        else if (text[i] == ')') { (*paren_depth)--; }
+        if (text[i] == '(') {
+          (*paren_depth)++;
+        } else if (text[i] == ')') {
+          (*paren_depth)--;
+        }
         i++;
       }
       continue;
@@ -124,28 +174,49 @@ static void scan_line_depth(const char* text,
       i++;
       int closed = 0;
       while (text[i] != '\0') {
-        if (text[i] == '\\' && text[i + 1] != '\0') { i += 2; continue; }
-        if (text[i] == '"') { i++; closed = 1; break; }
+        if (text[i] == '\\' && text[i + 1] != '\0') {
+          i += 2;
+          continue;
+        }
+        if (text[i] == '"') {
+          i++;
+          closed = 1;
+          break;
+        }
         i++;
       }
-      if (!closed) { *in_string = 1; }
+      if (!closed) {
+        *in_string = 1;
+      }
       continue;
     }
 
     /* Brackets */
-    if (c == '[') { (*bracket_depth)++; i++; continue; }
-    if (c == ']' || c == ';') { (*bracket_depth)--; i++; continue; }
+    if (c == '[') {
+      (*bracket_depth)++;
+      i++;
+      continue;
+    }
+    if (c == ']' || c == ';') {
+      (*bracket_depth)--;
+      i++;
+      continue;
+    }
 
     /* Tick — skip the quoted word, it doesn't affect depth */
     if (c == '\'') {
       i++;
-      while (text[i] != '\0' && !is_scan_delimiter(text[i])) { i++; }
+      while (text[i] != '\0' && !is_scan_delimiter(text[i])) {
+        i++;
+      }
       continue;
     }
 
     /* Regular word — check for `:` colon-sugar opener */
     int word_start = i;
-    while (text[i] != '\0' && !is_scan_delimiter(text[i])) { i++; }
+    while (text[i] != '\0' && !is_scan_delimiter(text[i])) {
+      i++;
+    }
     if (i - word_start == 1 && text[word_start] == ':') {
       (*bracket_depth)++;
     }
@@ -156,13 +227,18 @@ static void scan_line_depth(const char* text,
 
 /* Read characters into buffer starting at *pos.  Backspace is clamped to
  * line_start so it cannot erase into previous continuation lines. */
-static froth_error_t froth_repl_read_line(char* buffer,
-                                          froth_cell_u_t* pos,
+static froth_error_t froth_repl_read_line(char *buffer, froth_cell_u_t *pos,
                                           froth_cell_u_t line_start) {
   while (*pos < FROTH_LINE_BUFFER_SIZE - 1) {
     uint8_t byte;
     froth_error_t err = platform_key(&byte);
-    if (err != FROTH_OK) { return err; }
+    if (err != FROTH_OK) {
+      return err;
+    }
+
+    if (byte == 0x04) {
+      return FROTH_ERROR_IO; // return will cause the main loop to exit.
+    }
 
     if (byte == '\b' || byte == 127) {
       if (*pos > line_start) {
@@ -174,9 +250,13 @@ static froth_error_t froth_repl_read_line(char* buffer,
       continue;
     }
 
-    if (byte == '\n') { break; }
+    if (byte == '\n') {
+      platform_emit('\n');
+      break;
+    }
 
     buffer[(*pos)++] = byte;
+    platform_emit(byte);
   }
   buffer[*pos] = '\0';
   return FROTH_OK;
@@ -184,16 +264,20 @@ static froth_error_t froth_repl_read_line(char* buffer,
 
 /* ── REPL main loop ───────────────────────────────────────────────── */
 
-froth_error_t froth_repl_start(froth_vm_t* vm) {
+froth_error_t froth_repl_start(froth_vm_t *vm) {
   froth_error_t err;
   while (true) {
     FROTH_TRY(emit_string(prompt_normal));
 
     froth_cell_u_t buf_pos = 0;
     err = froth_repl_read_line(repl_buffer, &buf_pos, 0);
-    if (err != FROTH_OK) { return FROTH_OK; } /* EOF */
+    if (err != FROTH_OK) {
+      return FROTH_OK;
+    } /* EOF */
 
-    if (is_blank(repl_buffer)) { continue; }
+    if (is_blank(repl_buffer)) {
+      continue;
+    }
 
     /* Scan first line for nesting depth */
     int bracket_depth = 0, paren_depth = 0, in_string = 0;
@@ -216,12 +300,14 @@ froth_error_t froth_repl_start(froth_vm_t* vm) {
         break;
       }
 
-      scan_line_depth(repl_buffer + line_start,
-                      &bracket_depth, &paren_depth, &in_string);
+      scan_line_depth(repl_buffer + line_start, &bracket_depth, &paren_depth,
+                      &in_string);
     }
 
     /* Interrupted or EOF during continuation — skip evaluation */
-    if (bracket_depth > 0 || paren_depth > 0 || in_string) { continue; }
+    if (bracket_depth > 0 || paren_depth > 0 || in_string) {
+      continue;
+    }
 
     /* Evaluate the accumulated buffer */
     froth_cell_u_t ds_snapshot = vm->ds.pointer;
@@ -230,15 +316,17 @@ froth_error_t froth_repl_start(froth_vm_t* vm) {
     vm->last_error_slot = -1;
     err = froth_evaluate_input(repl_buffer, vm);
     if (err != FROTH_OK) {
-      froth_cell_t code = (err == FROTH_ERROR_THROW) ? vm->thrown : (froth_cell_t)err;
+      froth_cell_t code =
+          (err == FROTH_ERROR_THROW) ? vm->thrown : (froth_cell_t)err;
 
       emit_string("error(");
       emit_string(format_number(code));
       emit_string("): ");
       emit_string(error_name((froth_error_t)code));
       if (vm->last_error_slot >= 0) {
-        const char* name;
-        if (froth_slot_get_name((froth_cell_u_t)vm->last_error_slot, &name) == FROTH_OK) {
+        const char *name;
+        if (froth_slot_get_name((froth_cell_u_t)vm->last_error_slot, &name) ==
+            FROTH_OK) {
           emit_string(" in \"");
           emit_string(name);
           emit_string("\"");
