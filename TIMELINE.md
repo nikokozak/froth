@@ -1,6 +1,6 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-11*
+*Last reviewed: 2026-03-13*
 *Source: Froth Implementation Roadmap v0.4 (Feb 25 → Workshop week of Mar 15)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
@@ -147,7 +147,8 @@
 - [x] POSIX raw terminal mode: `tcgetattr`/`tcsetattr` disables ECHO+ICANON, `sigaction` for SIGINT, REPL owns echo/backspace/Ctrl-D
 - [x] `froth_boot.c`: shared boot sequence extracted from `main.c`
 - [ ] **Proof**: define `autorun`, `save`, restart → it runs. `wipe` resets to base.
-- [~] **Proof**: LED blink from Froth REPL on real ESP32 hardware — GPIO on/off proven (`2 1 gpio.mode`, `2 1 gpio.write`), blink loop pending serial terminal fix
+- [x] `platform_check_interrupt()`: platform-agnostic polling at executor safe points (ADR-030 pending). ESP-IDF polls UART, POSIX no-op.
+- [x] **Proof**: LED blink from Froth REPL on real ESP32 hardware — `[ -1 ] [ 2 1 gpio.write 500 ms 2 0 gpio.write 500 ms ] while`, Ctrl-C interrupts cleanly
 
 ### Mar 11 (Wed) — Evaluator refactor + quotation introspection + region
 - [ ] Evaluator refactor: split `froth_evaluator.c` into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
@@ -167,6 +168,16 @@
 
 > Phase 2 leans heavily on AI-assisted porting and frontend work.
 > The kernel is feature-complete after Phase 1. Phase 2 is ecosystem.
+
+### Mar 14 (Fri) — Hardening + small wins
+- [ ] ADR-030: `platform_check_interrupt` design
+- [ ] ESP32 flash death spiral diagnosis
+- [ ] Smoke tests: edge cases, bad input, heap exhaustion, deep nesting
+- [ ] `q.len`, `q@` (quotation introspection)
+- [ ] `mark` / `release` (FROTH-Region)
+- [ ] `see` shows stack effects, `info` shows overlay heap usage
+- [ ] Safe boot escape (CAN window)
+- [ ] **Proof**: break it, fix it, confidence up
 
 ### Mar 12–13 (Thu–Fri) — ESP32 dual-core architecture + audio FFI
 - [ ] Dual-core architecture ADR (Froth VM on Core 1, audio engine on Core 0)
@@ -208,8 +219,8 @@
 
 ## Workshop "Definition of Done"
 
-- [ ] LED blink from Froth REPL on ESP32
-- [ ] Interrupt stops runaway loop
+- [x] LED blink from Froth REPL on ESP32
+- [x] Interrupt stops runaway loop
 - [ ] `save` survives power cycle on ESP32
 - [ ] `wipe` returns to base-only state
 - [ ] `"Hello" s.emit` works
@@ -274,3 +285,5 @@
 | FROTH-Region | Post-break | Mar 11 | Pulled forward — workshop heap hygiene. |
 | q.len/q@/q.pack | Post-break | Mar 11 | Pulled forward — enables richer `see`, metaprogramming. |
 | Persistence Stage 2 | Mar 10 | Mar 10–11 | CRC32, platform API, header, A/B selection, prims, boot restore. 17/17 smoke tests. autorun still pending. |
+| Evaluator refactor + small wins | Mar 11 | Mar 14 | Mar 12–13 spent on ESP32 REPL debugging (UART buffering, line endings, Ctrl-C, raw terminal). Hardening day inserted. |
+| Dual-core + audio | Mar 12–13 | Mar 15–16 | Pushed by REPL debugging and hardening day insertion. |
