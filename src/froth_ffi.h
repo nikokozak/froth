@@ -23,6 +23,10 @@ froth_error_t froth_throw(froth_vm_t *vm, froth_cell_t error_code);
 
 froth_error_t froth_ffi_register(froth_vm_t *vm, const froth_ffi_entry_t *table);
 
+/* --- Lookup --- */
+
+const froth_ffi_entry_t *froth_ffi_find_entry(froth_native_word_t prim);
+
 /* --- Convenience macros --- */
 
 /* Declare an FFI function + companion metadata struct.

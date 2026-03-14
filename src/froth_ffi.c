@@ -3,6 +3,10 @@
 #include "froth_slot_table.h"
 #include <stddef.h>
 
+#define FROTH_FFI_MAX_TABLES 4
+static const froth_ffi_entry_t *registered_tables[FROTH_FFI_MAX_TABLES];
+static froth_cell_u_t registered_table_count = 0;
+
 /* Pop a number from DS. Returns stripped payload. Type-checked: non-numbers are rejected. */
 froth_error_t froth_pop(froth_vm_t *vm, froth_cell_t *value) {
   froth_cell_t cell;
@@ -39,10 +43,25 @@ froth_error_t froth_throw(froth_vm_t *vm, froth_cell_t error_code) {
 
 /* Register a null-terminated table of FFI bindings into the slot table. */
 froth_error_t froth_ffi_register(froth_vm_t *vm, const froth_ffi_entry_t *table) {
+  if (registered_table_count < FROTH_FFI_MAX_TABLES) {
+    registered_tables[registered_table_count++] = table;
+  }
   for (froth_cell_u_t i = 0; table[i].name != NULL; i++) {
     froth_cell_u_t slot_index;
     FROTH_TRY(froth_slot_create(table[i].name, &vm->heap, &slot_index));
     FROTH_TRY(froth_slot_set_prim(slot_index, table[i].word));
   }
   return FROTH_OK;
+}
+
+/* Find FFI metadata for a primitive by function pointer. Walks all registered tables. */
+const froth_ffi_entry_t *froth_ffi_find_entry(froth_native_word_t prim) {
+  for (froth_cell_u_t t = 0; t < registered_table_count; t++) {
+    const froth_ffi_entry_t *table = registered_tables[t];
+    for (froth_cell_u_t i = 0; table[i].name != NULL; i++) {
+      if (table[i].word == prim)
+        return &table[i];
+    }
+  }
+  return NULL;
 }

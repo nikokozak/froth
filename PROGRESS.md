@@ -4,9 +4,9 @@
 
 ## Current Status
 
-**Phase**: Quotation introspection and mark/release landed. Next: `see`/`info` polish, then ecosystem work (web editor, audio FFI, ESP32 persistence).
+**Phase**: Kernel small wins complete (q.len, q@, mark/release, see polish, info overlay usage). Next: ecosystem work (web editor, audio FFI, ESP32 persistence).
 **Blocking issues**: Evaluator refactor, ESP32 snapshots remain. Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues).
-**Morale check**: Kernel feature set is nearly complete for workshop.
+**Morale check**: Kernel feature set is complete for workshop.
 
 ## What's Done
 
@@ -83,6 +83,9 @@
 - Spec updated: interrupt byte changed from CAN (0x18) to ETX (0x03, Ctrl-C). Boot sequence updated with safe boot step.
 - `q.len`, `q@` quotation introspection primitives. `q@` converts internal CALL-tagged cells to user-facing SLOT tags. Bounds-checked, consistent with `s@` conventions.
 - `mark` / `release` single-level heap watermark (ADR-032). `mark` snapshots heap pointer, `release` restores it. `release` without prior `mark` throws `FROTH_ERROR_NO_MARK` (code 19). Sentinel: `(froth_cell_u_t)-1`. No nesting; composable regions deferred to FROTH-Region-Strict.
+- `see` rewritten: shows name, stack effect, body or `<primitive>`, help text, origin (primitive/user-defined). FFI metadata lookup via `froth_ffi_find_entry` walks all registered tables (kernel, board, snapshot). Board words like `gpio.mode` now show full metadata.
+- `info` shows overlay heap usage: `heap: 708 / 4096 bytes used (20 user)`.
+- `froth_ffi_find_entry`: new lookup function in `froth_ffi.c`. Static array of up to 4 registered FFI table pointers, populated by `froth_ffi_register` during boot. Searches by function pointer.
 - ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards), 032 (mark/release heap watermark)
 
 ## In Progress
@@ -96,9 +99,9 @@ Nothing in progress.
 
 ## Next Up
 
-1. `see` shows stack effects, `info` shows overlay heap usage — trivial wins
-2. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
-3. Dual-core architecture + audio FFI (ecosystem)
+1. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
+2. Dual-core architecture + audio FFI (ecosystem)
+3. Web editor + Link Mode
 
 ## Open Questions
 

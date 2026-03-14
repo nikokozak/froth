@@ -946,32 +946,6 @@ froth_error_t froth_prim_quote_at(froth_vm_t *vm) {
   return froth_stack_push(&vm->ds, quote_location[idx_val + 1]);
 }
 
-froth_error_t froth_prim_see(froth_vm_t *vm) {
-  froth_cell_t slot_cell;
-  FROTH_TRY(froth_stack_pop(&vm->ds, &slot_cell));
-  if (!FROTH_CELL_IS_SLOT(slot_cell)) {
-    return FROTH_ERROR_TYPE_MISMATCH;
-  }
-
-  froth_cell_t impl;
-  froth_native_word_t prim;
-
-  if (froth_slot_get_impl((froth_cell_u_t)FROTH_CELL_STRIP_TAG(slot_cell),
-                          &impl) == FROTH_OK &&
-      impl != 0) {
-    FROTH_TRY(emit_cell(impl, &vm->heap));
-    FROTH_TRY(emit_string("\n"));
-  } else if (froth_slot_get_prim(
-                 (froth_cell_u_t)FROTH_CELL_STRIP_TAG(slot_cell), &prim) ==
-                 FROTH_OK &&
-             prim != 0) {
-    FROTH_TRY(emit_string("<primitive>\n"));
-  } else {
-    FROTH_TRY(emit_string("<unbound>\n"));
-  }
-  return FROTH_OK;
-}
-
 froth_error_t froth_prim_mark(froth_vm_t *vm) {
   vm->mark_offset = vm->heap.pointer;
 
@@ -989,6 +963,54 @@ froth_error_t froth_prim_release(froth_vm_t *vm) {
   return FROTH_OK;
 }
 
+
+froth_error_t froth_prim_see(froth_vm_t *vm) {
+  froth_cell_t slot_cell;
+  FROTH_TRY(froth_stack_pop(&vm->ds, &slot_cell));
+  if (!FROTH_CELL_IS_SLOT(slot_cell)) {
+    return FROTH_ERROR_TYPE_MISMATCH;
+  }
+
+  froth_cell_u_t slot_index = FROTH_CELL_STRIP_TAG(slot_cell);
+  const char *name;
+  FROTH_TRY(froth_slot_get_name(slot_index, &name));
+
+  froth_cell_t impl;
+  froth_native_word_t prim = NULL;
+  const froth_ffi_entry_t *ffi = NULL;
+  int has_impl = (froth_slot_get_impl(slot_index, &impl) == FROTH_OK && impl != 0);
+  int has_prim = (froth_slot_get_prim(slot_index, &prim) == FROTH_OK && prim != NULL);
+
+  if (!has_impl && !has_prim) {
+    FROTH_TRY(emit_string(name));
+    FROTH_TRY(emit_string(" | <unbound>\n"));
+    return FROTH_OK;
+  }
+
+  if (has_prim)
+    ffi = froth_ffi_find_entry(prim);
+
+  FROTH_TRY(emit_string(name));
+  FROTH_TRY(emit_string(" | "));
+  if (ffi != NULL) {
+    FROTH_TRY(emit_string(ffi->stack_effect));
+  }
+  FROTH_TRY(emit_string(" | "));
+  if (has_impl) {
+    FROTH_TRY(emit_cell(impl, &vm->heap));
+  } else {
+    FROTH_TRY(emit_string("<primitive>"));
+  }
+  FROTH_TRY(emit_string("\n"));
+  if (ffi != NULL && ffi->help != NULL) {
+    FROTH_TRY(emit_string(ffi->help));
+    FROTH_TRY(emit_string(" | "));
+  }
+  FROTH_TRY(emit_string(has_prim ? "primitive" : "user-defined"));
+  FROTH_TRY(emit_string("\n"));
+  return FROTH_OK;
+}
+
 froth_error_t froth_prim_info(froth_vm_t *vm) {
   FROTH_TRY(emit_string("Froth v" FROTH_VERSION " | "));
   FROTH_TRY(emit_string(format_number(FROTH_CELL_SIZE_BITS)));
@@ -997,7 +1019,9 @@ froth_error_t froth_prim_info(froth_vm_t *vm) {
   FROTH_TRY(emit_string(format_number(vm->heap.pointer)));
   FROTH_TRY(emit_string(" / "));
   FROTH_TRY(emit_string(format_number(FROTH_HEAP_SIZE)));
-  FROTH_TRY(emit_string(" bytes used\n"));
+  FROTH_TRY(emit_string(" bytes used ("));
+  FROTH_TRY(emit_string(format_number(vm->heap.pointer - vm->watermark_heap_offset)));
+  FROTH_TRY(emit_string(" user)\n"));
   FROTH_TRY(emit_string("slots: "));
   FROTH_TRY(emit_string(format_number(froth_slot_count())));
   FROTH_TRY(emit_string(" / "));

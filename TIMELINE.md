@@ -157,10 +157,10 @@
 - [ ] `q.pack` (build quotation from stack values)
 - [x] `mark` / `release` (FROTH-Region — heap watermark, ADR-032) — landed Mar 14
 - [ ] `arity!` (stack-effect metadata for slots — supports tooling + web editor)
-- [ ] `info` shows overlay heap usage (user code bytes vs total)
-- [ ] `see` shows stack effect for primitives (pull from `froth_ffi_entry_t`)
+- [x] `info` shows overlay heap usage (user code bytes vs total) — landed Mar 14
+- [x] `see` shows stack effect for primitives (pull from `froth_ffi_entry_t`) — landed Mar 14, walks all registered FFI tables
 - [ ] Strict bare identifiers ADR: design only — decide whether identifier execution should error on undefined slots instead of creating them (forward-reference strategy needed for quotations)
-- [ ] **Proof**: `[ 1 2 + ] q.len` → `[3]`; `mark ... release` reclaims heap
+- [x] **Proof**: `[ 1 2 + ] q.len` → `[3]`; `mark ... release` reclaims heap
 
 ---
 
@@ -183,7 +183,7 @@
 - [x] **Proof**: comprehensive smoke test battery, all findings fixed, persistence still works
 - [x] `q.len`, `q@` (quotation introspection) — CALL→SLOT tag conversion on extract
 - [x] `mark` / `release` (FROTH-Region, ADR-032) — single-level heap watermark, error 19 on release without mark
-- [ ] `see` shows stack effects, `info` shows overlay heap usage
+- [x] `see` shows stack effects (FFI metadata lookup across all registered tables), `info` shows overlay heap usage
 
 ### Mar 12–13 (Thu–Fri) — ESP32 dual-core architecture + audio FFI
 - [ ] Dual-core architecture ADR (Froth VM on Core 1, audio engine on Core 0)
@@ -256,6 +256,7 @@
 - FROTH-Region-Strict (fail-fast allocation gating)
 - Step mode / trace mode for debugging
 - Richer `see` (pretty printing, source retention policies)
+- Stack effect and help text metadata for user-defined words (currently only primitives carry this via `froth_ffi_entry_t`). Would enable `see` to show full metadata for stdlib and user words. Needs a storage decision: slot table field, heap-allocated metadata, or a separate registry.
 
 ### Completed (moved out of deferred)
 
