@@ -1,46 +1,50 @@
 #pragma once
 
-#include <stdint.h>
 #include <inttypes.h>
+#include <stdint.h>
 
 #ifndef FROTH_CELL_SIZE_BITS
-  #error "FROTH_CELL_SIZE_BITS is not defined. Please define it to 8, 16, 32, or 64."
+#error                                                                         \
+    "FROTH_CELL_SIZE_BITS is not defined. Please define it to 8, 16, 32, or 64."
 #endif
 
 /* Check for word size flag -DFROTH_CELL_SIZE_BITS=8,16,32,64
  * This allows us to determine the size of froth_cell_t and froth_cell_u_t,
  * which is necessary for cross-compilation. */
 #if FROTH_CELL_SIZE_BITS == 8
-  typedef int8_t froth_cell_t;
-  typedef uint8_t froth_cell_u_t;
-  /* Adding these FORMAT defines means that we don't need to worry
-   * about the size of the cell when using printf and scanf. */
-  #define FROTH_CELL_FORMAT PRId8
-  #define FROTH_CELL_U_FORMAT PRIu8
+typedef int8_t froth_cell_t;
+typedef uint8_t froth_cell_u_t;
+/* Adding these FORMAT defines means that we don't need to worry
+ * about the size of the cell when using printf and scanf. */
+#define FROTH_CELL_FORMAT PRId8
+#define FROTH_CELL_U_FORMAT PRIu8
 #elif FROTH_CELL_SIZE_BITS == 16
-  typedef int16_t froth_cell_t;
-  typedef uint16_t froth_cell_u_t;
-  #define FROTH_CELL_FORMAT PRId16
-  #define FROTH_CELL_U_FORMAT PRIu16
+typedef int16_t froth_cell_t;
+typedef uint16_t froth_cell_u_t;
+#define FROTH_CELL_FORMAT PRId16
+#define FROTH_CELL_U_FORMAT PRIu16
 #elif FROTH_CELL_SIZE_BITS == 32
-  typedef int32_t froth_cell_t;
-  typedef uint32_t froth_cell_u_t;
-  #define FROTH_CELL_FORMAT PRId32
-  #define FROTH_CELL_U_FORMAT PRIu32
+typedef int32_t froth_cell_t;
+typedef uint32_t froth_cell_u_t;
+#define FROTH_CELL_FORMAT PRId32
+#define FROTH_CELL_U_FORMAT PRIu32
 #elif FROTH_CELL_SIZE_BITS == 64
-  typedef int64_t froth_cell_t;
-  typedef uint64_t froth_cell_u_t;
-  #define FROTH_CELL_FORMAT PRId64
-  #define FROTH_CELL_U_FORMAT PRIu64
+typedef int64_t froth_cell_t;
+typedef uint64_t froth_cell_u_t;
+#define FROTH_CELL_FORMAT PRId64
+#define FROTH_CELL_U_FORMAT PRIu64
 #else
-  #error "Invalid value for FROTH_CELL_SIZE_BITS. Please define it to 8, 16, 32, or 64."
+#error                                                                         \
+    "Invalid value for FROTH_CELL_SIZE_BITS. Please define it to 8, 16, 32, or 64."
 #endif
 
 #define FROTH_FALSE ((froth_cell_t)0)
-#define FROTH_TRUE  ((froth_cell_t)-1)
+#define FROTH_TRUE ((froth_cell_t) - 1)
 
-// Sanity check that the size of froth_cell_t actually matches FROTH_CELL_SIZE_BITS
-_Static_assert(sizeof(froth_cell_t) * 8 == FROTH_CELL_SIZE_BITS, "FROTH_CELL_SIZE_BITS does not match the size of froth_cell_t");
+// Sanity check that the size of froth_cell_t actually matches
+// FROTH_CELL_SIZE_BITS
+_Static_assert(sizeof(froth_cell_t) * 8 == FROTH_CELL_SIZE_BITS,
+               "FROTH_CELL_SIZE_BITS does not match the size of froth_cell_t");
 
 /* Forward declaration — full definition in froth_vm.h */
 typedef struct froth_vm_t froth_vm_t;
@@ -51,54 +55,60 @@ typedef enum {
   /* Runtime errors — visible to Froth programs via catch/throw.
    * These numbers are the stable user-facing API. Never reorder.
    * Append new runtime errors after the last assigned value. */
-  FROTH_ERROR_STACK_OVERFLOW       = 1,
-  FROTH_ERROR_STACK_UNDERFLOW      = 2,
-  FROTH_ERROR_TYPE_MISMATCH        = 3,
-  FROTH_ERROR_UNDEFINED_WORD       = 4,
-  FROTH_ERROR_DIVISION_BY_ZERO     = 5,
-  FROTH_ERROR_HEAP_OUT_OF_MEMORY   = 6,
-  FROTH_ERROR_PATTERN_INVALID      = 7,
-  FROTH_ERROR_PATTERN_TOO_LARGE    = 8,
-  FROTH_ERROR_IO                   = 9,
-  FROTH_ERROR_NOCATCH              = 10,
-  FROTH_ERROR_WHILE_STACK          = 11,
-  FROTH_ERROR_VALUE_OVERFLOW       = 12,
-  FROTH_ERROR_BOUNDS               = 13,
-  FROTH_ERROR_PROGRAM_INTERRUPTED  = 14,
+  FROTH_ERROR_STACK_OVERFLOW = 1,
+  FROTH_ERROR_STACK_UNDERFLOW = 2,
+  FROTH_ERROR_TYPE_MISMATCH = 3,
+  FROTH_ERROR_UNDEFINED_WORD = 4,
+  FROTH_ERROR_DIVISION_BY_ZERO = 5,
+  FROTH_ERROR_HEAP_OUT_OF_MEMORY = 6,
+  FROTH_ERROR_PATTERN_INVALID = 7,
+  FROTH_ERROR_PATTERN_TOO_LARGE = 8,
+  FROTH_ERROR_IO = 9,
+  FROTH_ERROR_NOCATCH = 10,
+  FROTH_ERROR_WHILE_STACK = 11,
+  FROTH_ERROR_VALUE_OVERFLOW = 12,
+  FROTH_ERROR_BOUNDS = 13,
+  FROTH_ERROR_PROGRAM_INTERRUPTED = 14,
   FROTH_ERROR_UNBALANCED_RETURN_STACK_CALLS = 15,
-  FROTH_ERROR_SLOT_TABLE_FULL     = 16,
-  FROTH_ERROR_REDEF_PRIMITIVE     = 17,
-  FROTH_ERROR_CALL_DEPTH          = 18,
+  FROTH_ERROR_SLOT_TABLE_FULL = 16,
+  FROTH_ERROR_REDEF_PRIMITIVE = 17,
+  FROTH_ERROR_CALL_DEPTH = 18,
+  FROTH_ERROR_NO_MARK = 19,
   /* Reader/evaluator errors — occur before execution.
    * Stable numbers, but programs won't typically catch these. */
-  FROTH_ERROR_TOKEN_TOO_LONG       = 100,
-  FROTH_ERROR_UNTERMINATED_QUOTE   = 101,
+  FROTH_ERROR_TOKEN_TOO_LONG = 100,
+  FROTH_ERROR_UNTERMINATED_QUOTE = 101,
   FROTH_ERROR_UNTERMINATED_COMMENT = 102,
-  FROTH_ERROR_UNEXPECTED_PAREN     = 103,
-  FROTH_ERROR_BSTRING_TOO_LONG     = 104,
-  FROTH_ERROR_UNTERMINATED_STRING  = 105,
-  FROTH_ERROR_INVALID_ESCAPE       = 106,
-  FROTH_ERROR_UNEXPECTED_BRACKET   = 107,
+  FROTH_ERROR_UNEXPECTED_PAREN = 103,
+  FROTH_ERROR_BSTRING_TOO_LONG = 104,
+  FROTH_ERROR_UNTERMINATED_STRING = 105,
+  FROTH_ERROR_INVALID_ESCAPE = 106,
+  FROTH_ERROR_UNEXPECTED_BRACKET = 107,
 
   /* Snapshot errors — persistence subsystem (200–299). */
-  FROTH_ERROR_SNAPSHOT_OVERFLOW        = 200, /* buffer read/write past end */
-  FROTH_ERROR_SNAPSHOT_FORMAT          = 201, /* bad magic, version, or unknown tag */
-  FROTH_ERROR_SNAPSHOT_UNRESOLVED      = 202, /* heap offset not in object table */
-  FROTH_ERROR_SNAPSHOT_BAD_CRC         = 203, /* header or payload CRC mismatch */
-  FROTH_ERROR_SNAPSHOT_INCOMPAT        = 204, /* ABI hash mismatch */
-  FROTH_ERROR_SNAPSHOT_NO_SNAPSHOT     = 205, /* no valid snapshot in storage */
-  FROTH_ERROR_SNAPSHOT_BAD_NAME        = 206, /* name exceeds max length */
+  FROTH_ERROR_SNAPSHOT_OVERFLOW = 200, /* buffer read/write past end */
+  FROTH_ERROR_SNAPSHOT_FORMAT = 201,   /* bad magic, version, or unknown tag */
+  FROTH_ERROR_SNAPSHOT_UNRESOLVED = 202,  /* heap offset not in object table */
+  FROTH_ERROR_SNAPSHOT_BAD_CRC = 203,     /* header or payload CRC mismatch */
+  FROTH_ERROR_SNAPSHOT_INCOMPAT = 204,    /* ABI hash mismatch */
+  FROTH_ERROR_SNAPSHOT_NO_SNAPSHOT = 205, /* no valid snapshot in storage */
+  FROTH_ERROR_SNAPSHOT_BAD_NAME = 206,    /* name exceeds max length */
 
   /* Internal sentinel — not a user-visible error code. */
-  FROTH_ERROR_THROW                = -1,
+  FROTH_ERROR_THROW = -1,
 } froth_error_t;
 
 /* Early-return on error. Only works in functions returning froth_error_t. */
-#define FROTH_TRY(expr) do { froth_error_t _err = (expr); if (_err != FROTH_OK) return _err; } while(0)
+#define FROTH_TRY(expr)                                                        \
+  do {                                                                         \
+    froth_error_t _err = (expr);                                               \
+    if (_err != FROTH_OK)                                                      \
+      return _err;                                                             \
+  } while (0)
 
-/* Convenience macro for turning a value into a Froth bool (0 - false, -1 - true (anything other than zero)) */
+/* Convenience macro for turning a value into a Froth bool (0 - false, -1 - true
+ * (anything other than zero)) */
 #define FROTH_BOOLIFY(val) ((val) ? FROTH_TRUE : FROTH_FALSE)
-
 
 typedef enum {
   FROTH_NUMBER = 0,
@@ -107,13 +117,15 @@ typedef enum {
   FROTH_PATTERN = 3,
   FROTH_BSTRING = 4,
   FROTH_CONTRACT = 5,
-  FROTH_CALL = 6,    // internal: invoke SlotRef (only inside quotation bodies, see ADR-009)
+  FROTH_CALL =
+      6, // internal: invoke SlotRef (only inside quotation bodies, see ADR-009)
 } froth_cell_tag_t;
 
 /* TAGGED CELL ENCODING
  * Froth uses 3-bit LSB tagging for its cells.
  * The lower 3 bits encode the type tag, the remaining bits carry the payload.
- * Tag 0 (Number) leaves tag bits clear so addition/subtraction work without untagging.
+ * Tag 0 (Number) leaves tag bits clear so addition/subtraction work without
+ * untagging.
  *
  * Tag table:
  *   0 = Number       (user-visible value)
@@ -134,15 +146,18 @@ typedef enum {
 #define FROTH_CELL_IS_NUMBER(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_NUMBER))
 #define FROTH_CELL_IS_QUOTE(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_QUOTE))
 #define FROTH_CELL_IS_SLOT(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_SLOT))
-#define FROTH_CELL_IS_PATTERN(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_PATTERN))
-#define FROTH_CELL_IS_BSTRING(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_BSTRING))
-#define FROTH_CELL_IS_CONTRACT(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_CONTRACT))
+#define FROTH_CELL_IS_PATTERN(val)                                             \
+  ((FROTH_CELL_GET_TAG((val)) == FROTH_PATTERN))
+#define FROTH_CELL_IS_BSTRING(val)                                             \
+  ((FROTH_CELL_GET_TAG((val)) == FROTH_BSTRING))
+#define FROTH_CELL_IS_CONTRACT(val)                                            \
+  ((FROTH_CELL_GET_TAG((val)) == FROTH_CONTRACT))
 #define FROTH_CELL_IS_CALL(val) ((FROTH_CELL_GET_TAG((val)) == FROTH_CALL))
 
-
-/* Wrap a raw arithmetic result to payload range with two's-complement semantics.
- * Operates in unsigned space to avoid C signed-overflow UB, then truncates to
- * payload width (FROTH_CELL_SIZE_BITS - 3) and sign-extends back. */
+/* Wrap a raw arithmetic result to payload range with two's-complement
+ * semantics. Operates in unsigned space to avoid C signed-overflow UB, then
+ * truncates to payload width (FROTH_CELL_SIZE_BITS - 3) and sign-extends back.
+ */
 static inline froth_cell_t froth_wrap_payload(froth_cell_u_t raw) {
   const int pbits = FROTH_CELL_SIZE_BITS - 3;
   const froth_cell_u_t pmask = ((froth_cell_u_t)1 << pbits) - 1;
@@ -154,11 +169,16 @@ static inline froth_cell_t froth_wrap_payload(froth_cell_u_t raw) {
 }
 
 /* Payload range limits (signed, FROTH_CELL_SIZE_BITS - 3 wide). */
-#define FROTH_MAX_CELL_VALUE  ((froth_cell_t)(((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3)) - 1))
-#define FROTH_MIN_CELL_VALUE  ((froth_cell_t)(-((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3))))
+#define FROTH_MAX_CELL_VALUE                                                   \
+  ((froth_cell_t)(((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3)) - 1))
+#define FROTH_MIN_CELL_VALUE                                                   \
+  ((froth_cell_t)(-((froth_cell_t)1 << (FROTH_CELL_SIZE_BITS - 3))))
 
-static inline froth_error_t froth_make_cell(froth_cell_t value, froth_cell_tag_t tag, froth_cell_t *out) {
-  if (value < FROTH_MIN_CELL_VALUE || value > FROTH_MAX_CELL_VALUE) { return FROTH_ERROR_VALUE_OVERFLOW; }
+static inline froth_error_t
+froth_make_cell(froth_cell_t value, froth_cell_tag_t tag, froth_cell_t *out) {
+  if (value < FROTH_MIN_CELL_VALUE || value > FROTH_MAX_CELL_VALUE) {
+    return FROTH_ERROR_VALUE_OVERFLOW;
+  }
   *out = FROTH_CELL_PACK_TAG(value, tag);
   return FROTH_OK;
 }

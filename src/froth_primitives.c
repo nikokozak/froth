@@ -972,6 +972,23 @@ froth_error_t froth_prim_see(froth_vm_t *vm) {
   return FROTH_OK;
 }
 
+froth_error_t froth_prim_mark(froth_vm_t *vm) {
+  vm->mark_offset = vm->heap.pointer;
+
+  return FROTH_OK;
+}
+
+froth_error_t froth_prim_release(froth_vm_t *vm) {
+  if (vm->mark_offset == (froth_cell_u_t)-1) { // No mark set
+    return FROTH_ERROR_NO_MARK;
+  }
+
+  vm->heap.pointer = vm->mark_offset;
+  vm->mark_offset = (froth_cell_u_t)-1;
+
+  return FROTH_OK;
+}
+
 froth_error_t froth_prim_info(froth_vm_t *vm) {
   FROTH_TRY(emit_string("Froth v" FROTH_VERSION " | "));
   FROTH_TRY(emit_string(format_number(FROTH_CELL_SIZE_BITS)));
@@ -1049,6 +1066,10 @@ const froth_ffi_entry_t froth_primitives[] = {
     /* Quotation introspection */
     {"q.len", froth_prim_quote_len, "( q -- n )", "Quotation body length"},
     {"q@", froth_prim_quote_at, "( q i -- cell )", "Fetch cell at index"},
+
+    /* Memory */
+    {"mark", froth_prim_mark, "( -- )", "Snapshot heap pointer"},
+    {"release", froth_prim_release, "( -- )", "Restore heap to last mark"},
 
     /* Display / introspection */
     {".", froth_prim_dot, "( x -- )", "Print and consume top"},

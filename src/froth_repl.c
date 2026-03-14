@@ -54,6 +54,8 @@ static const char *error_name(froth_error_t err) {
     return "cannot redefine primitive";
   case FROTH_ERROR_CALL_DEPTH:
     return "call depth exceeded";
+  case FROTH_ERROR_NO_MARK:
+    return "no mark set";
   /* Reader/evaluator errors */
   case FROTH_ERROR_TOKEN_TOO_LONG:
     return "token too long";

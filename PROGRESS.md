@@ -1,12 +1,12 @@
 # Froth Implementation Progress
 
-*Last updated: 2026-03-13*
+*Last updated: 2026-03-14*
 
 ## Current Status
 
-**Phase**: Hardening day complete. Death spiral diagnosed and mitigated, safe boot implemented, smoke tests passed (5 bugs found and fixed). Next: quotation introspection, FROTH-Region, `see`/`info` polish.
-**Blocking issues**: Evaluator refactor, quotation introspection, region, ESP32 snapshots remain. Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues).
-**Morale check**: Every crash and bad error message from smoke testing is fixed. Kernel feels solid.
+**Phase**: Quotation introspection and mark/release landed. Next: `see`/`info` polish, then ecosystem work (web editor, audio FFI, ESP32 persistence).
+**Blocking issues**: Evaluator refactor, ESP32 snapshots remain. Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues).
+**Morale check**: Kernel feature set is nearly complete for workshop.
 
 ## What's Done
 
@@ -81,7 +81,9 @@
 - `count_quote_body` now propagates reader errors. Previously swallowed errors from pass 1, causing misleading "unterminated quotation" when the real error was e.g. "string too long."
 - Slot table full now returns `FROTH_ERROR_SLOT_TABLE_FULL` (code 16) instead of `FROTH_ERROR_HEAP_OUT_OF_MEMORY`.
 - Spec updated: interrupt byte changed from CAN (0x18) to ETX (0x03, Ctrl-C). Boot sequence updated with safe boot step.
-- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards)
+- `q.len`, `q@` quotation introspection primitives. `q@` converts internal CALL-tagged cells to user-facing SLOT tags. Bounds-checked, consistent with `s@` conventions.
+- `mark` / `release` single-level heap watermark (ADR-032). `mark` snapshots heap pointer, `release` restores it. `release` without prior `mark` throws `FROTH_ERROR_NO_MARK` (code 19). Sentinel: `(froth_cell_u_t)-1`. No nesting; composable regions deferred to FROTH-Region-Strict.
+- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards), 032 (mark/release heap watermark)
 
 ## In Progress
 
@@ -94,10 +96,9 @@ Nothing in progress.
 
 ## Next Up
 
-1. `q.len`, `q@` (quotation introspection) — small win
-2. `mark` / `release` (FROTH-Region) — small win, high workshop value
-3. `see` shows stack effects, `info` shows overlay heap usage — trivial wins
-4. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
+1. `see` shows stack effects, `info` shows overlay heap usage — trivial wins
+2. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
+3. Dual-core architecture + audio FFI (ecosystem)
 
 ## Open Questions
 

@@ -153,9 +153,9 @@
 ### Mar 11 (Wed) — Evaluator refactor + quotation introspection + region
 - [ ] Evaluator refactor: split `froth_evaluator.c` into `froth_toplevel.c` + `froth_builder.c` (see `docs/concepts/evaluator-refactor.md`)
 - [ ] ESP32 port (if slipped from Tue)
-- [ ] `q.len`, `q@` (quotation introspection — enables richer `see`)
+- [x] `q.len`, `q@` (quotation introspection — enables richer `see`) — landed Mar 14
 - [ ] `q.pack` (build quotation from stack values)
-- [ ] `mark` / `release` (FROTH-Region — heap watermark, keeps workshop experimentation tidy)
+- [x] `mark` / `release` (FROTH-Region — heap watermark, ADR-032) — landed Mar 14
 - [ ] `arity!` (stack-effect metadata for slots — supports tooling + web editor)
 - [ ] `info` shows overlay heap usage (user code bytes vs total)
 - [ ] `see` shows stack effect for primitives (pull from `froth_ffi_entry_t`)
@@ -181,8 +181,8 @@
 - [x] Spec updated: CAN → ETX for interrupt byte, boot sequence with safe boot step
 - [x] `platform_delay_ms` added to platform API
 - [x] **Proof**: comprehensive smoke test battery, all findings fixed, persistence still works
-- [ ] `q.len`, `q@` (quotation introspection)
-- [ ] `mark` / `release` (FROTH-Region)
+- [x] `q.len`, `q@` (quotation introspection) — CALL→SLOT tag conversion on extract
+- [x] `mark` / `release` (FROTH-Region, ADR-032) — single-level heap watermark, error 19 on release without mark
 - [ ] `see` shows stack effects, `info` shows overlay heap usage
 
 ### Mar 12–13 (Thu–Fri) — ESP32 dual-core architecture + audio FFI
@@ -294,3 +294,5 @@
 | Evaluator refactor + small wins | Mar 11 | Mar 14 | Mar 12–13 spent on ESP32 REPL debugging (UART buffering, line endings, Ctrl-C, raw terminal). Hardening day inserted. |
 | Hardening day | Mar 14 | Mar 13 | Started early. Death spiral, safe boot, smoke tests, 5 bug fixes, 2 ADRs. |
 | Dual-core + audio | Mar 12–13 | Mar 15–16 | Pushed by REPL debugging and hardening day insertion. |
+| q.len/q@ | Mar 11 | Mar 14 | Slipped with evaluator refactor block. Landed alongside mark/release. |
+| mark/release | Mar 11 | Mar 14 | Single-level watermark (ADR-032). Nesting deferred to FROTH-Region-Strict. |

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "froth_stack.h"
 #include "froth_heap.h"
+#include "froth_stack.h"
 #include <stdbool.h>
 
 struct froth_vm_t {
@@ -15,6 +15,7 @@ struct froth_vm_t {
   uint8_t boot_complete;
   froth_cell_u_t call_depth;
   froth_cell_u_t watermark_heap_offset;
+  froth_cell_u_t mark_offset;
 };
 
 extern froth_vm_t froth_vm;
