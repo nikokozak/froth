@@ -185,35 +185,37 @@
 - [x] `mark` / `release` (FROTH-Region, ADR-032) — single-level heap watermark, error 19 on release without mark
 - [x] `see` shows stack effects (FFI metadata lookup across all registered tables), `info` shows overlay heap usage
 
-### Mar 12–13 (Thu–Fri) — ESP32 dual-core architecture + audio FFI
-- [ ] Dual-core architecture ADR (Froth VM on Core 1, audio engine on Core 0)
-- [ ] FreeRTOS task setup, UART routing, shared parameter struct
-- [ ] AI-assisted: port ESP32Forth I2S/DAC/ADC/GPIO/timer bindings to Froth FFI
-- [ ] Audio engine skeleton in C (Core 0): oscillator, DAC output
-- [ ] Froth FFI bridge to audio parameters (`osc.freq`, `osc.wave`, etc.)
-- [ ] **Proof**: set oscillator frequency from Froth REPL, hear audio output
+### Mar 15 (Sat) — Ecosystem planning + ADR-033
+- [x] Target tier model documented (32-bit full, 16-bit tethered, 8-bit tethered)
+- [x] Tooling architecture proposal reviewed (ChatGPT doc)
+- [x] ADR-033: FROTH-LINK/1 binary transport (COBS framing, replaces STX/ETX)
+- [x] ADR-033 reviewed, 8 issues found and fixed (CRC scope, field widths, COBS semantics, etc.)
 
-### Mar 14–15 (Sat–Sun) — Web editor + flash tooling + Link Mode
-- [ ] Web editor: WebSerial connection to ESP32
-- [ ] Froth syntax highlighting, library/board definition loading
-- [ ] Flash tooling integration (esptool.py wrapper or equivalent)
-- [ ] Link Mode (STX/ETX framing, `#ACK`/`#NAK`) — enables reliable editor→device communication
-- [ ] Machine-readable `#STACK`/`#ERR` protocol lines for editor integration
-- [ ] **Proof**: edit `.froth` in web editor, push to device, it updates
+### Mar 16–17 (Sun–Mon) — Device-side link layer (C)
+- [ ] COBS codec (`froth_link.c`): encode, decode, CRC32 over header+payload
+- [ ] Console multiplexer (`froth_console_mux.c`): split bytes into direct/frame/interrupt
+- [ ] Link dispatcher (`froth_link_dispatch.c`): HELLO, EVAL, INSPECT, INFO handlers
+- [ ] Gate behind `FROTH_HAS_LINK` CMake flag
+- [ ] **Proof**: pipe COBS frames through stdin on POSIX build, get structured responses
 
-### Mar 16–17 (Mon–Tue) — ESP32 persistence + workshop hardening
+### Mar 18–19 (Tue–Wed) — Host CLI skeleton
+- [ ] Host language decision (Go vs Node)
+- [ ] Serial port open, HELLO handshake, print device info
+- [ ] EVAL round-trip: send source, print structured result
+- [ ] INSPECT round-trip: query word, print metadata
+- [ ] **Proof**: end-to-end protocol proven (host CLI ↔ POSIX Froth)
+
+### Mar 19–21 (Wed–Fri) — AI-assisted host buildout
+- [ ] CLI commands: doctor, build, flash, send, info
+- [ ] Daemon skeleton (serial session ownership, reconnect)
+- [ ] VS Code extension skeleton (connect, send selection, console panel)
+- [ ] Iterative review and testing
+
+### Interleaved kernel work (Mar 16–21, as sessions allow)
+- [ ] ESP32 dual-core architecture + audio FFI
 - [ ] ESP32 NVS/flash backend for snapshot persistence
-- [ ] Save/restore survives power cycle on real hardware
-- [ ] Safe boot escape (GPIO pin or CAN window)
-- [ ] End-to-end test: flash → REPL → define synth → save → power cycle → autorun
-- [ ] UART monitor task for Ctrl-C during Froth execution (background FreeRTOS task watches for 0x03, sets `vm.interrupted`)
-- [ ] Workshop failure mode testing (bad input, heap exhaustion, bricked recovery)
-
-### Mar 18 (Wed) — Workshop prep
-- [ ] Example synth patches in Froth (oscillators, filters, LFOs, envelopes)
-- [ ] Participant documentation / cheat sheet
-- [ ] Pre-flash ESP32 boards
-- [ ] Dry run of workshop flow
+- [ ] FROTH-Addr memory access primitives (ADR-024)
+- [ ] Evaluator refactor if time permits
 
 ## Kernel "Definition of Done"
 
@@ -232,7 +234,7 @@
 - [ ] `"Hello" s.emit` works
 - [ ] Hex literals work (`0xFF`)
 - [ ] Synth audio controllable from Froth REPL
-- [ ] Web editor can push code to device
+- [ ] Host tooling can push code to device (CLI or VS Code via FROTH-LINK/1)
 - [ ] 15 pre-flashed ESP32 boards ready
 
 ## Deferred (post-workshop)
@@ -297,3 +299,7 @@
 | Dual-core + audio | Mar 12–13 | Mar 15–16 | Pushed by REPL debugging and hardening day insertion. |
 | q.len/q@ | Mar 11 | Mar 14 | Slipped with evaluator refactor block. Landed alongside mark/release. |
 | mark/release | Mar 11 | Mar 14 | Single-level watermark (ADR-032). Nesting deferred to FROTH-Region-Strict. |
+| Link Mode | Mar 14–15 | Mar 16–17 | Redesigned as FROTH-LINK/1 binary transport (ADR-033). STX/ETX replaced with COBS framing. |
+| Web editor | Mar 14–15 | Mar 19–21 | Replaced with host CLI + VS Code extension via daemon architecture. AI-assisted buildout. |
+| Dual-core + audio | Mar 15–16 | Mar 16–21 | Interleaved with link/ecosystem work. |
+| ESP32 persistence | Mar 16–17 | Mar 16–21 | Interleaved with link/ecosystem work. |

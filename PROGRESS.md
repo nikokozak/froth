@@ -1,12 +1,12 @@
 # Froth Implementation Progress
 
-*Last updated: 2026-03-14*
+*Last updated: 2026-03-15*
 
 ## Current Status
 
-**Phase**: Kernel small wins complete (q.len, q@, mark/release, see polish, info overlay usage). Next: ecosystem work (web editor, audio FFI, ESP32 persistence).
+**Phase**: Ecosystem. Link transport designed (ADR-033), target tier model documented. Next: implement device-side link layer in C, then host CLI.
 **Blocking issues**: Evaluator refactor, ESP32 snapshots remain. Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues).
-**Morale check**: Kernel feature set is complete for workshop.
+**Morale check**: Kernel feature set is complete. Ecosystem week begins.
 
 ## What's Done
 
@@ -86,11 +86,13 @@
 - `see` rewritten: shows name, stack effect, body or `<primitive>`, help text, origin (primitive/user-defined). FFI metadata lookup via `froth_ffi_find_entry` walks all registered tables (kernel, board, snapshot). Board words like `gpio.mode` now show full metadata.
 - `info` shows overlay heap usage: `heap: 708 / 4096 bytes used (20 user)`.
 - `froth_ffi_find_entry`: new lookup function in `froth_ffi.c`. Static array of up to 4 registered FFI table pointers, populated by `froth_ffi_register` during boot. Searches by function pointer.
-- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards), 032 (mark/release heap watermark)
+- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards), 032 (mark/release heap watermark), 033 (link transport v1: COBS binary framing)
+- Target tier model: 32-bit (full Froth), 16-bit (tethered), 8-bit (tethered). Documented in `docs/concepts/target-tiers-and-tethered-mode.md`.
+- Tooling architecture proposal reviewed. Key decisions: binary payloads (not JSON), COBS framing (replaces STX/ETX), device-first principle preserved. See `docs/concepts/tooling-and-link-architecture-proposal-2026-03.md`.
 
 ## In Progress
 
-Nothing in progress.
+- ADR-033 link transport v1: proposed, reviewed, ready for implementation.
 
 ## Blocked / Waiting
 
@@ -99,9 +101,11 @@ Nothing in progress.
 
 ## Next Up
 
-1. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
-2. Dual-core architecture + audio FFI (ecosystem)
-3. Web editor + Link Mode
+1. Device-side link layer: COBS codec, console mux, link dispatcher (ADR-033)
+2. Host CLI skeleton: serial handshake, EVAL round-trip
+3. AI-assisted host buildout: CLI commands, daemon, VS Code extension
+4. Interleaved kernel work: audio FFI, ESP32 persistence, FROTH-Addr
+5. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
 
 ## Open Questions
 
