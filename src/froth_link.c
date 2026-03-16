@@ -1,8 +1,10 @@
 #include "froth_link.h"
 #include "froth_evaluator.h"
+#include "froth_fmt.h"
 #include "froth_transport.h"
 #include "froth_slot_table.h"
 #include "froth_vm.h"
+#include <stdio.h>
 #include <string.h>
 
 /* ── Payload builder helpers ─────────────────────────────────────── */
@@ -46,6 +48,60 @@ static froth_error_t pw_str(payload_writer_t *pw, const char *s) {
   memcpy(pw->buf + pw->pos, s, len);
   pw->pos += len;
   return FROTH_OK;
+}
+
+/* ── Stack formatting ─────────────────────────────────────────────── */
+
+/* Format the data stack into buf as "[1 2 3]". Returns bytes written
+   (not including the null terminator). Truncates if buf is too small. */
+static int format_stack(froth_vm_t *vm, char *buf, int cap) {
+  int pos = 0;
+  froth_cell_u_t depth = froth_stack_depth(&vm->ds);
+
+  if (pos < cap) buf[pos++] = '[';
+
+  for (froth_cell_u_t i = 0; i < depth; i++) {
+    if (i > 0 && pos < cap) buf[pos++] = ' ';
+
+    froth_cell_t cell = vm->ds.data[i];
+    froth_cell_t tag = FROTH_CELL_GET_TAG(cell);
+    froth_cell_t payload = FROTH_CELL_STRIP_TAG(cell);
+    int wrote = 0;
+
+    switch (tag) {
+    case FROTH_NUMBER:
+      wrote = snprintf(buf + pos, cap - pos, "%" FROTH_CELL_FORMAT, payload);
+      break;
+    case FROTH_SLOT: {
+      const char *name;
+      if (froth_slot_get_name((froth_cell_u_t)payload, &name) == FROTH_OK)
+        wrote = snprintf(buf + pos, cap - pos, "<s:%s>", name);
+      else
+        wrote = snprintf(buf + pos, cap - pos, "<s:%d>", (int)payload);
+      break;
+    }
+    case FROTH_QUOTE:
+      wrote = snprintf(buf + pos, cap - pos, "<q>");
+      break;
+    case FROTH_PATTERN:
+      wrote = snprintf(buf + pos, cap - pos, "<p>");
+      break;
+    case FROTH_BSTRING:
+      wrote = snprintf(buf + pos, cap - pos, "<str>");
+      break;
+    default:
+      wrote = snprintf(buf + pos, cap - pos, "<%d>", (int)tag);
+      break;
+    }
+    if (wrote > 0 && pos + wrote < cap) pos += wrote;
+    else if (wrote > 0) { pos = cap - 1; break; }
+  }
+
+  if (pos < cap) buf[pos++] = ']';
+  if (pos < cap) buf[pos] = '\0';
+  else buf[cap - 1] = '\0';
+
+  return pos;
 }
 
 /* ── Response buffer (shared across handlers) ────────────────────── */
@@ -103,10 +159,13 @@ static froth_error_t handle_eval(froth_vm_t *vm, uint16_t request_id,
   payload_writer_t pw = {resp_buf, sizeof(resp_buf), 0};
 
   if (eval_err == FROTH_OK) {
-    FROTH_TRY(pw_u8(&pw, 0));   /* status: success */
-    FROTH_TRY(pw_u16(&pw, 0));  /* error_code */
-    FROTH_TRY(pw_str(&pw, "")); /* fault_word */
-    FROTH_TRY(pw_str(&pw, "")); /* stack_repr (TODO: format stack) */
+    char stack_buf[128];
+    format_stack(vm, stack_buf, sizeof(stack_buf));
+
+    FROTH_TRY(pw_u8(&pw, 0));             /* status: success */
+    FROTH_TRY(pw_u16(&pw, 0));            /* error_code */
+    FROTH_TRY(pw_str(&pw, ""));           /* fault_word */
+    FROTH_TRY(pw_str(&pw, stack_buf));    /* stack_repr */
   } else {
     froth_cell_t code =
         (eval_err == FROTH_ERROR_THROW) ? vm->thrown : (froth_cell_t)eval_err;
@@ -123,7 +182,7 @@ static froth_error_t handle_eval(froth_vm_t *vm, uint16_t request_id,
         fault = name;
     }
     FROTH_TRY(pw_str(&pw, fault));
-    FROTH_TRY(pw_str(&pw, "")); /* stack_repr */
+    FROTH_TRY(pw_str(&pw, "")); /* stack_repr (empty on error) */
 
     vm->ds.pointer = ds_snap;
     vm->rs.pointer = rs_snap;

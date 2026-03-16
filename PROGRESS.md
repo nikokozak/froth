@@ -1,12 +1,12 @@
 # Froth Implementation Progress
 
-*Last updated: 2026-03-15*
+*Last updated: 2026-03-16*
 
 ## Current Status
 
-**Phase**: Ecosystem. Device-side link layer complete. REPL refactored to mux architecture. COBS transport proven end-to-end. Next: host CLI.
+**Phase**: Ecosystem. Host CLI skeleton complete and proven end-to-end. Next: AI-assisted host buildout + ESP32 workshop prep.
 **Blocking issues**: ESP32 snapshots remain. Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues).
-**Morale check**: Link pipeline working. HELLO, EVAL, INFO all proven over COBS frames piped through stdin.
+**Morale check**: Full host-to-device round-trip proven over socat PTY pair. HELLO, EVAL (success + error), INFO all working through Go CLI.
 
 ## What's Done
 
@@ -95,10 +95,13 @@
 - `froth_crc32_update`: incremental CRC32 for non-contiguous data (link header + payload separated by CRC field).
 - `FROTH_BOARD_NAME` CMake compile definition for device identification in HELLO_RES.
 - End-to-end proof: COBS-framed HELLO, EVAL, INFO piped through stdin on POSIX build, structured responses decoded and verified (5/5 CRC pass).
+- EVAL_RES `stack_repr` field now populated: `format_stack` in `froth_link.c` formats DS as `[1 2 3]` with tag-aware display (numbers decimal, slots named, others tagged).
+- Host CLI (`tools/cli/`): Go, `go.bug.st/serial` for serial I/O, hand-rolled arg parser. Packages: `internal/protocol/` (COBS, frame, messages), `internal/serial/` (port, discover), `internal/session/` (connect, HELLO, EVAL), `cmd/` (info, send). Auto-discovery probes USB-serial ports with HELLO_REQ.
+- End-to-end proof: Go CLI ↔ POSIX Froth binary via socat PTY pair. `info` prints device metadata, `send "1 2 +"` returns `[3]`, `send "1 drop drop"` returns `error(2) in "perm"`. Device stack persists across EVAL requests (expected).
 
 ## In Progress
 
-(nothing — device-side link layer complete, ready for host CLI)
+(nothing — CLI skeleton complete, ready for AI-assisted host buildout)
 
 ## Blocked / Waiting
 
@@ -107,9 +110,9 @@
 
 ## Next Up
 
-1. Host CLI skeleton: serial handshake, EVAL round-trip
-2. AI-assisted host buildout: CLI commands, daemon, VS Code extension
-3. Interleaved kernel work: audio FFI, ESP32 persistence, FROTH-Addr
+1. AI-assisted host buildout: CLI commands (doctor, build, flash), daemon, VS Code extension
+2. ESP32 workshop prep: NVS/flash snapshot backend, dual-core audio FFI
+3. Interleaved kernel work: FROTH-Addr
 4. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
 
 ## Open Questions

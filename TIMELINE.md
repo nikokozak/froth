@@ -1,6 +1,6 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-13 (hardening session)*
+*Last reviewed: 2026-03-16 (CLI skeleton proven)*
 *Source: Froth Implementation Roadmap v0.4 (Feb 25 → Workshop week of Mar 15)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
@@ -202,12 +202,13 @@
 - [x] **Proof**: 17/17 REPL smoke tests pass through the mux
 - [x] **Proof**: 5/5 COBS frame round-trips (HELLO, EVAL success, EVAL error, INFO, unknown type), all CRCs verified
 
-### Mar 18–19 (Tue–Wed) — Host CLI skeleton
-- [ ] Host language decision (Go vs Node)
-- [ ] Serial port open, HELLO handshake, print device info
-- [ ] EVAL round-trip: send source, print structured result
-- [ ] INSPECT round-trip: query word, print metadata
-- [ ] **Proof**: end-to-end protocol proven (host CLI ↔ POSIX Froth)
+### Mar 16 (Sun) — Host CLI skeleton (was Mar 18–19)
+- [x] Host language decision: Go, `go.bug.st/serial`
+- [x] Serial port open, HELLO handshake, print device info
+- [x] EVAL round-trip: send source, print structured result
+- [ ] INSPECT round-trip: query word, print metadata (device-side not implemented)
+- [x] EVAL_RES stack_repr populated (format_stack in froth_link.c)
+- [x] **Proof**: end-to-end protocol proven (Go CLI ↔ POSIX Froth via socat PTY pair)
 
 ### Mar 19–21 (Wed–Fri) — AI-assisted host buildout
 - [ ] CLI commands: doctor, build, flash, send, info
@@ -307,3 +308,4 @@
 | Web editor | Mar 14–15 | Mar 19–21 | Replaced with host CLI + VS Code extension via daemon architecture. AI-assisted buildout. |
 | Dual-core + audio | Mar 15–16 | Mar 16–21 | Interleaved with link/ecosystem work. |
 | ESP32 persistence | Mar 16–17 | Mar 16–21 | Interleaved with link/ecosystem work. |
+| Host CLI skeleton | Mar 18–19 | Mar 16 | Landed 2 days early. Go CLI with serial discovery, HELLO, EVAL proven via socat. |
