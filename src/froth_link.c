@@ -94,12 +94,12 @@ static int format_stack(froth_vm_t *vm, char *buf, int cap) {
       break;
     }
     if (wrote > 0 && pos + wrote < cap) pos += wrote;
-    else if (wrote > 0) { pos = cap - 1; break; }
+    else if (wrote > 0) { pos = cap - 3; break; } /* room for ] \0 */
   }
 
-  if (pos < cap) buf[pos++] = ']';
-  if (pos < cap) buf[pos] = '\0';
-  else buf[cap - 1] = '\0';
+  if (pos < 0) pos = 0;
+  if (pos < cap - 1) buf[pos++] = ']';
+  buf[pos] = '\0';
 
   return pos;
 }
@@ -133,13 +133,13 @@ static froth_error_t handle_eval(froth_vm_t *vm, uint16_t request_id,
                                  const uint8_t *payload,
                                  uint16_t payload_len) {
   if (payload_len < 3)
-    return FROTH_ERROR_LINK_COBS_DECODE;
+    return FROTH_ERROR_LINK_TOO_LARGE;
 
   /* uint8_t flags = payload[0]; */
   uint16_t source_len = (uint16_t)payload[1] | ((uint16_t)payload[2] << 8);
 
   if (3 + source_len > payload_len)
-    return FROTH_ERROR_LINK_COBS_DECODE;
+    return FROTH_ERROR_LINK_TOO_LARGE;
 
   /* Copy source into a null-terminated buffer on the stack */
   char source[FROTH_LINK_MAX_PAYLOAD];
@@ -151,6 +151,7 @@ static froth_error_t handle_eval(froth_vm_t *vm, uint16_t request_id,
   /* Evaluate */
   froth_cell_u_t ds_snap = vm->ds.pointer;
   froth_cell_u_t rs_snap = vm->rs.pointer;
+  froth_cell_u_t cd_snap = vm->call_depth;
   vm->last_error_slot = -1;
 
   froth_error_t eval_err = froth_evaluate_input(source, vm);
@@ -186,6 +187,7 @@ static froth_error_t handle_eval(froth_vm_t *vm, uint16_t request_id,
 
     vm->ds.pointer = ds_snap;
     vm->rs.pointer = rs_snap;
+    vm->call_depth = cd_snap;
   }
 
   return froth_link_send_frame(FROTH_LINK_EVAL_RES, request_id,

@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"io"
 	"sync/atomic"
 	"time"
 
@@ -26,18 +27,6 @@ type Session struct {
 //
 // Always performs a HELLO handshake before returning.
 func Connect(portPath string) (*Session, error) {
-	// Two paths:
-	//
-	// A. portPath is specified:
-	//    1. Open the serial port: serial.Open(portPath)
-	//    2. Drain boot output: port.Drain(serial.DrainDuration)
-	//    3. Send HELLO and get response: serial.ProbeHello(port, DefaultTimeout)
-	//    4. Wrap in Session and return.
-	//
-	// B. portPath is empty (auto-detect):
-	//    1. Call serial.Discover() which handles enumeration + probing.
-	//    2. Wrap the returned port + hello in Session and return.
-
 	if portPath != "" {
 		port, err := serial.Open(portPath)
 		if err != nil {
@@ -72,41 +61,14 @@ func (s *Session) DeviceInfo() *protocol.HelloResponse {
 	return s.hello
 }
 
+// SetPassthrough routes non-frame device output to w.
+func (s *Session) SetPassthrough(w io.Writer) {
+	s.port.PassthroughWriter = w
+}
+
 // Eval sends Froth source for evaluation and returns the result.
 func (s *Session) Eval(source string) (*protocol.EvalResponse, error) {
-	// Steps:
-	//
-	// 1. Get a request ID: atomic increment of nextReqID.
-	//    Cap at 0xFFFE (0xFFFF is reserved sentinel).
-	//
-	// 2. Build EVAL_REQ payload:
-	//    payload := protocol.BuildEvalPayload(source)
-	//
-	// 3. Build wire frame:
-	//    wire, err := protocol.EncodeWireFrame(protocol.EvalReq, reqID, payload)
-	//
-	// 4. Write to port:
-	//    s.port.Write(wire)
-	//
-	// 5. Read response frame:
-	//    encoded, err := s.port.ReadFrame(DefaultTimeout)
-	//
-	// 6. COBS-decode:
-	//    decoded, err := protocol.COBSDecode(encoded)
-	//
-	// 7. Parse frame:
-	//    header, payload, err := protocol.ParseFrame(decoded)
-	//
-	// 8. Check header.MessageType:
-	//    - EvalRes: parse and return protocol.ParseEvalResponse(payload)
-	//    - Error:   parse protocol.ParseErrorResponse(payload),
-	//               return as wrapped error
-	//    - other:   return error "unexpected response type"
-	//
-	// 9. Verify header.RequestID == reqID.
-	//    Mismatch is a protocol error (should not happen with stop-and-wait).
-
-	reqID := uint16(atomic.AddUint32(&s.nextReqID, 1) % 0xFFFF)
+	reqID := s.allocReqID()
 
 	payload := protocol.BuildEvalPayload(source)
 
@@ -148,8 +110,9 @@ func (s *Session) Eval(source string) (*protocol.EvalResponse, error) {
 	}
 }
 
-// allocReqID returns the next request ID, wrapping at 0xFFFE.
+// allocReqID returns the next request ID in [1, 0xFFFE].
+// 0x0000 is unused, 0xFFFF is the sentinel (ReqIDNone).
 func (s *Session) allocReqID() uint16 {
 	id := atomic.AddUint32(&s.nextReqID, 1)
-	return uint16(id % 0xFFFE)
+	return uint16((id % 0xFFFE) + 1)
 }

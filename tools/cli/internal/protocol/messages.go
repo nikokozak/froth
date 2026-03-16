@@ -13,15 +13,15 @@ import (
 
 // HelloResponse holds parsed HELLO_RES payload fields.
 type HelloResponse struct {
-	CellBits    uint8
-	MaxPayload  uint16
-	HeapSize    uint32
-	HeapUsed    uint32
-	SlotCount   uint16
-	Flags       uint8
-	Version     string
-	Board       string
-	Capabilities []string
+	CellBits     uint8
+	MaxPayload   uint16
+	HeapSize     uint32
+	HeapUsed     uint32
+	SlotCount    uint16
+	Flags        uint8
+	Version      string
+	Board        string
+	Capabilities []uint8
 }
 
 // ParseHelloResponse decodes a HELLO_RES binary payload.
@@ -36,7 +36,7 @@ func ParseHelloResponse(p []byte) (*HelloResponse, error) {
 	//   str  version        (u16 len + bytes)
 	//   str  board          (u16 len + bytes)
 	//   u8   capability_count
-	//   str  capabilities[] (u16 len + bytes, repeated)
+	//   u8   capabilities[] (each: u8 capability_id, per ADR-033)
 
 	r := &payloadReader{data: p}
 
@@ -52,7 +52,7 @@ func ParseHelloResponse(p []byte) (*HelloResponse, error) {
 
 	capCount := r.u8()
 	for i := uint8(0); i < capCount; i++ {
-		h.Capabilities = append(h.Capabilities, r.str())
+		h.Capabilities = append(h.Capabilities, r.u8())
 	}
 
 	if r.err != nil {

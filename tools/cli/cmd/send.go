@@ -2,19 +2,20 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/nikokozak/froth/tools/cli/internal/session"
 )
 
 func runSend(source string) error {
-	// 1. Open a session.
 	sess, err := session.Connect(portFlag)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}
 	defer sess.Close()
 
-	// 2. Send EVAL_REQ with the source string.
+	sess.SetPassthrough(os.Stdout)
+
 	result, err := sess.Eval(source)
 	if err != nil {
 		return fmt.Errorf("eval: %w", err)

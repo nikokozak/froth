@@ -3,6 +3,7 @@ package serial
 import (
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"go.bug.st/serial"
@@ -14,6 +15,9 @@ var ErrTimeout = errors.New("serial read timeout")
 type Port struct {
 	port serial.Port
 	path string
+	// PassthroughWriter receives non-frame bytes (device console output).
+	// If nil, non-frame bytes are discarded.
+	PassthroughWriter io.Writer
 }
 
 // Open opens a serial port at the given path with Froth defaults (115200 8N1).
@@ -85,8 +89,9 @@ func (p *Port) ReadFrame(timeout time.Duration) ([]byte, error) {
 
 		if inFrame {
 			frame = append(frame, b)
+		} else if p.PassthroughWriter != nil {
+			p.PassthroughWriter.Write([]byte{b})
 		}
-		// Bytes outside a frame (before the first 0x00) are discarded.
 	}
 }
 
