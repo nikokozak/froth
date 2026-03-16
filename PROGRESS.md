@@ -4,9 +4,9 @@
 
 ## Current Status
 
-**Phase**: Ecosystem. Host CLI skeleton complete and proven end-to-end. Next: AI-assisted host buildout + ESP32 workshop prep.
+**Phase**: Ecosystem. CLI commands (doctor, build, flash) and daemon skeleton complete. Next: VS Code extension skeleton, then ESP32 workshop prep.
 **Blocking issues**: ESP32 snapshots remain. Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues).
-**Morale check**: Full host-to-device round-trip proven over socat PTY pair. HELLO, EVAL (success + error), INFO all working through Go CLI.
+**Morale check**: Daemon lifecycle proven (start, status, stop). CLI auto-detects daemon with serial fallback.
 
 ## What's Done
 
@@ -96,12 +96,14 @@
 - `FROTH_BOARD_NAME` CMake compile definition for device identification in HELLO_RES.
 - End-to-end proof: COBS-framed HELLO, EVAL, INFO piped through stdin on POSIX build, structured responses decoded and verified (5/5 CRC pass).
 - EVAL_RES `stack_repr` field now populated: `format_stack` in `froth_link.c` formats DS as `[1 2 3]` with tag-aware display (numbers decimal, slots named, others tagged).
-- Host CLI (`tools/cli/`): Go, `go.bug.st/serial` for serial I/O, hand-rolled arg parser. Packages: `internal/protocol/` (COBS, frame, messages), `internal/serial/` (port, discover), `internal/session/` (connect, HELLO, EVAL), `cmd/` (info, send). Auto-discovery probes USB-serial ports with HELLO_REQ.
+- Host CLI (`tools/cli/`): Go, `go.bug.st/serial` for serial I/O, hand-rolled arg parser. Packages: `internal/protocol/` (COBS, frame, messages), `internal/serial/` (port, discover), `internal/session/` (connect, HELLO, EVAL), `internal/daemon/` (daemon server, RPC, client), `cmd/` (info, send, doctor, build, flash, daemon). Auto-discovery probes USB-serial ports with HELLO_REQ.
 - End-to-end proof: Go CLI ↔ POSIX Froth binary via socat PTY pair. `info` prints device metadata, `send "1 2 +"` returns `[3]`, `send "1 drop drop"` returns `error(2) in "perm"`. Device stack persists across EVAL requests (expected).
+- CLI commands: `doctor` (Go, cmake, make, serial ports, ESP-IDF, device probe), `build` (POSIX cmake+make or ESP-IDF idf.py, project root auto-detection), `flash` (ESP-IDF with port detection, POSIX prints binary path).
+- Daemon skeleton (ADR-035): Unix domain socket at `~/.froth/daemon.sock`, JSON-RPC 2.0, serial connection ownership, reconnect on device loss, event broadcast (console, connected, disconnected, reconnecting). `froth daemon start|stop|status`. CLI auto-detects daemon, `--serial` forces bypass, `--daemon` forces routing. Concurrency reviewed: atomic reconnect guard, sync.Once for shutdown, broadcast outside lock, nil-map guard on client disconnect.
 
 ## In Progress
 
-(nothing — CLI skeleton complete, ready for AI-assisted host buildout)
+- VS Code extension skeleton (Phase 3 of host buildout)
 
 ## Blocked / Waiting
 
@@ -110,10 +112,11 @@
 
 ## Next Up
 
-1. AI-assisted host buildout: CLI commands (doctor, build, flash), daemon, VS Code extension
-2. ESP32 workshop prep: NVS/flash snapshot backend, dual-core audio FFI
-3. Interleaved kernel work: FROTH-Addr
-4. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
+1. VS Code extension skeleton (connect, send selection, console panel)
+2. Daemon PTY passthrough (Phase 2 of ADR-035, post-workshop)
+3. ESP32 workshop prep: NVS/flash snapshot backend, dual-core audio FFI
+4. Interleaved kernel work: FROTH-Addr
+5. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
 
 ## Open Questions
 

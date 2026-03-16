@@ -21,6 +21,26 @@ var candidatePattern = regexp.MustCompile(
 		`|^/dev/tty(USB|ACM)`,
 )
 
+// IsCandidate reports whether a port path matches the USB-serial pattern.
+func IsCandidate(path string) bool {
+	return candidatePattern.MatchString(path)
+}
+
+// ListCandidates returns all port paths matching the USB-serial pattern.
+func ListCandidates() ([]string, error) {
+	ports, err := serial.GetPortsList()
+	if err != nil {
+		return nil, err
+	}
+	var result []string
+	for _, p := range ports {
+		if candidatePattern.MatchString(p) {
+			result = append(result, p)
+		}
+	}
+	return result, nil
+}
+
 // Discover probes available serial ports for a Froth device.
 // Returns the first port that responds to HELLO_REQ.
 func Discover() (*Port, *protocol.HelloResponse, error) {

@@ -210,9 +210,12 @@
 - [x] EVAL_RES stack_repr populated (format_stack in froth_link.c)
 - [x] **Proof**: end-to-end protocol proven (Go CLI ↔ POSIX Froth via socat PTY pair)
 
-### Mar 19–21 (Wed–Fri) — AI-assisted host buildout
-- [ ] CLI commands: doctor, build, flash, send, info
-- [ ] Daemon skeleton (serial session ownership, reconnect)
+### Mar 16 (Sun) — AI-assisted host buildout (was Mar 19–21)
+- [x] CLI commands: doctor (Go, cmake, make, serial, ESP-IDF, device), build (POSIX + ESP-IDF), flash (ESP-IDF + port detect)
+- [x] ADR-035: daemon architecture (RPC-only Phase 1, PTY Phase 2, write serialization, CLI routing)
+- [x] Daemon skeleton: Unix socket, JSON-RPC 2.0, serial ownership, reconnect, event broadcast, start/stop/status
+- [x] CLI daemon routing: auto-detect socket, --serial/--daemon flags, info+send work through daemon
+- [x] Code review: 6 concurrency/safety issues found and fixed (nil-map panic, broadcast deadlock, unbounded reconnect, double-close, stale PID, SetReadTimeout error)
 - [ ] VS Code extension skeleton (connect, send selection, console panel)
 - [ ] Iterative review and testing
 
@@ -309,3 +312,4 @@
 | Dual-core + audio | Mar 15–16 | Mar 16–21 | Interleaved with link/ecosystem work. |
 | ESP32 persistence | Mar 16–17 | Mar 16–21 | Interleaved with link/ecosystem work. |
 | Host CLI skeleton | Mar 18–19 | Mar 16 | Landed 2 days early. Go CLI with serial discovery, HELLO, EVAL proven via socat. |
+| AI-assisted host buildout | Mar 19–21 | Mar 16 | CLI commands + daemon landed same day as skeleton. ADR-035, 6 review fixes. VS Code still pending. |

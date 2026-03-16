@@ -95,6 +95,21 @@ func (p *Port) ReadFrame(timeout time.Duration) ([]byte, error) {
 	}
 }
 
+// Read reads raw bytes from the serial port.
+func (p *Port) Read(buf []byte) (int, error) {
+	return p.port.Read(buf)
+}
+
+// SetReadTimeout sets the read timeout on the serial port.
+func (p *Port) SetReadTimeout(d time.Duration) error {
+	return p.port.SetReadTimeout(d)
+}
+
+// Path returns the serial port's device path.
+func (p *Port) Path() string {
+	return p.path
+}
+
 // Drain reads and discards all bytes for the given duration.
 // Clears boot messages before sending the first frame.
 func (p *Port) Drain(duration time.Duration) {
