@@ -195,6 +195,20 @@ Actionable. Each problem gets a fix button: missing SDK, broken daemon, no seria
 
 Safe boot and snapshot rescue are one click. If autorun bricks the board, the extension guides the user into safe boot and offers Wipe Snapshot immediately.
 
+## Code Standards
+
+All extension code must hold up to open source release standards. The bar is projects like the RP2040 SDK, SQLite, and Redis: code that strangers will read, judge, and build on.
+
+- TypeScript strict mode. No `any` types. Explicit error handling.
+- Minimal dependencies. `@types/vscode` and `@types/node` only. No frameworks.
+- Comments explain why, not what. If the code is clear, no comment.
+- No em-dashes. No AI voice ("straightforward", "leverage", "robust"). Short declarative sentences.
+- Every function readable in under 30 seconds. Clean module boundaries.
+- No technical debt. If it's not right, fix it now.
+- Review every tranche with self-review and Codex before commit.
+
+See `docs/concepts/host-tooling-roadmap.md` for the full code standards section.
+
 ## Architecture
 
 ### The extension is thin

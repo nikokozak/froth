@@ -3,6 +3,30 @@
 **Date:** 2026-03-16
 **Purpose:** Track all host tooling work items, decisions, and dependencies. AI agents should read this file to understand what's built, what's next, and what's deferred.
 
+## Code Standards
+
+This is non-negotiable. All code in this project, whether written by a human or an AI, must hold up to open source release standards. The bar is set by projects like the RP2040 SDK, SQLite, and Redis: code that strangers will read, judge, and build on for years.
+
+**Style:**
+- Write like the RP2040 datasheet. Informal, expressive, technically precise.
+- No em-dashes. No AI-isms ("straightforward", "leverage", "robust", "comprehensive", "it's important to note"). Just say the thing.
+- Comments explain why, not what. If the code is clear, no comment is needed.
+- Short declarative sentences. One idea per sentence.
+
+**Code quality:**
+- Extremely readable. A contributor should understand any function in under 30 seconds.
+- Ergonomic APIs. Callers should not need to read the implementation to use a function correctly.
+- Well-architected. Clean module boundaries, minimal coupling, no circular dependencies.
+- No technical debt. Do not ship code that needs a follow-up cleanup pass. If it's not right, fix it now or don't merge it.
+- Error handling is explicit and complete. No silent failures, no swallowed errors.
+- Resource management is airtight. Every open gets a close. Every alloc has a free path.
+
+**Go code:** standard gofmt, error wrapping with `%w`, no third-party deps beyond `go.bug.st/serial`.
+**TypeScript code:** strict mode, no `any` types, explicit error handling, minimal dependencies.
+**C code:** C11, `froth_` prefix, snake_case, clang-format (project .clang-format when established).
+
+**Review discipline:** Every tranche of work gets a self-review and a Codex review before commit. Fix everything flagged. No exceptions.
+
 ## Status Key
 
 - [x] Done and committed
