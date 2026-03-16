@@ -185,18 +185,22 @@
 - [x] `mark` / `release` (FROTH-Region, ADR-032) — single-level heap watermark, error 19 on release without mark
 - [x] `see` shows stack effects (FFI metadata lookup across all registered tables), `info` shows overlay heap usage
 
-### Mar 15 (Sat) — Ecosystem planning + ADR-033
+### Mar 15 (Sat) — Ecosystem planning + ADR-033 + ADR-034
 - [x] Target tier model documented (32-bit full, 16-bit tethered, 8-bit tethered)
 - [x] Tooling architecture proposal reviewed (ChatGPT doc)
 - [x] ADR-033: FROTH-LINK/1 binary transport (COBS framing, replaces STX/ETX)
 - [x] ADR-033 reviewed, 8 issues found and fixed (CRC scope, field widths, COBS semantics, etc.)
+- [x] ADR-034: console multiplexer architecture (poll-and-dispatch, REPL refactor, `key` blocking behavior)
 
-### Mar 16–17 (Sun–Mon) — Device-side link layer (C)
-- [ ] COBS codec (`froth_link.c`): encode, decode, CRC32 over header+payload
-- [ ] Console multiplexer (`froth_console_mux.c`): split bytes into direct/frame/interrupt
-- [ ] Link dispatcher (`froth_link_dispatch.c`): HELLO, EVAL, INSPECT, INFO handlers
-- [ ] Gate behind `FROTH_HAS_LINK` CMake flag
-- [ ] **Proof**: pipe COBS frames through stdin on POSIX build, get structured responses
+### Mar 15 (Sat) — Console mux + device-side link layer (C)
+- [x] REPL refactor: split `froth_repl_start` into `froth_repl_accept_byte` + `froth_repl_evaluate` (ADR-034)
+- [x] Console mux main loop (`froth_console_mux.c`): poll-and-dispatch, byte classification, frame accumulation (ADR-034)
+- [x] COBS codec (`froth_transport.c`): encode, decode, in-place decode, CRC32 incremental update
+- [x] Link dispatcher (`froth_link.c`): HELLO, EVAL, INFO handlers, ERROR for unknown types
+- [x] Gate behind `FROTH_HAS_LINK` CMake flag
+- [x] File rename: `froth_link` → `froth_transport` (dumb pipe), `froth_link_dispatch` → `froth_link` (smart protocol)
+- [x] **Proof**: 17/17 REPL smoke tests pass through the mux
+- [x] **Proof**: 5/5 COBS frame round-trips (HELLO, EVAL success, EVAL error, INFO, unknown type), all CRCs verified
 
 ### Mar 18–19 (Tue–Wed) — Host CLI skeleton
 - [ ] Host language decision (Go vs Node)

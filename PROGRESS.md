@@ -4,9 +4,9 @@
 
 ## Current Status
 
-**Phase**: Ecosystem. Link transport designed (ADR-033), target tier model documented. Next: implement device-side link layer in C, then host CLI.
-**Blocking issues**: Evaluator refactor, ESP32 snapshots remain. Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues).
-**Morale check**: Kernel feature set is complete. Ecosystem week begins.
+**Phase**: Ecosystem. Device-side link layer complete. REPL refactored to mux architecture. COBS transport proven end-to-end. Next: host CLI.
+**Blocking issues**: ESP32 snapshots remain. Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues).
+**Morale check**: Link pipeline working. HELLO, EVAL, INFO all proven over COBS frames piped through stdin.
 
 ## What's Done
 
@@ -86,13 +86,19 @@
 - `see` rewritten: shows name, stack effect, body or `<primitive>`, help text, origin (primitive/user-defined). FFI metadata lookup via `froth_ffi_find_entry` walks all registered tables (kernel, board, snapshot). Board words like `gpio.mode` now show full metadata.
 - `info` shows overlay heap usage: `heap: 708 / 4096 bytes used (20 user)`.
 - `froth_ffi_find_entry`: new lookup function in `froth_ffi.c`. Static array of up to 4 registered FFI table pointers, populated by `froth_ffi_register` during boot. Searches by function pointer.
-- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards), 032 (mark/release heap watermark), 033 (link transport v1: COBS binary framing)
+- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards), 032 (mark/release heap watermark), 033 (link transport v1: COBS binary framing), 034 (console multiplexer architecture)
 - Target tier model: 32-bit (full Froth), 16-bit (tethered), 8-bit (tethered). Documented in `docs/concepts/target-tiers-and-tethered-mode.md`.
 - Tooling architecture proposal reviewed. Key decisions: binary payloads (not JSON), COBS framing (replaces STX/ETX), device-first principle preserved. See `docs/concepts/tooling-and-link-architecture-proposal-2026-03.md`.
+- Console multiplexer (ADR-034): poll-and-dispatch main loop replaces `froth_repl_start`. REPL restructured from blocking loop to `froth_repl_accept_byte` + `froth_repl_evaluate`. Mux routes bytes: 0x00 → frame accumulation, direct bytes → REPL. Gated behind `FROTH_HAS_LINK`.
+- `froth_transport.h` / `froth_transport.c`: COBS encode/decode (in-place decode safe), frame header parse/build with CRC32 validation, `froth_link_send_frame` helper, inbound frame accumulation buffer. Link error codes 250-256.
+- `froth_link.h` / `froth_link.c`: protocol dispatcher. HELLO_RES (cell_bits, heap, slots, version, board), EVAL_RES (evaluate source, return status/error/fault word), INFO_RES (heap, overlay, slots, version). ERROR response for unknown types. `payload_writer_t` helper for building response payloads.
+- `froth_crc32_update`: incremental CRC32 for non-contiguous data (link header + payload separated by CRC field).
+- `FROTH_BOARD_NAME` CMake compile definition for device identification in HELLO_RES.
+- End-to-end proof: COBS-framed HELLO, EVAL, INFO piped through stdin on POSIX build, structured responses decoded and verified (5/5 CRC pass).
 
 ## In Progress
 
-- ADR-033 link transport v1: proposed, reviewed, ready for implementation.
+(nothing — device-side link layer complete, ready for host CLI)
 
 ## Blocked / Waiting
 
@@ -101,11 +107,10 @@
 
 ## Next Up
 
-1. Device-side link layer: COBS codec, console mux, link dispatcher (ADR-033)
-2. Host CLI skeleton: serial handshake, EVAL round-trip
-3. AI-assisted host buildout: CLI commands, daemon, VS Code extension
-4. Interleaved kernel work: audio FFI, ESP32 persistence, FROTH-Addr
-5. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
+1. Host CLI skeleton: serial handshake, EVAL round-trip
+2. AI-assisted host buildout: CLI commands, daemon, VS Code extension
+3. Interleaved kernel work: audio FFI, ESP32 persistence, FROTH-Addr
+4. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
 
 ## Open Questions
 

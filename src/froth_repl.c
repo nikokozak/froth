@@ -6,10 +6,11 @@
 #include "froth_vm.h"
 #include "platform.h"
 #include <stdbool.h>
-#include <stdio.h>
 
 static char repl_buffer[FROTH_LINE_BUFFER_SIZE];
-static const char *prompt_normal = "froth> ";
+static froth_cell_u_t buf_pos = 0;
+static froth_cell_u_t line_start = 0;
+static int bracket_depth = 0, paren_depth = 0, in_string = 0;
 static const char *prompt_cont = ".. ";
 
 /* Return a human-readable name for an error code. */
@@ -88,6 +89,21 @@ static const char *error_name(froth_error_t err) {
     return "no saved snapshot";
   case FROTH_ERROR_SNAPSHOT_BAD_NAME:
     return "snapshot name too long";
+  /* Link errors */
+  case FROTH_ERROR_LINK_OVERFLOW:
+    return "link buffer overflow";
+  case FROTH_ERROR_LINK_COBS_DECODE:
+    return "link COBS decode error";
+  case FROTH_ERROR_LINK_BAD_MAGIC:
+    return "link bad magic";
+  case FROTH_ERROR_LINK_BAD_VERSION:
+    return "link bad version";
+  case FROTH_ERROR_LINK_BAD_CRC:
+    return "link CRC mismatch";
+  case FROTH_ERROR_LINK_TOO_LARGE:
+    return "link payload too large";
+  case FROTH_ERROR_LINK_UNKNOWN_TYPE:
+    return "link unknown message type";
   /* Internal */
   case FROTH_ERROR_THROW:
     return "unhandled throw";
@@ -233,98 +249,32 @@ static void scan_line_depth(const char *text, int *bracket_depth,
   }
 }
 
-/* ── Line input ────────────────────────────────────────────────────── */
+/* ── REPL public interface ─────────────────────────────────────────── */
 
-/* Read characters into buffer starting at *pos.  Backspace is clamped to
- * line_start so it cannot erase into previous continuation lines. */
-static froth_error_t froth_repl_read_line(char *buffer, froth_cell_u_t *pos,
-                                          froth_cell_u_t line_start) {
-  while (*pos < FROTH_LINE_BUFFER_SIZE - 1) {
-    uint8_t byte;
-    froth_error_t err = platform_key(&byte);
-    if (err != FROTH_OK) {
-      return err;
-    }
+static void reset_state(void) {
+  buf_pos = 0;
+  line_start = 0;
+  bracket_depth = 0;
+  paren_depth = 0;
+  in_string = 0;
+}
 
-    if (byte == 0x04) {
-      return FROTH_ERROR_IO; // return will cause the main loop to exit.
-    }
-
-    if (byte == '\b' || byte == 127) {
-      if (*pos > line_start) {
-        (*pos)--;
-        FROTH_TRY(platform_emit('\b'));
-        FROTH_TRY(platform_emit(' '));
-        FROTH_TRY(platform_emit('\b'));
-      }
-      continue;
-    }
-
-    if (byte == '\n') {
-      platform_emit('\n');
-      break;
-    }
-
-    buffer[(*pos)++] = byte;
-    platform_emit(byte);
+froth_error_t froth_repl_init(froth_vm_t *vm) {
+  (void)vm;
+  for (int i = 0; i < FROTH_LINE_BUFFER_SIZE; i++) {
+    repl_buffer[i] = '\0';
   }
-  buffer[*pos] = '\0';
+  reset_state();
   return FROTH_OK;
 }
 
-/* ── REPL main loop ───────────────────────────────────────────────── */
-
-froth_error_t froth_repl_start(froth_vm_t *vm) {
-  froth_error_t err;
-  while (true) {
-    FROTH_TRY(emit_string(prompt_normal));
-
-    froth_cell_u_t buf_pos = 0;
-    err = froth_repl_read_line(repl_buffer, &buf_pos, 0);
-    if (err != FROTH_OK) {
-      return FROTH_OK;
-    } /* EOF */
-
-    if (is_blank(repl_buffer)) {
-      continue;
-    }
-
-    /* Scan first line for nesting depth */
-    int bracket_depth = 0, paren_depth = 0, in_string = 0;
-    scan_line_depth(repl_buffer, &bracket_depth, &paren_depth, &in_string);
-
-    /* Accumulate continuation lines while expression is incomplete */
-    while ((bracket_depth > 0 || paren_depth > 0 || in_string) &&
-           buf_pos < FROTH_LINE_BUFFER_SIZE - 2) {
-      FROTH_TRY(emit_string(prompt_cont));
-
-      /* Newline separator — critical for line-comment correctness */
-      repl_buffer[buf_pos++] = '\n';
-
-      froth_cell_u_t line_start = buf_pos;
-      err = froth_repl_read_line(repl_buffer, &buf_pos, line_start);
-      if (err != FROTH_OK) {
-        /* Ctrl-C or EOF during continuation — discard and restart */
-        vm->interrupted = 0;
-        emit_string("\n");
-        break;
-      }
-
-      scan_line_depth(repl_buffer + line_start, &bracket_depth, &paren_depth,
-                      &in_string);
-    }
-
-    /* Interrupted or EOF during continuation — skip evaluation */
-    if (bracket_depth > 0 || paren_depth > 0 || in_string) {
-      continue;
-    }
-
-    /* Evaluate the accumulated buffer */
+froth_error_t froth_repl_evaluate(froth_vm_t *vm) {
+  if (!is_blank(repl_buffer)) {
     froth_cell_u_t ds_snapshot = vm->ds.pointer;
     froth_cell_u_t rs_snapshot = vm->rs.pointer;
 
     vm->last_error_slot = -1;
-    err = froth_evaluate_input(repl_buffer, vm);
+    froth_error_t err = froth_evaluate_input(repl_buffer, vm);
     if (err != FROTH_OK) {
       froth_cell_t code =
           (err == FROTH_ERROR_THROW) ? vm->thrown : (froth_cell_t)err;
@@ -346,10 +296,59 @@ froth_error_t froth_repl_start(froth_vm_t *vm) {
 
       vm->ds.pointer = ds_snapshot;
       vm->rs.pointer = rs_snapshot;
-
-      continue;
     }
-
     FROTH_TRY(froth_prim_dots(vm));
   }
+
+  reset_state();
+  return FROTH_OK;
+}
+
+froth_error_t froth_repl_accept_byte(froth_vm_t *vm, char byte, int8_t *state) {
+  (void)vm;
+
+  if (buf_pos >= FROTH_LINE_BUFFER_SIZE - 1) {
+    *state = -1;
+    return FROTH_ERROR_BOUNDS;
+  }
+
+  if (byte == 0x04) {
+    return FROTH_ERROR_IO;
+  }
+
+  if (byte == '\b' || byte == 127) {
+    if (buf_pos > line_start) {
+      buf_pos--;
+      FROTH_TRY(platform_emit('\b'));
+      FROTH_TRY(platform_emit(' '));
+      FROTH_TRY(platform_emit('\b'));
+    }
+    *state = 0;
+    return FROTH_OK;
+  }
+
+  if (byte == '\n') {
+    FROTH_TRY(platform_emit('\n'));
+    repl_buffer[buf_pos] = '\0';
+
+    scan_line_depth(repl_buffer + line_start, &bracket_depth, &paren_depth,
+                    &in_string);
+
+    if (bracket_depth > 0 || paren_depth > 0 || in_string) {
+      repl_buffer[buf_pos++] = '\n';
+      line_start = buf_pos;
+      FROTH_TRY(emit_string(prompt_cont));
+      *state = 0;
+      return FROTH_OK;
+    }
+
+    *state = 1;
+    return FROTH_OK;
+  }
+
+  /* Regular byte */
+  repl_buffer[buf_pos++] = byte;
+  platform_emit(byte);
+  *state = 0;
+  return FROTH_OK;
 }

@@ -1,4 +1,5 @@
 #include "froth_boot.h"
+#include "froth_console_mux.h"
 #include "froth_evaluator.h"
 #include "froth_fmt.h"
 #include "froth_lib_core.h"
@@ -82,5 +83,6 @@ void froth_boot(const froth_ffi_entry_t *board_bindings) {
     emit_string("boot: Safe Boot, skipped restore and autorun.");
   }
 
-  froth_repl_start(&froth_vm);
+  froth_console_mux_start(&froth_vm);
+  // froth_repl_start(&froth_vm);
 }

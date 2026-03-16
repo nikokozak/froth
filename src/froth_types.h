@@ -94,6 +94,15 @@ typedef enum {
   FROTH_ERROR_SNAPSHOT_NO_SNAPSHOT = 205, /* no valid snapshot in storage */
   FROTH_ERROR_SNAPSHOT_BAD_NAME = 206,    /* name exceeds max length */
 
+  /* Link errors (250–259) */
+  FROTH_ERROR_LINK_OVERFLOW = 250,      /* frame/COBS buffer too small */
+  FROTH_ERROR_LINK_COBS_DECODE = 251,   /* invalid COBS encoding */
+  FROTH_ERROR_LINK_BAD_MAGIC = 252,     /* magic != "FL" */
+  FROTH_ERROR_LINK_BAD_VERSION = 253,   /* unsupported protocol version */
+  FROTH_ERROR_LINK_BAD_CRC = 254,       /* CRC32 mismatch */
+  FROTH_ERROR_LINK_TOO_LARGE = 255,     /* payload exceeds max */
+  FROTH_ERROR_LINK_UNKNOWN_TYPE = 256,  /* unrecognized message type */
+
   /* Internal sentinel — not a user-visible error code. */
   FROTH_ERROR_THROW = -1,
 } froth_error_t;
