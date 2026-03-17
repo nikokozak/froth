@@ -229,8 +229,8 @@
 - [ ] **Proof**: flash ESP32, define word, save, power cycle, verify persistence
 
 ### Kernel work (Mar 18–21, priority order)
-- [ ] Fix ESP32 NVS serialization bug (blocking hardware test)
-- [ ] **Proof**: flash ESP32, define word, save, power cycle, verify persistence
+- [x] Fix ESP32 NVS serialization bug (stack overflow in platform read/write — static staging buffer)
+- [x] **Proof**: flash ESP32, define word, save, power cycle, verify persistence. A/B rotation, wipe, multiple saves all work.
 - [ ] Streaming snapshot serializer v2 (ADR-038: ~344B writer, ~280B reader, format change)
 - [ ] `reset` primitive (ADR-037: clear overlay, restore watermark, abort to top level)
 - [ ] Embedded user program support (CMake `FROTH_USER_PROGRAM`, boot sequence slot)
@@ -250,7 +250,7 @@
 
 - [x] LED blink from Froth REPL on ESP32
 - [x] Interrupt stops runaway loop
-- [ ] `save` survives power cycle on ESP32
+- [x] `save` survives power cycle on ESP32
 - [ ] `wipe` returns to base-only state
 - [ ] `"Hello" s.emit` works
 - [ ] Hex literals work (`0xFF`)

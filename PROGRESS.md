@@ -4,9 +4,9 @@
 
 ## Current Status
 
-**Phase**: Ecosystem. Host tooling chain complete (CLI, daemon, VS Code extension). Next: ESP32 workshop prep (NVS backend, dual-core audio FFI).
-**Blocking issues**: ESP32 NVS snapshot backend has bugs (Codex review found 4 issues in platform.c). Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues).
-**Morale check**: Full host pipeline proven. VS Code extension connects to daemon, sends code, streams console output.
+**Phase**: Ecosystem. ESP32 persistence proven on hardware. Host tooling chain complete. ADR-037 (host-centric deployment) and ADR-038 (streaming snapshot serializer) accepted.
+**Blocking issues**: Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues). Synth audio under reconsideration.
+**Morale check**: Full save/restore/wipe cycle works on ESP32 hardware. Workshop "save survives power cycle" DoD item checked off.
 
 ## What's Done
 
@@ -86,7 +86,12 @@
 - `see` rewritten: shows name, stack effect, body or `<primitive>`, help text, origin (primitive/user-defined). FFI metadata lookup via `froth_ffi_find_entry` walks all registered tables (kernel, board, snapshot). Board words like `gpio.mode` now show full metadata.
 - `info` shows overlay heap usage: `heap: 708 / 4096 bytes used (20 user)`.
 - `froth_ffi_find_entry`: new lookup function in `froth_ffi.c`. Static array of up to 4 registered FFI table pointers, populated by `froth_ffi_register` during boot. Searches by function pointer.
-- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards), 032 (mark/release heap watermark), 033 (link transport v1: COBS binary framing), 034 (console multiplexer architecture), 035 (host daemon architecture), 036 (protocol sideband probes)
+- `froth_repl_start`: blocking REPL loop restored in `froth_repl.c`. Wraps `froth_repl_init` + `platform_key` + `froth_repl_accept_byte` + `froth_repl_evaluate`. Used when `FROTH_HAS_LINK` is not defined. Verified with save/restore cycle.
+- `froth_boot.c`: `FROTH_HAS_LINK` gate on console mux vs blocking REPL. `FROTH_HAS_SNAPSHOTS` gate on snapshot include and restore. Targets without link get `froth_repl_start`, targets with link get `froth_console_mux_start`.
+- ESP32 NVS snapshot backend: `nvs_flash_init` in `platform_init` (with erase-and-retry on `NO_FREE_PAGES`/`NEW_VERSION_FOUND`). `platform_snapshot_write` reads existing blob, patches at offset, writes back. `platform_snapshot_read` reads whole blob, copies requested slice. `platform_snapshot_erase` tolerates `NOT_FOUND`. Namespace `"froth"`, keys `"snap_a"`/`"snap_b"`. `nvs_flash` added to ESP-IDF `REQUIRES`. `FROTH_HAS_SNAPSHOTS`, `FROTH_SNAPSHOT_BLOCK_SIZE`, `FROTH_BOARD_NAME` added to ESP-IDF compile definitions.
+- ESP32 stack overflow fix: snapshot workspace (name table, object table, walk stack, ram_buffer, header, reader tables) moved from stack to static BSS `froth_snapshot_workspace_t`. NVS staging buffer (2KB) also static. Fixes `LoadProhibited` crash on `save` and boot-loop crash on `restore`. Total static cost: ~4.8KB on `FROTH_HAS_SNAPSHOTS` targets.
+- ESP32 persistence proven on hardware: define word, save, power cycle, restore. A/B rotation, wipe, multiple saves all verified.
+- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards), 032 (mark/release heap watermark), 033 (link transport v1: COBS binary framing), 034 (console multiplexer architecture), 035 (host daemon architecture), 036 (protocol sideband probes), 037 (host-centric deployment with overlay user program)
 - VS Code extension design: `docs/concepts/vscode-extension-design.md`. Two modes (live/project), form-level sync, subscription probes at safe points, thin TypeScript over daemon. Workshop skeleton: connect, send selection, console, status bar.
 - Host tooling roadmap: `docs/concepts/host-tooling-roadmap.md`. Phased plan with status tracking for AI agents.
 - Target tier model: 32-bit (full Froth), 16-bit (tethered), 8-bit (tethered). Documented in `docs/concepts/target-tiers-and-tethered-mode.md`.
@@ -106,7 +111,8 @@
 
 ## In Progress
 
-- ESP32 NVS snapshot backend (platform.c has 4 bugs per Codex review, not yet fixed)
+- ADR-037 host-centric deployment: accepted. Implementation deferred (`reset` primitive, embedded user program support).
+- ADR-038 streaming snapshot serializer: accepted. Current static BSS workspace is a band-aid (~2.8KB + 2KB NVS staging). Streaming v2 format targets ~344B writer, ~280B reader.
 
 ## Blocked / Waiting
 
@@ -115,11 +121,13 @@
 
 ## Next Up
 
-1. Fix ESP32 NVS snapshot backend (4 bugs: offset ignored on write/read, missing CMake dep, inverted erase error)
-2. ESP32 workshop prep: dual-core audio FFI, 15 pre-flashed boards
-3. Daemon PTY passthrough (Phase 2 of ADR-035, post-workshop)
-4. Interleaved kernel work: FROTH-Addr
-5. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
+1. Flash and test ESP32 NVS persistence (define word, save, power cycle, verify)
+2. Implement `reset` primitive (ADR-037: clear overlay, restore watermark, abort to top level)
+3. Embedded user program support (CMake `FROTH_USER_PROGRAM` variable, boot sequence slot)
+4. ESP32 workshop prep: audio FFI decision (synth under reconsideration), 15 pre-flashed boards
+5. Daemon PTY passthrough (Phase 2 of ADR-035, post-workshop)
+6. Interleaved kernel work: FROTH-Addr
+7. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
 
 ## Open Questions
 
