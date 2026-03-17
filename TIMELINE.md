@@ -231,9 +231,9 @@
 ### Kernel work (Mar 18–21, priority order)
 - [x] Fix ESP32 NVS serialization bug (stack overflow in platform read/write — static staging buffer)
 - [x] **Proof**: flash ESP32, define word, save, power cycle, verify persistence. A/B rotation, wipe, multiple saves all work.
-- [ ] Streaming snapshot serializer v2 (ADR-038: ~344B writer, ~280B reader, format change)
-- [ ] `reset` primitive (ADR-037: clear overlay, restore watermark, abort to top level)
+- [ ] `reset` primitive + `RESET_REQ`/`RESET_RES` (ADR-037, ADR-039: prerequisite for honest Send File)
 - [ ] Embedded user program support (CMake `FROTH_USER_PROGRAM`, boot sequence slot)
+- [ ] Streaming snapshot serializer v2 (ADR-038: ~344B writer, ~280B reader, format change)
 - [ ] ESP32 audio FFI (synth under reconsideration)
 - [ ] FROTH-Addr memory access primitives (ADR-024)
 - [ ] Evaluator refactor if time permits
