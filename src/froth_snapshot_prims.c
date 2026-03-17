@@ -2,9 +2,10 @@
 
 #include "froth_crc32.h"
 #include "froth_ffi.h"
+#include "froth_primitives.h"
+#include "froth_slot_table.h"
 #include "froth_snapshot.h"
 #include "froth_types.h"
-#include "froth_slot_table.h"
 #include "froth_vm.h"
 #include "platform.h"
 #include <string.h>
@@ -44,7 +45,8 @@ static froth_error_t prim_restore(froth_vm_t *vm) {
   uint32_t generation;
   FROTH_TRY(froth_snapshot_pick_active(&slot, &generation));
 
-  FROTH_TRY(platform_snapshot_read(slot, 0, ws.header, FROTH_SNAPSHOT_HEADER_SIZE));
+  FROTH_TRY(
+      platform_snapshot_read(slot, 0, ws.header, FROTH_SNAPSHOT_HEADER_SIZE));
 
   froth_snapshot_header_info_t info;
   FROTH_TRY(froth_snapshot_parse_header(ws.header, &info));
@@ -65,8 +67,8 @@ static froth_error_t prim_restore(froth_vm_t *vm) {
     return FROTH_ERROR_SNAPSHOT_BAD_CRC;
   }
 
-  froth_snapshot_buffer_t ram_snapshot = {
-      .data = ws.ram_buffer, .position = info.payload_len};
+  froth_snapshot_buffer_t ram_snapshot = {.data = ws.ram_buffer,
+                                          .position = info.payload_len};
   return froth_snapshot_load(vm, &ram_snapshot, &ws);
 }
 
@@ -80,8 +82,9 @@ static froth_error_t prim_restore(froth_vm_t *vm) {
 static froth_error_t prim_wipe(froth_vm_t *vm) {
   FROTH_TRY(platform_snapshot_erase(0));
   FROTH_TRY(platform_snapshot_erase(1));
-  froth_slot_reset_overlay();
-  vm->heap.pointer = vm->watermark_heap_offset;
+  // froth_slot_reset_overlay();
+  // vm->heap.pointer = vm->watermark_heap_offset;
+  FROTH_TRY(froth_prim_dangerous_reset(vm));
   return FROTH_OK;
 }
 

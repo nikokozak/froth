@@ -91,7 +91,10 @@
 - ESP32 NVS snapshot backend: `nvs_flash_init` in `platform_init` (with erase-and-retry on `NO_FREE_PAGES`/`NEW_VERSION_FOUND`). `platform_snapshot_write` reads existing blob, patches at offset, writes back. `platform_snapshot_read` reads whole blob, copies requested slice. `platform_snapshot_erase` tolerates `NOT_FOUND`. Namespace `"froth"`, keys `"snap_a"`/`"snap_b"`. `nvs_flash` added to ESP-IDF `REQUIRES`. `FROTH_HAS_SNAPSHOTS`, `FROTH_SNAPSHOT_BLOCK_SIZE`, `FROTH_BOARD_NAME` added to ESP-IDF compile definitions.
 - ESP32 stack overflow fix: snapshot workspace (name table, object table, walk stack, ram_buffer, header, reader tables) moved from stack to static BSS `froth_snapshot_workspace_t`. NVS staging buffer (2KB) also static. Fixes `LoadProhibited` crash on `save` and boot-loop crash on `restore`. Total static cost: ~4.8KB on `FROTH_HAS_SNAPSHOTS` targets.
 - ESP32 persistence proven on hardware: define word, save, power cycle, restore. A/B rotation, wipe, multiple saves all verified.
-- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards), 032 (mark/release heap watermark), 033 (link transport v1: COBS binary framing), 034 (console multiplexer architecture), 035 (host daemon architecture), 036 (protocol sideband probes), 037 (host-centric deployment with overlay user program), 039 (host tooling UX and daemon lifecycle), 040 (CS trampoline executor)
+- `dangerous-reset` primitive (ADR-037): clears overlay slots, restores heap to watermark, zeroes DS/RS/CS, clears thrown/last_error_slot/call_depth/mark. Returns `FROTH_ERROR_RESET` (code 20) which the REPL catches as a clean top-level abort (prints "reset", no error display, no stale snapshot restore). Available on all targets (not gated behind `FROTH_HAS_SNAPSHOTS`). Named `dangerous-reset` to prevent accidental invocation.
+- `wipe` revised (ADR-037): now calls `froth_prim_dangerous_reset` internally instead of duplicating overlay-clear logic. Erases both snapshot slots, then resets.
+- Strict bare identifiers (ADR-041): top-level bare identifier resolution no longer creates slots. `froth_evaluator_handle_identifier` uses `froth_slot_find_name` directly; undefined names error without side effects. Forward references inside quotations, tick-identifiers, and colon sugar still create slots via `resolve_or_create_slot`. Fixes ghost slot bug where typos after `reset` left dangling heap pointers that poisoned subsequent `restore`.
+- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards), 032 (mark/release heap watermark), 033 (link transport v1: COBS binary framing), 034 (console multiplexer architecture), 035 (host daemon architecture), 036 (protocol sideband probes), 037 (host-centric deployment with overlay user program), 039 (host tooling UX and daemon lifecycle), 040 (CS trampoline executor), 041 (strict bare identifiers)
 - VS Code extension design: `docs/concepts/vscode-extension-design.md`. Two modes (live/project), form-level sync, subscription probes at safe points, thin TypeScript over daemon. Workshop skeleton: connect, send selection, console, status bar.
 - Host tooling roadmap: `docs/concepts/host-tooling-roadmap.md`. Phased plan with status tracking for AI agents.
 - Target tier model: 32-bit (full Froth), 16-bit (tethered), 8-bit (tethered). Documented in `docs/concepts/target-tiers-and-tethered-mode.md`.
@@ -111,7 +114,7 @@
 
 ## In Progress
 
-- ADR-037 host-centric deployment: accepted. Implementation deferred (`reset` primitive, embedded user program support).
+- ADR-037 host-centric deployment: `reset` primitive done. Remaining: `RESET_REQ`/`RESET_RES` protocol messages, embedded user program support.
 - ADR-038 streaming snapshot serializer: accepted. Current static BSS workspace is a band-aid (~2.8KB + 2KB NVS staging). Streaming v2 format targets ~344B writer, ~280B reader.
 
 ## Blocked / Waiting
@@ -121,7 +124,7 @@
 
 ## Next Up
 
-1. `reset` primitive + `RESET_REQ`/`RESET_RES` protocol messages (ADR-037/039: prerequisite for honest Send File)
+1. `RESET_REQ`/`RESET_RES` protocol messages (ADR-037: prerequisite for honest Send File)
 2. CS trampoline executor (ADR-040: replace C recursion with explicit call stack, O(1) C stack usage)
 3. Embedded user program support (CMake `FROTH_USER_PROGRAM` variable, boot sequence slot)
 4. ESP32 workshop prep: audio FFI decision (synth under reconsideration), 15 pre-flashed boards
@@ -135,7 +138,7 @@
 - `divmod`: INT_MIN / -1 is UB in C (result overflows). Need to decide: wrap or error? (deferred — make wrapping normative in spec, see TIMELINE deferred/near-term)
 - Tick syntax: spec grammar says `'name` (prefix, no space) but spec examples use `' name` (space-separated). Reader currently requires prefix form. Need ADR to pick one. (deferred — not blocking)
 - `while` stack discipline: too strict for REPL exploration? Revisit after `>r`/`r>`/`r@` and `times` exist — the pressure may ease naturally. (deferred)
-- Strict bare identifiers: typos create slots permanently. ADR needed before persistence ships to users. Design scheduled Mar 11, implementation deferred. (audit finding)
+- ~~Strict bare identifiers~~: resolved — ADR-041. Top-level bare identifiers no longer create slots.
 - ~~Boot error handling~~: resolved — `boot_fail()` + `platform_fatal()` in main.c.
 - ~~`wipe` does not restore redefined base words~~: resolved — primitive redefinition is now forbidden (ADR-031). `def` rejects slots with existing prims. Stdlib words defined via `: ;` can still be redefined (they're impl-only, no prim).
 - ~~String-Lite timing~~: moved to next-up, targeting Mar 8.

@@ -27,10 +27,11 @@ static froth_error_t froth_evaluator_handle_number(froth_token_t token, froth_vm
   return FROTH_OK;
 }
 
-/* Handle a bare identifier at top level: resolve/create slot, then invoke. */
+/* Handle a bare identifier at top level: find slot, then invoke.
+ * Does NOT create a slot if the name is undefined (ADR-041). */
 static froth_error_t froth_evaluator_handle_identifier(froth_token_t token, froth_vm_t* vm) {
   froth_cell_u_t slot_index;
-  FROTH_TRY(resolve_or_create_slot(token.name, &vm->heap, &slot_index));
+  FROTH_TRY(froth_slot_find_name(token.name, &slot_index));
   FROTH_TRY(froth_execute_slot(vm, slot_index));
   return FROTH_OK;
 }

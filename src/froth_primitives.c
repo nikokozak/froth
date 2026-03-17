@@ -963,7 +963,6 @@ froth_error_t froth_prim_release(froth_vm_t *vm) {
   return FROTH_OK;
 }
 
-
 froth_error_t froth_prim_see(froth_vm_t *vm) {
   froth_cell_t slot_cell;
   FROTH_TRY(froth_stack_pop(&vm->ds, &slot_cell));
@@ -978,8 +977,10 @@ froth_error_t froth_prim_see(froth_vm_t *vm) {
   froth_cell_t impl;
   froth_native_word_t prim = NULL;
   const froth_ffi_entry_t *ffi = NULL;
-  int has_impl = (froth_slot_get_impl(slot_index, &impl) == FROTH_OK && impl != 0);
-  int has_prim = (froth_slot_get_prim(slot_index, &prim) == FROTH_OK && prim != NULL);
+  int has_impl =
+      (froth_slot_get_impl(slot_index, &impl) == FROTH_OK && impl != 0);
+  int has_prim =
+      (froth_slot_get_prim(slot_index, &prim) == FROTH_OK && prim != NULL);
 
   if (!has_impl && !has_prim) {
     FROTH_TRY(emit_string(name));
@@ -1011,6 +1012,22 @@ froth_error_t froth_prim_see(froth_vm_t *vm) {
   return FROTH_OK;
 }
 
+froth_error_t froth_prim_dangerous_reset(froth_vm_t *vm) {
+  FROTH_TRY(froth_slot_reset_overlay());
+  vm->heap.pointer = vm->watermark_heap_offset;
+
+  vm->ds.pointer = 0;
+  vm->rs.pointer = 0;
+  vm->cs.pointer = 0;
+
+  vm->thrown = FROTH_OK;
+  vm->last_error_slot = -1;
+  vm->call_depth = 0;
+  vm->mark_offset = (froth_cell_u_t)-1;
+
+  return FROTH_ERROR_RESET;
+}
+
 froth_error_t froth_prim_info(froth_vm_t *vm) {
   FROTH_TRY(emit_string("Froth v" FROTH_VERSION " | "));
   FROTH_TRY(emit_string(format_number(FROTH_CELL_SIZE_BITS)));
@@ -1020,7 +1037,8 @@ froth_error_t froth_prim_info(froth_vm_t *vm) {
   FROTH_TRY(emit_string(" / "));
   FROTH_TRY(emit_string(format_number(FROTH_HEAP_SIZE)));
   FROTH_TRY(emit_string(" bytes used ("));
-  FROTH_TRY(emit_string(format_number(vm->heap.pointer - vm->watermark_heap_offset)));
+  FROTH_TRY(
+      emit_string(format_number(vm->heap.pointer - vm->watermark_heap_offset)));
   FROTH_TRY(emit_string(" user)\n"));
   FROTH_TRY(emit_string("slots: "));
   FROTH_TRY(emit_string(format_number(froth_slot_count())));
@@ -1101,5 +1119,9 @@ const froth_ffi_entry_t froth_primitives[] = {
     {"words", froth_prim_words, "( -- )", "List all defined words"},
     {"see", froth_prim_see, "( slot -- )", "Display slot definition"},
     {"info", froth_prim_info, "( -- )", "Print system info"},
+
+    /* Reset */
+    {"dangerous-reset", froth_prim_dangerous_reset, "( -- )",
+     "Wipe overlay state back to stdlib baseline"},
 
     {0}};

@@ -74,6 +74,7 @@ typedef enum {
   FROTH_ERROR_REDEF_PRIMITIVE = 17,
   FROTH_ERROR_CALL_DEPTH = 18,
   FROTH_ERROR_NO_MARK = 19,
+  FROTH_ERROR_RESET = 20,
   /* Reader/evaluator errors — occur before execution.
    * Stable numbers, but programs won't typically catch these. */
   FROTH_ERROR_TOKEN_TOO_LONG = 100,
@@ -95,13 +96,13 @@ typedef enum {
   FROTH_ERROR_SNAPSHOT_BAD_NAME = 206,    /* name exceeds max length */
 
   /* Link errors (250–259) */
-  FROTH_ERROR_LINK_OVERFLOW = 250,      /* frame/COBS buffer too small */
-  FROTH_ERROR_LINK_COBS_DECODE = 251,   /* invalid COBS encoding */
-  FROTH_ERROR_LINK_BAD_MAGIC = 252,     /* magic != "FL" */
-  FROTH_ERROR_LINK_BAD_VERSION = 253,   /* unsupported protocol version */
-  FROTH_ERROR_LINK_BAD_CRC = 254,       /* CRC32 mismatch */
-  FROTH_ERROR_LINK_TOO_LARGE = 255,     /* payload exceeds max */
-  FROTH_ERROR_LINK_UNKNOWN_TYPE = 256,  /* unrecognized message type */
+  FROTH_ERROR_LINK_OVERFLOW = 250,     /* frame/COBS buffer too small */
+  FROTH_ERROR_LINK_COBS_DECODE = 251,  /* invalid COBS encoding */
+  FROTH_ERROR_LINK_BAD_MAGIC = 252,    /* magic != "FL" */
+  FROTH_ERROR_LINK_BAD_VERSION = 253,  /* unsupported protocol version */
+  FROTH_ERROR_LINK_BAD_CRC = 254,      /* CRC32 mismatch */
+  FROTH_ERROR_LINK_TOO_LARGE = 255,    /* payload exceeds max */
+  FROTH_ERROR_LINK_UNKNOWN_TYPE = 256, /* unrecognized message type */
 
   /* Internal sentinel — not a user-visible error code. */
   FROTH_ERROR_THROW = -1,

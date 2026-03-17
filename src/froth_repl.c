@@ -275,6 +275,11 @@ froth_error_t froth_repl_evaluate(froth_vm_t *vm) {
 
     vm->last_error_slot = -1;
     froth_error_t err = froth_evaluate_input(repl_buffer, vm);
+    if (err == FROTH_ERROR_RESET) {
+      emit_string("reset\n");
+      reset_state();
+      return FROTH_OK;
+    }
     if (err != FROTH_OK) {
       froth_cell_t code =
           (err == FROTH_ERROR_THROW) ? vm->thrown : (froth_cell_t)err;
