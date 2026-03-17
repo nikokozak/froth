@@ -9,21 +9,16 @@
 #include "platform.h"
 #include <string.h>
 
-/* ---- save ---- ( -- )
- *
- * 1. Serialize overlay into RAM buffer (existing froth_snapshot_save)
- * 2. Pick inactive A/B slot and next generation number
- * 3. Check capacity: header + payload must fit in FROTH_SNAPSHOT_BLOCK_SIZE
- * 4. Write payload to slot at offset FROTH_SNAPSHOT_HEADER_SIZE
- * 5. Build header (computes payload CRC and header CRC)
- * 6. Write header to slot at offset 0 (this is the atomic commit point)
- */
-static froth_error_t prim_save(froth_vm_t *vm) {
-  uint8_t header[FROTH_SNAPSHOT_HEADER_SIZE];
-  uint8_t ram_buffer[FROTH_SNAPSHOT_MAX_BYTES];
-  froth_snapshot_buffer_t ram_snapshot = {.data = ram_buffer, .position = 0};
+/* Static workspace for save/restore. Lives in BSS, not on the call stack.
+ * ESP32 main task stack is ~3.5KB; the old stack-allocated tables used ~2.8KB.
+ * This struct uses ~2.8KB of BSS on targets with FROTH_HAS_SNAPSHOTS. */
+static froth_snapshot_workspace_t ws;
 
-  FROTH_TRY(froth_snapshot_save(vm, &ram_snapshot));
+/* ---- save ---- ( -- ) */
+static froth_error_t prim_save(froth_vm_t *vm) {
+  froth_snapshot_buffer_t ram_snapshot = {.data = ws.ram_buffer, .position = 0};
+
+  FROTH_TRY(froth_snapshot_save(vm, &ram_snapshot, &ws));
   uint8_t slot;
   uint32_t generation;
   FROTH_TRY(froth_snapshot_pick_inactive(&slot, &generation));
@@ -35,58 +30,44 @@ static froth_error_t prim_save(froth_vm_t *vm) {
 
   FROTH_TRY(platform_snapshot_write(slot, FROTH_SNAPSHOT_HEADER_SIZE,
                                     ram_snapshot.data, ram_snapshot.position));
-  FROTH_TRY(froth_snapshot_build_header(header, ram_snapshot.position,
+  FROTH_TRY(froth_snapshot_build_header(ws.header, ram_snapshot.position,
                                         ram_snapshot.data, generation));
   FROTH_TRY(
-      platform_snapshot_write(slot, 0, header, FROTH_SNAPSHOT_HEADER_SIZE));
+      platform_snapshot_write(slot, 0, ws.header, FROTH_SNAPSHOT_HEADER_SIZE));
 
   return FROTH_OK;
 }
 
-/* ---- restore ---- ( -- )
- *
- * 1. Pick active A/B slot (the valid one with highest generation)
- * 2. If no valid slot, throw — nothing to restore
- * 3. Read full image (header + payload) from slot into RAM buffer
- * 4. Validate payload CRC against header's stored payload_crc32
- * 5. Call existing froth_snapshot_load (resets heap to watermark, rebuilds
- * overlay)
- */
+/* ---- restore ---- ( -- ) */
 static froth_error_t prim_restore(froth_vm_t *vm) {
   uint8_t slot;
   uint32_t generation;
   FROTH_TRY(froth_snapshot_pick_active(&slot, &generation));
 
-  /* Read header to get payload_len and stored payload CRC */
-  uint8_t header[FROTH_SNAPSHOT_HEADER_SIZE];
-  FROTH_TRY(platform_snapshot_read(slot, 0, header, FROTH_SNAPSHOT_HEADER_SIZE));
+  FROTH_TRY(platform_snapshot_read(slot, 0, ws.header, FROTH_SNAPSHOT_HEADER_SIZE));
 
   froth_snapshot_header_info_t info;
-  FROTH_TRY(froth_snapshot_parse_header(header, &info));
+  FROTH_TRY(froth_snapshot_parse_header(ws.header, &info));
 
   if (info.payload_len > FROTH_SNAPSHOT_MAX_BYTES) {
     return FROTH_ERROR_SNAPSHOT_OVERFLOW;
   }
 
-  /* Read payload */
-  uint8_t ram_buffer[FROTH_SNAPSHOT_MAX_BYTES];
   FROTH_TRY(platform_snapshot_read(slot, FROTH_SNAPSHOT_HEADER_SIZE,
-                                   ram_buffer, info.payload_len));
+                                   ws.ram_buffer, info.payload_len));
 
-  /* Validate payload CRC */
   uint32_t stored_crc =
-      ((uint32_t)header[FROTH_SNAPSHOT_PAYLOAD_CRC32_OFFSET]) |
-      ((uint32_t)header[FROTH_SNAPSHOT_PAYLOAD_CRC32_OFFSET + 1] << 8) |
-      ((uint32_t)header[FROTH_SNAPSHOT_PAYLOAD_CRC32_OFFSET + 2] << 16) |
-      ((uint32_t)header[FROTH_SNAPSHOT_PAYLOAD_CRC32_OFFSET + 3] << 24);
-  if (froth_crc32(ram_buffer, info.payload_len) != stored_crc) {
+      ((uint32_t)ws.header[FROTH_SNAPSHOT_PAYLOAD_CRC32_OFFSET]) |
+      ((uint32_t)ws.header[FROTH_SNAPSHOT_PAYLOAD_CRC32_OFFSET + 1] << 8) |
+      ((uint32_t)ws.header[FROTH_SNAPSHOT_PAYLOAD_CRC32_OFFSET + 2] << 16) |
+      ((uint32_t)ws.header[FROTH_SNAPSHOT_PAYLOAD_CRC32_OFFSET + 3] << 24);
+  if (froth_crc32(ws.ram_buffer, info.payload_len) != stored_crc) {
     return FROTH_ERROR_SNAPSHOT_BAD_CRC;
   }
 
-  /* Load overlay from validated payload */
   froth_snapshot_buffer_t ram_snapshot = {
-      .data = ram_buffer, .position = info.payload_len};
-  return froth_snapshot_load(vm, &ram_snapshot);
+      .data = ws.ram_buffer, .position = info.payload_len};
+  return froth_snapshot_load(vm, &ram_snapshot, &ws);
 }
 
 /* ---- wipe ---- ( -- )

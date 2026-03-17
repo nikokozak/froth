@@ -324,19 +324,17 @@ static froth_error_t load_bindings(snapshot_reader_t *reader,
 // --- Top-level load ---
 
 froth_error_t froth_snapshot_load(froth_vm_t *froth_vm,
-                                  froth_snapshot_buffer_t *snapshot_buffer) {
+                                  froth_snapshot_buffer_t *snapshot_buffer,
+                                  froth_snapshot_workspace_t *ws) {
   snapshot_reader_t reader = {.data = snapshot_buffer->data,
                               .length = snapshot_buffer->position,
                               .cursor = 0};
 
-  froth_cell_u_t names[FROTH_SLOT_TABLE_SIZE];
-  froth_cell_t objects[FROTH_SNAPSHOT_MAX_OBJECTS];
-
   FROTH_TRY(reset_overlay_to_base(froth_vm));
 
-  FROTH_TRY(read_names(froth_vm, &reader, names));
-  FROTH_TRY(load_objects(froth_vm, &reader, names, objects));
-  FROTH_TRY(load_bindings(&reader, names, objects));
+  FROTH_TRY(read_names(froth_vm, &reader, ws->reader_names));
+  FROTH_TRY(load_objects(froth_vm, &reader, ws->reader_names, ws->reader_objects));
+  FROTH_TRY(load_bindings(&reader, ws->reader_names, ws->reader_objects));
 
   return FROTH_OK;
 }

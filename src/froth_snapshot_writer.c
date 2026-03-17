@@ -6,36 +6,13 @@
 #include <stdint.h>
 #include <string.h>
 
-typedef struct {
-  const char *name;
-  froth_cell_u_t slot_index;
-} name_table_item_t;
-
-typedef struct {
-  name_table_item_t items[FROTH_SLOT_TABLE_SIZE];
-  froth_cell_u_t count;
-} name_table_t;
-
-typedef struct {
-  froth_cell_u_t object_id;
-  froth_cell_u_t heap_offset;
-  froth_cell_tag_t type;
-} object_table_item_t;
-
-typedef struct {
-  object_table_item_t items[FROTH_SNAPSHOT_MAX_OBJECTS];
-  froth_cell_u_t count;
-} object_table_t;
-
-typedef struct {
-  froth_cell_u_t quote_heap_offset;
-  froth_cell_u_t next_token_index;
-} quote_walk_frame_t;
-
-typedef struct {
-  quote_walk_frame_t frames[FROTH_SNAPSHOT_MAX_QUOTE_DEPTH];
-  froth_cell_u_t depth;
-} quote_walk_stack_t;
+/* Type aliases for brevity — actual types live in froth_snapshot.h */
+typedef froth_snapshot_name_item_t name_table_item_t;
+typedef froth_snapshot_name_table_t name_table_t;
+typedef froth_snapshot_object_item_t object_table_item_t;
+typedef froth_snapshot_object_table_t object_table_t;
+typedef froth_snapshot_walk_frame_t quote_walk_frame_t;
+typedef froth_snapshot_walk_stack_t quote_walk_stack_t;
 
 static bool name_table_has_slot(const name_table_t *name_table,
                                 froth_cell_u_t slot_index) {
@@ -576,16 +553,17 @@ static froth_error_t froth_snapshot_write_payload(
 }
 
 froth_error_t froth_snapshot_save(froth_vm_t *froth_vm,
-                                  froth_snapshot_buffer_t *snapshot) {
-  name_table_t name_table = {0};
-  object_table_t object_table = {0};
+                                  froth_snapshot_buffer_t *snapshot,
+                                  froth_snapshot_workspace_t *ws) {
+  memset(&ws->names, 0, sizeof(ws->names));
+  memset(&ws->objects, 0, sizeof(ws->objects));
 
   FROTH_TRY(
-      collect_snapshot_dependencies(froth_vm, &name_table, &object_table));
+      collect_snapshot_dependencies(froth_vm, &ws->names, &ws->objects));
 
   snapshot->position = 0;
-  FROTH_TRY(froth_snapshot_write_payload(froth_vm, snapshot, &name_table,
-                                         &object_table));
+  FROTH_TRY(froth_snapshot_write_payload(froth_vm, snapshot, &ws->names,
+                                         &ws->objects));
 
   return FROTH_OK;
 }
