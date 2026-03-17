@@ -251,7 +251,7 @@
 - [x] LED blink from Froth REPL on ESP32
 - [x] Interrupt stops runaway loop
 - [x] `save` survives power cycle on ESP32
-- [ ] `wipe` returns to base-only state
+- [x] `wipe` returns to base-only state
 - [ ] `"Hello" s.emit` works
 - [ ] Hex literals work (`0xFF`)
 - [ ] Synth audio controllable from Froth REPL
