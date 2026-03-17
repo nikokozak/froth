@@ -219,9 +219,22 @@
 - [x] VS Code extension skeleton (connect, send selection, console panel) — landed Mar 17
 - [x] Codex review + 5 fixes (socket errors, concurrent connect, error_code fallback, id validation, buffer cleanup)
 
-### Interleaved kernel work (Mar 16–21, as sessions allow)
-- [ ] ESP32 dual-core architecture + audio FFI
-- [ ] ESP32 NVS/flash backend for snapshot persistence
+### Mar 17 (Mon) — ESP32 NVS persistence + ADR-037
+- [x] ESP32 NVS snapshot backend: `nvs_flash_init`, read/write/erase with offset-based blob slicing
+- [x] `froth_repl_start` restored: blocking REPL for non-link targets
+- [x] `FROTH_HAS_LINK` gate in `froth_boot.c`: mux vs blocking REPL
+- [x] ESP-IDF CMake parity: `nvs_flash` dependency, `FROTH_BOARD_NAME`, `FROTH_HAS_SNAPSHOTS`, `FROTH_SNAPSHOT_BLOCK_SIZE`
+- [x] POSIX save/restore verified through both mux and `froth_repl_start` paths
+- [x] ADR-037: host-centric deployment model (embedded user program as overlay, `reset` primitive, editor workflow, snapshot hash)
+- [ ] **Proof**: flash ESP32, define word, save, power cycle, verify persistence
+
+### Kernel work (Mar 18–21, priority order)
+- [ ] Fix ESP32 NVS serialization bug (blocking hardware test)
+- [ ] **Proof**: flash ESP32, define word, save, power cycle, verify persistence
+- [ ] Streaming snapshot serializer v2 (ADR-038: ~344B writer, ~280B reader, format change)
+- [ ] `reset` primitive (ADR-037: clear overlay, restore watermark, abort to top level)
+- [ ] Embedded user program support (CMake `FROTH_USER_PROGRAM`, boot sequence slot)
+- [ ] ESP32 audio FFI (synth under reconsideration)
 - [ ] FROTH-Addr memory access primitives (ADR-024)
 - [ ] Evaluator refactor if time permits
 
@@ -313,3 +326,5 @@
 | ESP32 persistence | Mar 16–17 | Mar 16–21 | Interleaved with link/ecosystem work. |
 | Host CLI skeleton | Mar 18–19 | Mar 16 | Landed 2 days early. Go CLI with serial discovery, HELLO, EVAL proven via socat. |
 | AI-assisted host buildout | Mar 19–21 | Mar 16 | CLI commands + daemon landed same day as skeleton. ADR-035, 6 review fixes. VS Code still pending. |
+| ESP32 NVS persistence | Mar 16–21 | Mar 17 | NVS backend written and compiles. Hardware test pending (Mar 18). |
+| Host-centric deployment ADR | Not scheduled | Mar 17 | ADR-037 accepted. Defines deployment model, reset primitive, editor workflow. |
