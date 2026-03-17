@@ -216,8 +216,8 @@
 - [x] Daemon skeleton: Unix socket, JSON-RPC 2.0, serial ownership, reconnect, event broadcast, start/stop/status
 - [x] CLI daemon routing: auto-detect socket, --serial/--daemon flags, info+send work through daemon
 - [x] Code review: 6 concurrency/safety issues found and fixed (nil-map panic, broadcast deadlock, unbounded reconnect, double-close, stale PID, SetReadTimeout error)
-- [ ] VS Code extension skeleton (connect, send selection, console panel)
-- [ ] Iterative review and testing
+- [x] VS Code extension skeleton (connect, send selection, console panel) — landed Mar 17
+- [x] Codex review + 5 fixes (socket errors, concurrent connect, error_code fallback, id validation, buffer cleanup)
 
 ### Interleaved kernel work (Mar 16–21, as sessions allow)
 - [ ] ESP32 dual-core architecture + audio FFI

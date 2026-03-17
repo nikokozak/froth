@@ -73,23 +73,23 @@ All committed in `668187b`. ADR-035.
 - [ ] Ctrl-C bypass during paused PTY (send 0x03 immediately)
 - [ ] PTY announced in daemon status output
 
-## Phase 3: VS Code Extension Skeleton (NEXT — workshop target)
+## Phase 3: VS Code Extension Skeleton (DONE)
 
 Design doc: `docs/concepts/vscode-extension-design.md`
 
 ### Skeleton scope (Mar 21 workshop)
 
-- [ ] `tools/vscode/package.json` — extension manifest
-- [ ] `tools/vscode/tsconfig.json` — TypeScript config
-- [ ] `tools/vscode/src/extension.ts` — activate/deactivate, commands, UI
-- [ ] `tools/vscode/src/daemon-client.ts` — JSON-RPC client over Unix socket
-- [ ] Connect to daemon on activation (auto-detect `~/.froth/daemon.sock`)
-- [ ] Status bar item: connection state (connected/disconnected/no daemon)
-- [ ] Command: `froth.sendSelection` (Cmd+Enter) — send selection or current line
-- [ ] Command: `froth.sendFile` — send entire file
-- [ ] Output channel: console events + eval results as transcript
-- [ ] Disconnect/reconnect handling (daemon events)
-- [ ] `npm run compile` passes with zero errors
+- [x] `tools/vscode/package.json` — extension manifest
+- [x] `tools/vscode/tsconfig.json` — TypeScript config
+- [x] `tools/vscode/src/extension.ts` — activate/deactivate, commands, UI
+- [x] `tools/vscode/src/daemon-client.ts` — JSON-RPC client over Unix socket
+- [x] Connect to daemon on activation (auto-detect `~/.froth/daemon.sock`)
+- [x] Status bar item: connection state (connected/disconnected/no daemon)
+- [x] Command: `froth.sendSelection` (Cmd+Enter) — send selection or current line
+- [x] Command: `froth.sendFile` — send entire file
+- [x] Output channel: console events + eval results as transcript
+- [x] Disconnect/reconnect handling (daemon events)
+- [x] `npm run compile` passes with zero errors
 
 ### Build/dev workflow
 

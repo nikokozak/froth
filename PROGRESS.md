@@ -1,12 +1,12 @@
 # Froth Implementation Progress
 
-*Last updated: 2026-03-16*
+*Last updated: 2026-03-17*
 
 ## Current Status
 
-**Phase**: Ecosystem. CLI commands (doctor, build, flash) and daemon skeleton complete. Next: VS Code extension skeleton, then ESP32 workshop prep.
-**Blocking issues**: ESP32 snapshots remain. Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues).
-**Morale check**: Daemon lifecycle proven (start, status, stop). CLI auto-detects daemon with serial fallback.
+**Phase**: Ecosystem. Host tooling chain complete (CLI, daemon, VS Code extension). Next: ESP32 workshop prep (NVS backend, dual-core audio FFI).
+**Blocking issues**: ESP32 NVS snapshot backend has bugs (Codex review found 4 issues in platform.c). Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues).
+**Morale check**: Full host pipeline proven. VS Code extension connects to daemon, sends code, streams console output.
 
 ## What's Done
 
@@ -102,10 +102,11 @@
 - End-to-end proof: Go CLI ↔ POSIX Froth binary via socat PTY pair. `info` prints device metadata, `send "1 2 +"` returns `[3]`, `send "1 drop drop"` returns `error(2) in "perm"`. Device stack persists across EVAL requests (expected).
 - CLI commands: `doctor` (Go, cmake, make, serial ports, ESP-IDF, device probe), `build` (POSIX cmake+make or ESP-IDF idf.py, project root auto-detection), `flash` (ESP-IDF with port detection, POSIX prints binary path).
 - Daemon skeleton (ADR-035): Unix domain socket at `~/.froth/daemon.sock`, JSON-RPC 2.0, serial connection ownership, reconnect on device loss, event broadcast (console, connected, disconnected, reconnecting). `froth daemon start|stop|status`. CLI auto-detects daemon, `--serial` forces bypass, `--daemon` forces routing. Concurrency reviewed: atomic reconnect guard, sync.Once for shutdown, broadcast outside lock, nil-map guard on client disconnect.
+- VS Code extension skeleton (`tools/vscode/`): TypeScript, strict mode, zero dependencies. `daemon-client.ts` (JSON-RPC 2.0 over Unix socket, mirrors Go client architecture). `extension.ts` (FrothController: auto-connect, reconnect, status bar with 3 states, `froth.sendSelection` Cmd+Enter, `froth.sendFile`, "Froth Console" output channel streaming daemon events). Self-review + Codex review, 5 issues found and fixed (socket error handling, concurrent connect guard, error_code undefined fallback, id type validation, buffer cleanup).
 
 ## In Progress
 
-- VS Code extension skeleton (Phase 3 of host buildout)
+- ESP32 NVS snapshot backend (platform.c has 4 bugs per Codex review, not yet fixed)
 
 ## Blocked / Waiting
 
@@ -114,9 +115,9 @@
 
 ## Next Up
 
-1. VS Code extension skeleton (connect, send selection, console panel)
-2. Daemon PTY passthrough (Phase 2 of ADR-035, post-workshop)
-3. ESP32 workshop prep: NVS/flash snapshot backend, dual-core audio FFI
+1. Fix ESP32 NVS snapshot backend (4 bugs: offset ignored on write/read, missing CMake dep, inverted erase error)
+2. ESP32 workshop prep: dual-core audio FFI, 15 pre-flashed boards
+3. Daemon PTY passthrough (Phase 2 of ADR-035, post-workshop)
 4. Interleaved kernel work: FROTH-Addr
 5. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
 
