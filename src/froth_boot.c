@@ -1,13 +1,19 @@
 #include "froth_boot.h"
-#include "froth_console_mux.h"
 #include "froth_evaluator.h"
 #include "froth_fmt.h"
 #include "froth_lib_core.h"
 #include "froth_primitives.h"
 #include "froth_repl.h"
-#include "froth_snapshot.h"
 #include "froth_vm.h"
 #include "platform.h"
+
+#ifdef FROTH_HAS_LINK
+#include "froth_console_mux.h"
+#endif
+
+#ifdef FROTH_HAS_SNAPSHOTS
+#include "froth_snapshot.h"
+#endif
 
 static void boot_fail(const char *step, froth_error_t err) {
   emit_string("boot: ");
@@ -83,6 +89,9 @@ void froth_boot(const froth_ffi_entry_t *board_bindings) {
     emit_string("boot: Safe Boot, skipped restore and autorun.");
   }
 
+#ifdef FROTH_HAS_LINK
   froth_console_mux_start(&froth_vm);
-  // froth_repl_start(&froth_vm);
+#else
+  froth_repl_start(&froth_vm);
+#endif
 }

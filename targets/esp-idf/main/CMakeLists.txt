@@ -29,7 +29,7 @@ idf_component_register(
     INCLUDE_DIRS
         "${FROTH_ROOT}/src"
         "${FROTH_ROOT}/boards/${FROTH_BOARD}"
-    REQUIRES driver
+    REQUIRES driver nvs_flash
 )
 
 # Froth compile-time configuration
@@ -43,6 +43,8 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
     FROTH_LINE_BUFFER_SIZE=1024
     FROTH_MAX_PERM_SIZE=8
     FROTH_VERSION="0.1.0"
+    FROTH_HAS_SNAPSHOTS=1
+    FROTH_SNAPSHOT_BLOCK_SIZE=2048
 )
 
 # Embed stdlib as C header

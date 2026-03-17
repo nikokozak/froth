@@ -7,6 +7,8 @@
 #include "freertos/task.h"
 #include "froth_types.h"
 #include "froth_vm.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 #include <stdio.h>
 #include <sys/select.h>
 #include <unistd.h>
@@ -29,6 +31,20 @@ froth_error_t platform_init(void) {
   uart_flush(UART_NUM_0); // Get rid of dirty RX data
   esp_vfs_dev_uart_use_driver(UART_NUM_0);
   esp_vfs_dev_uart_port_set_rx_line_endings(UART_NUM_0, ESP_LINE_ENDINGS_CR);
+
+  // Set up the NVS partition system
+  err = nvs_flash_init();
+  if (err == ESP_ERR_NVS_NO_FREE_PAGES ||
+      err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    // NVS partition was truncated and needs to be erased
+    // Retry nvs_flash_init
+    ESP_ERROR_CHECK(nvs_flash_erase());
+    err = nvs_flash_init();
+  }
+  if (err != ESP_OK) {
+    return FROTH_ERROR_IO;
+  }
+
   return FROTH_OK;
 }
 
@@ -80,4 +96,111 @@ _Noreturn void platform_fatal(void) {
   // esp_restart(); // Avoid this, it will result in an infinite loop.
   while (1) {
   };
+}
+
+froth_error_t platform_snapshot_write(uint8_t slot, uint32_t offset,
+                                      const uint8_t *buf, uint32_t len) {
+  nvs_handle_t handle;
+  uint8_t local_buf[FROTH_SNAPSHOT_BLOCK_SIZE];
+  const char *key = slot == 0 ? "snap_a" : "snap_b";
+
+  if (offset + len > FROTH_SNAPSHOT_BLOCK_SIZE) {
+    return FROTH_ERROR_SNAPSHOT_OVERFLOW;
+  }
+
+  esp_err_t err = nvs_open("froth", NVS_READWRITE, &handle);
+  if (err != ESP_OK) {
+    return FROTH_ERROR_IO;
+  }
+
+  // Read existing blob so we can merge, or start from zeroes
+  size_t existing_len = FROTH_SNAPSHOT_BLOCK_SIZE;
+  err = nvs_get_blob(handle, key, local_buf, &existing_len);
+  if (err == ESP_ERR_NVS_NOT_FOUND) {
+    memset(local_buf, 0, sizeof(local_buf));
+    existing_len = 0;
+  } else if (err != ESP_OK) {
+    nvs_close(handle);
+    return FROTH_ERROR_IO;
+  }
+
+  // Patch in the new bytes at the requested offset
+  memcpy(local_buf + offset, buf, len);
+
+  // New blob size is the larger of existing data and the write extent
+  size_t new_len = existing_len;
+  if (offset + len > new_len) {
+    new_len = offset + len;
+  }
+
+  err = nvs_set_blob(handle, key, local_buf, new_len);
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return FROTH_ERROR_IO;
+  }
+
+  err = nvs_commit(handle);
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return FROTH_ERROR_IO;
+  }
+
+  nvs_close(handle);
+  return FROTH_OK;
+}
+
+froth_error_t platform_snapshot_read(uint8_t slot, uint32_t offset,
+                                     uint8_t *buf, uint32_t len) {
+  nvs_handle_t handle;
+  uint8_t local_buf[FROTH_SNAPSHOT_BLOCK_SIZE];
+  const char *key = slot == 0 ? "snap_a" : "snap_b";
+
+  esp_err_t err = nvs_open("froth", NVS_READONLY, &handle);
+  if (err != ESP_OK) {
+    return FROTH_ERROR_IO;
+  }
+
+  size_t stored_len = FROTH_SNAPSHOT_BLOCK_SIZE;
+  err = nvs_get_blob(handle, key, local_buf, &stored_len);
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return FROTH_ERROR_IO;
+  }
+
+  if (offset + len > stored_len) {
+    nvs_close(handle);
+    return FROTH_ERROR_SNAPSHOT_FORMAT;
+  }
+
+  memcpy(buf, local_buf + offset, len);
+
+  nvs_close(handle);
+  return FROTH_OK;
+}
+
+froth_error_t platform_snapshot_erase(uint8_t slot) {
+  nvs_handle_t handle;
+
+  esp_err_t err = nvs_open("froth", NVS_READWRITE, &handle);
+  if (err != ESP_OK) {
+    return FROTH_ERROR_IO;
+  }
+
+  const char *key = slot == 0 ? "snap_a" : "snap_b";
+  err = nvs_erase_key(handle, key);
+  if (err == ESP_ERR_NVS_NOT_FOUND) {
+    // Nothing to erase, that's fine
+  } else if (err != ESP_OK) {
+    nvs_close(handle);
+    return FROTH_ERROR_IO;
+  }
+
+  err = nvs_commit(handle);
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return FROTH_ERROR_IO;
+  }
+
+  nvs_close(handle);
+  return FROTH_OK;
 }

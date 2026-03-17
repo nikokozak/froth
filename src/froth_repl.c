@@ -352,3 +352,28 @@ froth_error_t froth_repl_accept_byte(froth_vm_t *vm, char byte, int8_t *state) {
   *state = 0;
   return FROTH_OK;
 }
+
+/* Blocking REPL loop for targets without the console mux. */
+froth_error_t froth_repl_start(froth_vm_t *vm) {
+  static const char *prompt = "froth> ";
+  int8_t state;
+
+  FROTH_TRY(froth_repl_init(vm));
+  FROTH_TRY(emit_string(prompt));
+
+  while (1) {
+    uint8_t byte;
+    state = 0;
+
+    froth_error_t err = platform_key(&byte);
+    if (err != FROTH_OK)
+      continue;
+
+    FROTH_TRY(froth_repl_accept_byte(vm, byte, &state));
+
+    if (state == 1) {
+      FROTH_TRY(froth_repl_evaluate(vm));
+      FROTH_TRY(emit_string(prompt));
+    }
+  }
+}
