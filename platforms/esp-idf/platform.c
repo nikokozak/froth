@@ -98,10 +98,12 @@ _Noreturn void platform_fatal(void) {
   };
 }
 
+/* Shared NVS staging buffer. Static to keep it off the task stack (2KB). */
+static uint8_t nvs_staging[FROTH_SNAPSHOT_BLOCK_SIZE];
+
 froth_error_t platform_snapshot_write(uint8_t slot, uint32_t offset,
                                       const uint8_t *buf, uint32_t len) {
   nvs_handle_t handle;
-  uint8_t local_buf[FROTH_SNAPSHOT_BLOCK_SIZE];
   const char *key = slot == 0 ? "snap_a" : "snap_b";
 
   if (offset + len > FROTH_SNAPSHOT_BLOCK_SIZE) {
@@ -115,9 +117,9 @@ froth_error_t platform_snapshot_write(uint8_t slot, uint32_t offset,
 
   // Read existing blob so we can merge, or start from zeroes
   size_t existing_len = FROTH_SNAPSHOT_BLOCK_SIZE;
-  err = nvs_get_blob(handle, key, local_buf, &existing_len);
+  err = nvs_get_blob(handle, key, nvs_staging, &existing_len);
   if (err == ESP_ERR_NVS_NOT_FOUND) {
-    memset(local_buf, 0, sizeof(local_buf));
+    memset(nvs_staging, 0, sizeof(nvs_staging));
     existing_len = 0;
   } else if (err != ESP_OK) {
     nvs_close(handle);
@@ -125,7 +127,7 @@ froth_error_t platform_snapshot_write(uint8_t slot, uint32_t offset,
   }
 
   // Patch in the new bytes at the requested offset
-  memcpy(local_buf + offset, buf, len);
+  memcpy(nvs_staging + offset, buf, len);
 
   // New blob size is the larger of existing data and the write extent
   size_t new_len = existing_len;
@@ -133,7 +135,7 @@ froth_error_t platform_snapshot_write(uint8_t slot, uint32_t offset,
     new_len = offset + len;
   }
 
-  err = nvs_set_blob(handle, key, local_buf, new_len);
+  err = nvs_set_blob(handle, key, nvs_staging, new_len);
   if (err != ESP_OK) {
     nvs_close(handle);
     return FROTH_ERROR_IO;
@@ -152,7 +154,6 @@ froth_error_t platform_snapshot_write(uint8_t slot, uint32_t offset,
 froth_error_t platform_snapshot_read(uint8_t slot, uint32_t offset,
                                      uint8_t *buf, uint32_t len) {
   nvs_handle_t handle;
-  uint8_t local_buf[FROTH_SNAPSHOT_BLOCK_SIZE];
   const char *key = slot == 0 ? "snap_a" : "snap_b";
 
   esp_err_t err = nvs_open("froth", NVS_READONLY, &handle);
@@ -161,7 +162,7 @@ froth_error_t platform_snapshot_read(uint8_t slot, uint32_t offset,
   }
 
   size_t stored_len = FROTH_SNAPSHOT_BLOCK_SIZE;
-  err = nvs_get_blob(handle, key, local_buf, &stored_len);
+  err = nvs_get_blob(handle, key, nvs_staging, &stored_len);
   if (err != ESP_OK) {
     nvs_close(handle);
     return FROTH_ERROR_IO;
@@ -172,7 +173,7 @@ froth_error_t platform_snapshot_read(uint8_t slot, uint32_t offset,
     return FROTH_ERROR_SNAPSHOT_FORMAT;
   }
 
-  memcpy(buf, local_buf + offset, len);
+  memcpy(buf, nvs_staging + offset, len);
 
   nvs_close(handle);
   return FROTH_OK;
