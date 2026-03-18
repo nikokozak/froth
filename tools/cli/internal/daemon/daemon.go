@@ -52,12 +52,14 @@ type Daemon struct {
 	reqMu    sync.Mutex
 	reqIDSeq atomic.Uint32
 
-	// Single pending response slot. The serial reader delivers decoded
-	// frames here. Only one goroutine waits on replyCh at a time
-	// (enforced by reqMu).
-	replyCh chan frameResponse
+	// Per-request waiter. Before sending a frame, the caller registers
+	// a waiter with the expected request ID. The serial reader delivers
+	// matching frames directly. No buffering, no drain, no race.
+	waiterMu sync.Mutex
+	waiterID uint16              // expected request ID, 0 = no waiter
+	waiterCh chan frameResponse  // delivery channel, nil = no waiter
 
-	// Closed by handleDisconnect to unblock any waiting eval/reset/info.
+	// Closed by handleDisconnect to unblock any waiting request.
 	disconnectCh chan struct{}
 
 	// Connected RPC clients
@@ -80,7 +82,6 @@ func New(portPath string) *Daemon {
 		portPath:     portPath,
 		socketPath:   filepath.Join(frothDir, "daemon.sock"),
 		pidPath:      filepath.Join(frothDir, "daemon.pid"),
-		replyCh:      make(chan frameResponse, 1),
 		disconnectCh: make(chan struct{}),
 		clients:      make(map[*rpcConn]struct{}),
 		done:         make(chan struct{}),
@@ -260,8 +261,9 @@ func (d *Daemon) serialReadLoop() {
 	}
 }
 
-// deliverFrame decodes a raw COBS frame and sends it to replyCh.
-// If nobody is waiting, the frame is logged and dropped.
+// deliverFrame decodes a raw COBS frame and delivers it to the
+// registered waiter if the request ID matches. Unmatched or corrupt
+// frames are logged and dropped.
 func (d *Daemon) deliverFrame(raw []byte) {
 	decoded, err := protocol.COBSDecode(raw)
 	if err != nil {
@@ -275,11 +277,27 @@ func (d *Daemon) deliverFrame(raw []byte) {
 		return
 	}
 
-	resp := frameResponse{header: header, payload: payload}
-	select {
-	case d.replyCh <- resp:
-	default:
+	d.waiterMu.Lock()
+	ch := d.waiterCh
+	wantID := d.waiterID
+	d.waiterMu.Unlock()
+
+	if ch == nil {
 		log.Printf("frame: no waiter, dropping %s (id=%d)", msgTypeName(header.MessageType), header.RequestID)
+		return
+	}
+
+	if header.RequestID != wantID {
+		log.Printf("frame: stale (got id=%d, want %d), dropping", header.RequestID, wantID)
+		return
+	}
+
+	// Deliver to the waiting goroutine. Non-blocking because the channel
+	// has capacity 1 and only one waiter exists at a time (reqMu).
+	select {
+	case ch <- frameResponse{header: header, payload: payload}:
+	default:
+		log.Printf("frame: waiter channel full, dropping %s (id=%d)", msgTypeName(header.MessageType), header.RequestID)
 	}
 }
 
@@ -472,33 +490,43 @@ func (d *Daemon) sendFrame(msgType byte, reqID uint16, payload []byte) error {
 	return port.Write(wire)
 }
 
-// waitResponse blocks until the serial reader delivers a frame, the
-// device disconnects, or the daemon shuts down. No timeout — eval can
-// run indefinitely. The caller holds reqMu so only one waiter exists.
-func (d *Daemon) waitResponse(reqID uint16) (*protocol.Header, []byte, error) {
-	// Drain any stale frame from a previous request
-	select {
-	case <-d.replyCh:
-	default:
-	}
+// registerWaiter sets up a per-request delivery channel. The serial
+// reader will deliver matching frames here. Must be called before
+// sending the frame. The caller holds reqMu so only one waiter exists.
+func (d *Daemon) registerWaiter(reqID uint16) chan frameResponse {
+	ch := make(chan frameResponse, 1)
+	d.waiterMu.Lock()
+	d.waiterID = reqID
+	d.waiterCh = ch
+	d.waiterMu.Unlock()
+	return ch
+}
 
-	for {
-		select {
-		case resp := <-d.replyCh:
-			if resp.err != nil {
-				return nil, nil, resp.err
-			}
-			// Check request ID — discard stale responses
-			if resp.header.RequestID != reqID {
-				log.Printf("frame: discard stale (got ID %d, want %d)", resp.header.RequestID, reqID)
-				continue
-			}
-			return resp.header, resp.payload, nil
-		case <-d.disconnectCh:
-			return nil, nil, ErrDisconnected
-		case <-d.done:
-			return nil, nil, fmt.Errorf("daemon shutting down")
+// clearWaiter removes the registered waiter. Called after waitResponse
+// returns, whether success or error.
+func (d *Daemon) clearWaiter() {
+	d.waiterMu.Lock()
+	d.waiterID = 0
+	d.waiterCh = nil
+	d.waiterMu.Unlock()
+}
+
+// waitResponse blocks until the serial reader delivers a matching frame,
+// the device disconnects, or the daemon shuts down. No timeout — eval
+// can run indefinitely. The caller must have called registerWaiter first.
+func (d *Daemon) waitResponse(ch chan frameResponse) (*protocol.Header, []byte, error) {
+	defer d.clearWaiter()
+
+	select {
+	case resp := <-ch:
+		if resp.err != nil {
+			return nil, nil, resp.err
 		}
+		return resp.header, resp.payload, nil
+	case <-d.disconnectCh:
+		return nil, nil, ErrDisconnected
+	case <-d.done:
+		return nil, nil, fmt.Errorf("daemon shutting down")
 	}
 }
 
@@ -522,11 +550,13 @@ func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 		reqID := d.allocReqID()
 		payload := protocol.BuildEvalPayload(chunk)
 
+		ch := d.registerWaiter(reqID)
 		if err := d.sendFrame(protocol.EvalReq, reqID, payload); err != nil {
+			d.clearWaiter()
 			return nil, fmt.Errorf("write: %w", err)
 		}
 
-		header, respPayload, err := d.waitResponse(reqID)
+		header, respPayload, err := d.waitResponse(ch)
 		if err != nil {
 			return nil, err
 		}
@@ -576,11 +606,13 @@ func (d *Daemon) deviceInfo() (*InfoResult, error) {
 	defer d.reqMu.Unlock()
 
 	reqID := d.allocReqID()
+	ch := d.registerWaiter(reqID)
 	if err := d.sendFrame(protocol.InfoReq, reqID, nil); err != nil {
+		d.clearWaiter()
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
-	header, respPayload, err := d.waitResponse(reqID)
+	header, respPayload, err := d.waitResponse(ch)
 	if err != nil {
 		return nil, err
 	}
@@ -617,11 +649,13 @@ func (d *Daemon) deviceReset() (*ResetResult, error) {
 	defer d.reqMu.Unlock()
 
 	reqID := d.allocReqID()
+	ch := d.registerWaiter(reqID)
 	if err := d.sendFrame(protocol.ResetReq, reqID, nil); err != nil {
+		d.clearWaiter()
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
-	header, respPayload, err := d.waitResponse(reqID)
+	header, respPayload, err := d.waitResponse(ch)
 	if err != nil {
 		return nil, err
 	}
