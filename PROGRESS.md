@@ -1,6 +1,6 @@
 # Froth Implementation Progress
 
-*Last updated: 2026-03-17*
+*Last updated: 2026-03-18*
 
 ## Current Status
 
@@ -112,6 +112,9 @@
 - End-to-end proof: Go CLI ↔ POSIX Froth binary via socat PTY pair. `info` prints device metadata, `send "1 2 +"` returns `[3]`, `send "1 drop drop"` returns `error(2) in "perm"`. Device stack persists across EVAL requests (expected).
 - CLI commands: `doctor` (Go, cmake, make, serial ports, ESP-IDF, device probe), `build` (POSIX cmake+make or ESP-IDF idf.py, project root auto-detection), `flash` (ESP-IDF with port detection, POSIX prints binary path).
 - Daemon skeleton (ADR-035): Unix domain socket at `~/.froth/daemon.sock`, JSON-RPC 2.0, serial connection ownership, reconnect on device loss, event broadcast (console, connected, disconnected, reconnecting). `froth daemon start|stop|status`. CLI auto-detects daemon, `--serial` forces bypass, `--daemon` forces routing. Concurrency reviewed: atomic reconnect guard, sync.Once for shutdown, broadcast outside lock, nil-map guard on client disconnect.
+- ESP-IDF link layer enabled: `FROTH_HAS_LINK=1` in ESP-IDF CMakeLists, transport/link/mux sources added. Full host CLI ↔ ESP32 protocol proven on real hardware: info, eval, reset, strings, redefine-after-reset.
+- ESP32 binary-safe UART: VFS line-ending conversion disabled (both RX and TX set to `ESP_LINE_ENDINGS_LF` = no conversion). CR → LF and CRLF coalescing handled at the mux/REPL level in direct mode only. Frame mode gets raw bytes. Fixes COBS frame corruption from 0x0D → 0x0A translation.
+- ESP32 `platform_key` 0x03 fix: sets interrupt flag as side effect but returns the byte normally. Mux clears the false interrupt in frame mode (0x03 is COBS data there). Direct mode and blocking REPL consume 0x03 as interrupt. `key` prim returns the byte, executor safe-point check fires interrupt. All three line endings (CR, LF, CRLF) tested and correct.
 - VS Code extension skeleton (`tools/vscode/`): TypeScript, strict mode, zero dependencies. `daemon-client.ts` (JSON-RPC 2.0 over Unix socket, mirrors Go client architecture). `extension.ts` (FrothController: auto-connect, reconnect, status bar with 3 states, `froth.sendSelection` Cmd+Enter, `froth.sendFile`, "Froth Console" output channel streaming daemon events). Self-review + Codex review, 5 issues found and fixed (socket error handling, concurrent connect guard, error_code undefined fallback, id type validation, buffer cleanup).
 
 ## In Progress
@@ -134,7 +137,7 @@
 
 ## Open Questions
 
-- CS holds `froth_cell_t` currently and is unused — will it need a different entry type for the eventual trampoline refactor? (deferred to FROTH-Perf)
+- ~~CS holds `froth_cell_t` currently and is unused~~: resolved — CS now uses `froth_cs_frame_t` (two-cell struct) with purpose-built `froth_cs_t` stack type. Trampoline executor (ADR-040).
 - `divmod`: INT_MIN / -1 is UB in C (result overflows). Need to decide: wrap or error? (deferred — make wrapping normative in spec, see TIMELINE deferred/near-term)
 - Tick syntax: spec grammar says `'name` (prefix, no space) but spec examples use `' name` (space-separated). Reader currently requires prefix form. Need ADR to pick one. (deferred — not blocking)
 - `while` stack discipline: too strict for REPL exploration? Revisit after `>r`/`r>`/`r@` and `times` exist — the pressure may ease naturally. (deferred)

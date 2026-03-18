@@ -73,7 +73,7 @@ WATCH_REQ can only be sent when no eval is active (between evals). The device re
 
 ### Required prerequisite
 
-Fix the ESP32 0x03 bug: `platform_key()` on ESP-IDF must not treat 0x03 as interrupt before the mux classifies it. The mux owns byte classification, not the platform layer. This fix is independent of probes but blocks any mid-eval frame handling.
+~~Fix the ESP32 0x03 bug~~: **Resolved (2026-03-18).** `platform_key()` now returns 0x03 as a normal byte with the interrupt flag set as a side effect. The mux clears the flag in frame mode (0x03 is COBS data). VFS line-ending conversion also disabled (both RX and TX) to prevent 0x0D corruption of binary frames. CR → LF and CRLF coalescing handled at the mux/REPL level.
 
 ### Host-side (daemon)
 

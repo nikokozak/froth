@@ -254,10 +254,10 @@
 - [x] Interrupt stops runaway loop
 - [x] `save` survives power cycle on ESP32
 - [x] `wipe` returns to base-only state
-- [ ] `"Hello" s.emit` works
-- [ ] Hex literals work (`0xFF`)
+- [x] `"Hello" s.emit` works
+- [x] Hex literals work (`0xFF`)
 - [ ] Synth audio controllable from Froth REPL
-- [ ] Host tooling can push code to device (CLI or VS Code via FROTH-LINK/1)
+- [x] Host tooling can push code to device (CLI or VS Code via FROTH-LINK/1)
 - [ ] 15 pre-flashed ESP32 boards ready
 
 ## Deferred (post-workshop)
