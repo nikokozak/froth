@@ -52,6 +52,10 @@ froth_error_t platform_init(void) {
 }
 
 froth_error_t platform_emit(uint8_t byte) {
+  /* 0x00 is the COBS frame delimiter on the wire. Console output
+     containing NUL would corrupt the host's frame parser. Skip it. */
+  if (byte == 0x00)
+    return FROTH_OK;
   /* Terminal expects \r\n. VFS conversion is off (binary safety for COBS),
      so we prepend \r before \n here for REPL/console output. */
   if (byte == '\n')
