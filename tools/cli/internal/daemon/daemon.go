@@ -35,8 +35,9 @@ type Daemon struct {
 	portMu sync.Mutex
 
 	// One FROTH-LINK/1 transaction at a time
-	reqMu   sync.Mutex
-	frameCh chan []byte
+	reqMu    sync.Mutex
+	frameCh  chan []byte
+	reqIDSeq atomic.Uint32
 
 	// Connected RPC clients
 	clients   map[*rpcConn]struct{}
@@ -370,8 +371,9 @@ func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 
 	drainFrames(d.frameCh)
 
+	reqID := d.allocReqID()
 	payload := protocol.BuildEvalPayload(source)
-	wire, err := protocol.EncodeWireFrame(protocol.EvalReq, 1, payload)
+	wire, err := protocol.EncodeWireFrame(protocol.EvalReq, reqID, payload)
 	if err != nil {
 		return nil, fmt.Errorf("build frame: %w", err)
 	}
@@ -380,19 +382,9 @@ func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
-	encoded, err := d.waitFrame(rpcTimeout)
+	header, respPayload, err := d.waitValidResponse(reqID, rpcTimeout)
 	if err != nil {
 		return nil, err
-	}
-
-	decoded, err := protocol.COBSDecode(encoded)
-	if err != nil {
-		return nil, fmt.Errorf("cobs decode: %w", err)
-	}
-
-	header, respPayload, err := protocol.ParseFrame(decoded)
-	if err != nil {
-		return nil, fmt.Errorf("parse frame: %w", err)
 	}
 
 	switch header.MessageType {
@@ -433,7 +425,8 @@ func (d *Daemon) deviceInfo() (*InfoResult, error) {
 
 	drainFrames(d.frameCh)
 
-	wire, err := protocol.EncodeWireFrame(protocol.InfoReq, 1, nil)
+	reqID := d.allocReqID()
+	wire, err := protocol.EncodeWireFrame(protocol.InfoReq, reqID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build frame: %w", err)
 	}
@@ -442,19 +435,9 @@ func (d *Daemon) deviceInfo() (*InfoResult, error) {
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
-	encoded, err := d.waitFrame(rpcTimeout)
+	header, respPayload, err := d.waitValidResponse(reqID, rpcTimeout)
 	if err != nil {
 		return nil, err
-	}
-
-	decoded, err := protocol.COBSDecode(encoded)
-	if err != nil {
-		return nil, fmt.Errorf("cobs decode: %w", err)
-	}
-
-	header, respPayload, err := protocol.ParseFrame(decoded)
-	if err != nil {
-		return nil, fmt.Errorf("parse frame: %w", err)
 	}
 
 	if header.MessageType != protocol.InfoRes {
@@ -491,7 +474,8 @@ func (d *Daemon) deviceReset() (*ResetResult, error) {
 
 	drainFrames(d.frameCh)
 
-	wire, err := protocol.EncodeWireFrame(protocol.ResetReq, 1, nil)
+	reqID := d.allocReqID()
+	wire, err := protocol.EncodeWireFrame(protocol.ResetReq, reqID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build frame: %w", err)
 	}
@@ -500,19 +484,9 @@ func (d *Daemon) deviceReset() (*ResetResult, error) {
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
-	encoded, err := d.waitFrame(rpcTimeout)
+	header, respPayload, err := d.waitValidResponse(reqID, rpcTimeout)
 	if err != nil {
 		return nil, err
-	}
-
-	decoded, err := protocol.COBSDecode(encoded)
-	if err != nil {
-		return nil, fmt.Errorf("cobs decode: %w", err)
-	}
-
-	header, respPayload, err := protocol.ParseFrame(decoded)
-	if err != nil {
-		return nil, fmt.Errorf("parse frame: %w", err)
 	}
 
 	switch header.MessageType {
@@ -544,14 +518,56 @@ func (d *Daemon) deviceReset() (*ResetResult, error) {
 	}, nil
 }
 
-func (d *Daemon) waitFrame(timeout time.Duration) ([]byte, error) {
-	select {
-	case frame := <-d.frameCh:
-		return frame, nil
-	case <-time.After(timeout):
-		return nil, fmt.Errorf("device response timeout")
-	case <-d.done:
-		return nil, fmt.Errorf("daemon shutting down")
+// allocReqID returns a unique request ID in the range [1, 0xFFFE].
+func (d *Daemon) allocReqID() uint16 {
+	id := d.reqIDSeq.Add(1)
+	return uint16((id % 0xFFFE) + 1)
+}
+
+// waitValidResponse reads frames from frameCh until one decodes
+// successfully and has a matching request ID, or until timeout.
+// Corrupt frames and ID mismatches are discarded and retried.
+// This prevents stale or corrupt frames from poisoning subsequent RPCs.
+func (d *Daemon) waitValidResponse(reqID uint16, timeout time.Duration) (*protocol.Header, []byte, error) {
+	deadline := time.Now().Add(timeout)
+
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, nil, fmt.Errorf("device response timeout")
+		}
+
+		// Wait for next raw COBS frame from the serial read loop
+		var encoded []byte
+		select {
+		case encoded = <-d.frameCh:
+		case <-time.After(remaining):
+			return nil, nil, fmt.Errorf("device response timeout")
+		case <-d.done:
+			return nil, nil, fmt.Errorf("daemon shutting down")
+		}
+
+		// Decode COBS — if corrupt, discard and retry
+		decoded, err := protocol.COBSDecode(encoded)
+		if err != nil {
+			log.Printf("frame: discard corrupt COBS (%v)", err)
+			continue
+		}
+
+		// Parse header — if invalid, discard and retry
+		header, payload, err := protocol.ParseFrame(decoded)
+		if err != nil {
+			log.Printf("frame: discard bad frame (%v)", err)
+			continue
+		}
+
+		// Check request ID — if stale, discard and retry
+		if header.RequestID != reqID {
+			log.Printf("frame: discard stale response (got ID %d, want %d)", header.RequestID, reqID)
+			continue
+		}
+
+		return header, payload, nil
 	}
 }
 

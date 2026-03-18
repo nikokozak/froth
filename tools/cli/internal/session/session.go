@@ -3,6 +3,7 @@ package session
 import (
 	"fmt"
 	"io"
+	"log"
 	"sync/atomic"
 	"time"
 
@@ -66,6 +67,44 @@ func (s *Session) SetPassthrough(w io.Writer) {
 	s.port.PassthroughWriter = w
 }
 
+// waitValidResponse reads frames from serial until one decodes
+// successfully and has a matching request ID, or until timeout.
+// Corrupt frames and ID mismatches are discarded and retried.
+func (s *Session) waitValidResponse(reqID uint16, timeout time.Duration) (*protocol.Header, []byte, error) {
+	deadline := time.Now().Add(timeout)
+
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, nil, fmt.Errorf("device response timeout")
+		}
+
+		encoded, err := s.port.ReadFrame(remaining)
+		if err != nil {
+			return nil, nil, fmt.Errorf("read response: %w", err)
+		}
+
+		decoded, err := protocol.COBSDecode(encoded)
+		if err != nil {
+			log.Printf("frame: discard corrupt COBS (%v)", err)
+			continue
+		}
+
+		header, payload, err := protocol.ParseFrame(decoded)
+		if err != nil {
+			log.Printf("frame: discard bad frame (%v)", err)
+			continue
+		}
+
+		if header.RequestID != reqID {
+			log.Printf("frame: discard stale response (got ID %d, want %d)", header.RequestID, reqID)
+			continue
+		}
+
+		return header, payload, nil
+	}
+}
+
 // Reset sends a RESET_REQ, which resets the device state to a "bare" firmware boot (no user code).
 func (s *Session) Reset() (*protocol.ResetResponse, error) {
 	reqID := s.allocReqID()
@@ -79,19 +118,9 @@ func (s *Session) Reset() (*protocol.ResetResponse, error) {
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
-	encoded, err := s.port.ReadFrame(DefaultTimeout)
+	header, respPayload, err := s.waitValidResponse(reqID, DefaultTimeout)
 	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
-	decoded, err := protocol.COBSDecode(encoded)
-	if err != nil {
-		return nil, fmt.Errorf("cobs decode: %w", err)
-	}
-
-	header, respPayload, err := protocol.ParseFrame(decoded)
-	if err != nil {
-		return nil, fmt.Errorf("parse frame: %w", err)
+		return nil, err
 	}
 
 	switch header.MessageType {
@@ -123,19 +152,9 @@ func (s *Session) Eval(source string) (*protocol.EvalResponse, error) {
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
-	encoded, err := s.port.ReadFrame(DefaultTimeout)
+	header, respPayload, err := s.waitValidResponse(reqID, DefaultTimeout)
 	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
-	decoded, err := protocol.COBSDecode(encoded)
-	if err != nil {
-		return nil, fmt.Errorf("cobs decode: %w", err)
-	}
-
-	header, respPayload, err := protocol.ParseFrame(decoded)
-	if err != nil {
-		return nil, fmt.Errorf("parse frame: %w", err)
+		return nil, err
 	}
 
 	switch header.MessageType {
