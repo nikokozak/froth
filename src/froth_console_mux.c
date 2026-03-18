@@ -15,6 +15,7 @@ typedef enum { MUX_DIRECT, MUX_FRAME } mux_state_t;
 froth_error_t froth_console_mux_start(froth_vm_t *vm) {
   int8_t reader_state;
   mux_state_t mode = MUX_DIRECT;
+  int last_was_cr = 0;
   FROTH_TRY(emit_string(prompt_normal));
 
   while (1) {
@@ -33,6 +34,10 @@ froth_error_t froth_console_mux_start(froth_vm_t *vm) {
         mode = MUX_DIRECT;
       } else {
         froth_link_frame_byte(byte);
+        /* On ESP32, platform_key sets the interrupt flag for any 0x03.
+           Inside a COBS frame, 0x03 is data, not an interrupt. */
+        if (byte == 0x03)
+          vm->interrupted = 0;
       }
       continue;
     }
@@ -45,12 +50,19 @@ froth_error_t froth_console_mux_start(froth_vm_t *vm) {
     }
 #endif
 
-    /* Ctrl-C in direct mode triggers interrupt, not passed to REPL.
-       Inside a COBS frame, 0x03 is data (handled above in MUX_FRAME). */
+    /* Ctrl-C in direct mode triggers interrupt, not passed to REPL. */
     if (byte == 0x03) {
       vm->interrupted = 1;
       continue;
     }
+
+    /* CRLF coalescing: CR was already converted to LF below. If the
+       next byte is LF (trailing half of CRLF), swallow it. */
+    if (byte == '\n' && last_was_cr) {
+      last_was_cr = 0;
+      continue;
+    }
+    last_was_cr = (byte == '\r');
 
     /* CR → LF for REPL (VFS conversion is disabled for binary safety). */
     if (byte == '\r')

@@ -61,9 +61,14 @@ froth_error_t platform_key(uint8_t *byte) {
   if (c == EOF) {
     return FROTH_ERROR_IO;
   }
-  /* Return raw bytes including 0x03 (Ctrl-C). Interrupt handling
-     belongs to the caller (mux or blocking REPL), which knows whether
-     the byte is inside a COBS frame (data) or direct mode (interrupt). */
+  /* Set interrupt flag on 0x03 but still return the byte. The caller
+     decides context: the mux clears the flag in frame mode (0x03 is
+     data there), direct mode and the blocking REPL consume it as an
+     interrupt, and the key prim returns it to user code where the
+     executor's safe-point check will fire the interrupt. */
+  if (c == 0x03) {
+    froth_vm.interrupted = 1;
+  }
   *byte = (uint8_t)c;
   return FROTH_OK;
 }

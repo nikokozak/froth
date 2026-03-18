@@ -362,6 +362,7 @@ froth_error_t froth_repl_accept_byte(froth_vm_t *vm, char byte, int8_t *state) {
 froth_error_t froth_repl_start(froth_vm_t *vm) {
   static const char *prompt = "froth> ";
   int8_t state;
+  int last_was_cr = 0;
 
   FROTH_TRY(froth_repl_init(vm));
   FROTH_TRY(emit_string(prompt));
@@ -380,6 +381,14 @@ froth_error_t froth_repl_start(froth_vm_t *vm) {
       vm->interrupted = 1;
       continue;
     }
+
+    /* CRLF coalescing: if CR was converted to LF on the previous byte,
+       swallow a trailing LF (the second half of CRLF). */
+    if (byte == '\n' && last_was_cr) {
+      last_was_cr = 0;
+      continue;
+    }
+    last_was_cr = (byte == '\r');
 
     /* CR → LF (VFS conversion is disabled for binary safety on ESP32). */
     if (byte == '\r')
