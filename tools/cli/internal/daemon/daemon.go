@@ -21,6 +21,11 @@ import (
 const (
 	reconnectInterval = 2 * time.Second
 	serialReadTimeout = 100 * time.Millisecond
+	// Safety timeout for non-eval operations (info, reset, hello).
+	// These should respond within milliseconds. 10s catches transport
+	// failures (malformed frame dropped by device, no reply) without
+	// interfering with normal operation. Eval uses 0 (no timeout).
+	commandTimeout = 10 * time.Second
 )
 
 var ErrDisconnected = errors.New("device disconnected")
@@ -512,10 +517,16 @@ func (d *Daemon) clearWaiter() {
 }
 
 // waitResponse blocks until the serial reader delivers a matching frame,
-// the device disconnects, or the daemon shuts down. No timeout — eval
-// can run indefinitely. The caller must have called registerWaiter first.
-func (d *Daemon) waitResponse(ch chan frameResponse) (*protocol.Header, []byte, error) {
+// the device disconnects, or the daemon shuts down.
+// If timeout > 0, gives up after that duration (for info/reset/hello).
+// If timeout == 0, waits indefinitely (for eval — programs can run forever).
+func (d *Daemon) waitResponse(ch chan frameResponse, timeout time.Duration) (*protocol.Header, []byte, error) {
 	defer d.clearWaiter()
+
+	var timeoutCh <-chan time.Time
+	if timeout > 0 {
+		timeoutCh = time.After(timeout)
+	}
 
 	select {
 	case resp := <-ch:
@@ -527,6 +538,8 @@ func (d *Daemon) waitResponse(ch chan frameResponse) (*protocol.Header, []byte, 
 		return nil, nil, ErrDisconnected
 	case <-d.done:
 		return nil, nil, fmt.Errorf("daemon shutting down")
+	case <-timeoutCh:
+		return nil, nil, fmt.Errorf("device response timeout")
 	}
 }
 
@@ -556,7 +569,7 @@ func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 			return nil, fmt.Errorf("write: %w", err)
 		}
 
-		header, respPayload, err := d.waitResponse(ch)
+		header, respPayload, err := d.waitResponse(ch, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -612,7 +625,7 @@ func (d *Daemon) deviceInfo() (*InfoResult, error) {
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
-	header, respPayload, err := d.waitResponse(ch)
+	header, respPayload, err := d.waitResponse(ch, commandTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -655,7 +668,7 @@ func (d *Daemon) deviceReset() (*ResetResult, error) {
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
-	header, respPayload, err := d.waitResponse(ch)
+	header, respPayload, err := d.waitResponse(ch, commandTimeout)
 	if err != nil {
 		return nil, err
 	}
