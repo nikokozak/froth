@@ -152,24 +152,42 @@ func (s *Session) Reset() (*protocol.ResetResponse, error) {
 const maxEvalSource = protocol.MaxPayload - 3
 
 // chunkSource splits source into pieces that fit in one EVAL_REQ.
-// Splits on newline boundaries. Identical to daemon.chunkSource.
+// Splits only at top-level boundaries (depth == 0 after tracking
+// brackets and colon-semicolon nesting).
 func chunkSource(source string) []string {
 	lines := strings.SplitAfter(source, "\n")
 	var chunks []string
 	var current strings.Builder
+	depth := 0
 
 	for _, line := range lines {
 		if line == "" {
 			continue
 		}
-		if current.Len() > 0 && current.Len()+len(line) > maxEvalSource {
-			chunks = append(chunks, current.String())
-			current.Reset()
-		}
+
 		current.WriteString(line)
-		if current.Len() >= maxEvalSource {
-			chunks = append(chunks, current.String())
-			current.Reset()
+
+		for _, ch := range line {
+			switch ch {
+			case '[':
+				depth++
+			case ']', ';':
+				if depth > 0 {
+					depth--
+				}
+			case ':':
+				depth++
+			}
+		}
+
+		if depth == 0 && current.Len() > 0 {
+			if current.Len() >= maxEvalSource || !strings.HasSuffix(line, "\n") {
+				chunks = append(chunks, current.String())
+				current.Reset()
+			} else if current.Len() > maxEvalSource*3/4 {
+				chunks = append(chunks, current.String())
+				current.Reset()
+			}
 		}
 	}
 	if current.Len() > 0 {

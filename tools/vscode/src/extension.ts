@@ -6,6 +6,7 @@ import {
   ConsoleEvent,
   ConnectedEvent,
   EvalResult,
+  InfoResult,
   StatusResult,
 } from "./daemon-client";
 
@@ -76,6 +77,7 @@ class FrothController {
   private connecting = false;
   private disposed = false;
   private deviceStatus: StatusResult | null = null;
+  private liveInfo: InfoResult | null = null;
   private stateListeners: StateChangeListener[] = [];
 
   constructor(
@@ -101,6 +103,10 @@ class FrothController {
 
   getDeviceStatus(): StatusResult | null {
     return this.deviceStatus;
+  }
+
+  getLiveInfo(): InfoResult | null {
+    return this.liveInfo;
   }
 
   start(): void {
@@ -208,7 +214,9 @@ class FrothController {
 
     try {
       const result = await this.client.eval(cmd);
-      if (result.status !== 0) {
+      // Error code 20 is FROTH_ERROR_RESET, returned by wipe and
+      // dangerous-reset. It's a success signal, not a real error.
+      if (result.status !== 0 && result.error_code !== 20) {
         this.output.appendLine(
           `[froth] ${cmd}: error(${result.error_code ?? 0})`,
         );
@@ -228,6 +236,14 @@ class FrothController {
     }
     try {
       this.deviceStatus = await this.client.status();
+      // Fetch live device metrics (heap, slots) via info(),
+      // since status() only returns the cached HELLO snapshot.
+      if (this.deviceStatus.connected) {
+        const live = await this.client.info();
+        this.liveInfo = live;
+      } else {
+        this.liveInfo = null;
+      }
       this.notifyStateChange();
     } catch {
       // ignore
@@ -297,6 +313,7 @@ class FrothController {
       case "disconnected":
         this.setState("disconnected");
         this.deviceStatus = null;
+        this.liveInfo = null;
         this.output.appendLine("[froth] device disconnected");
         break;
       case "reconnecting":
@@ -311,6 +328,7 @@ class FrothController {
       this.client = null;
     }
     this.deviceStatus = null;
+    this.liveInfo = null;
     this.setState("no-daemon");
     this.output.appendLine("[froth] daemon connection lost");
     this.scheduleReconnect();
@@ -459,18 +477,28 @@ class FrothSidebarProvider implements vscode.TreeDataProvider<SidebarItem> {
     }
 
     const dev = status.device;
+    const live = this.controller.getLiveInfo();
+
     items.push(new SidebarItem(`${dev.board}`, `v${dev.version}`, "$(circuit-board)"));
+
+    // Use live info for heap/slots when available (refreshed after each eval/reset)
+    const heapUsed = live ? live.heap_used : dev.heap_used;
+    const heapSize = live ? live.heap_size : dev.heap_size;
+    const overlayUsed = live ? live.heap_overlay_used : 0;
+    const slotCount = live ? live.slot_count : dev.slot_count;
+    const overlaySlots = live ? live.slot_overlay_count : 0;
+
     items.push(
       new SidebarItem(
-        `Heap: ${status.device.heap_used} / ${status.device.heap_size}`,
-        "",
+        `Heap: ${heapUsed} / ${heapSize}`,
+        overlayUsed > 0 ? `(${overlayUsed} user)` : "",
         "$(database)",
       ),
     );
     items.push(
       new SidebarItem(
-        `Slots: ${status.device.slot_count}`,
-        "",
+        `Slots: ${slotCount}`,
+        overlaySlots > 0 ? `(${overlaySlots} user)` : "",
         "$(symbol-variable)",
       ),
     );

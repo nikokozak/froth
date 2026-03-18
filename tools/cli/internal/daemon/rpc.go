@@ -150,18 +150,22 @@ func (c *rpcConn) serve() {
 
 func (c *rpcConn) handleRequest(req *rpcRequest) {
 	switch req.Method {
-	case "hello":
-		c.handleHello(req)
-	case "eval":
-		c.handleEval(req)
-	case "info":
-		c.handleInfo(req)
-	case "status":
-		c.handleStatus(req)
-	case "reset":
-		c.handleReset(req)
+	// Interrupt and status are handled inline so they can execute
+	// while a blocking eval/reset is in progress on this connection.
 	case "interrupt":
 		c.handleInterrupt(req)
+	case "status":
+		c.handleStatus(req)
+	// Blocking device operations are dispatched in a goroutine so
+	// the RPC reader stays live for interrupt requests.
+	case "hello":
+		go c.handleHello(req)
+	case "eval":
+		go c.handleEval(req)
+	case "info":
+		go c.handleInfo(req)
+	case "reset":
+		go c.handleReset(req)
 	default:
 		c.sendError(req.ID, errMethodNotFound, "unknown method: "+req.Method)
 	}

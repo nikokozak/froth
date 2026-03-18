@@ -361,28 +361,54 @@ func (d *Daemon) shutdown() {
 const maxEvalSource = protocol.MaxPayload - 3
 
 // chunkSource splits source into pieces that each fit in one EVAL_REQ.
-// Splits on newline boundaries so expressions aren't cut mid-token.
-// A single line longer than maxEvalSource is sent as-is (the device
-// will reject it with a frame error, which is the correct behavior).
+// Splits only at top-level boundaries (after newlines where bracket and
+// colon depth is zero), so multi-line forms like `: foo\n  dup +\n;`
+// are never broken across chunks.
 func chunkSource(source string) []string {
 	lines := strings.SplitAfter(source, "\n")
 	var chunks []string
 	var current strings.Builder
+	depth := 0
 
 	for _, line := range lines {
 		if line == "" {
 			continue
 		}
-		// If adding this line would overflow, flush the current chunk
-		if current.Len() > 0 && current.Len()+len(line) > maxEvalSource {
-			chunks = append(chunks, current.String())
-			current.Reset()
-		}
+
 		current.WriteString(line)
-		// If a single line exceeds the limit, flush it as its own chunk
-		if current.Len() >= maxEvalSource {
-			chunks = append(chunks, current.String())
-			current.Reset()
+
+		// Track nesting depth. This is a lightweight scan, not a full
+		// parser — it counts [ ] : ; to decide when we're at top level.
+		for _, ch := range line {
+			switch ch {
+			case '[':
+				depth++
+			case ']', ';':
+				if depth > 0 {
+					depth--
+				}
+			case ':':
+				depth++
+			}
+		}
+
+		// Only consider flushing at top-level (depth == 0) and at a
+		// newline boundary. If the chunk is approaching the limit,
+		// flush it. If a single form exceeds the limit, let it through
+		// as one chunk — the device will evaluate it if it fits in its
+		// own payload, or error cleanly if it doesn't.
+		if depth == 0 && current.Len() > 0 {
+			if current.Len() >= maxEvalSource || !strings.HasSuffix(line, "\n") {
+				chunks = append(chunks, current.String())
+				current.Reset()
+			} else {
+				// Check if the next line would overflow
+				// For now, just flush if we're past 75% capacity
+				if current.Len() > maxEvalSource*3/4 {
+					chunks = append(chunks, current.String())
+					current.Reset()
+				}
+			}
 		}
 	}
 	if current.Len() > 0 {
