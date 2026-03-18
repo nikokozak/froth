@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -137,38 +138,86 @@ func (s *Session) Reset() (*protocol.ResetResponse, error) {
 	}
 }
 
-// Eval sends Froth source for evaluation and returns the result.
-func (s *Session) Eval(source string) (*protocol.EvalResponse, error) {
-	reqID := s.allocReqID()
+// maxEvalSource is the maximum source bytes per EVAL_REQ frame.
+const maxEvalSource = protocol.MaxPayload - 3
 
-	payload := protocol.BuildEvalPayload(source)
+// chunkSource splits source into pieces that fit in one EVAL_REQ.
+// Splits on newline boundaries. Identical to daemon.chunkSource.
+func chunkSource(source string) []string {
+	lines := strings.SplitAfter(source, "\n")
+	var chunks []string
+	var current strings.Builder
 
-	wire, err := protocol.EncodeWireFrame(protocol.EvalReq, reqID, payload)
-	if err != nil {
-		return nil, fmt.Errorf("build frame: %w", err)
-	}
-
-	if err := s.port.Write(wire); err != nil {
-		return nil, fmt.Errorf("write: %w", err)
-	}
-
-	header, respPayload, err := s.waitValidResponse(reqID, DefaultTimeout)
-	if err != nil {
-		return nil, err
-	}
-
-	switch header.MessageType {
-	case protocol.EvalRes:
-		return protocol.ParseEvalResponse(respPayload)
-	case protocol.Error:
-		errResp, parseErr := protocol.ParseErrorResponse(respPayload)
-		if parseErr != nil {
-			return nil, parseErr
+	for _, line := range lines {
+		if line == "" {
+			continue
 		}
-		return nil, fmt.Errorf("device error (cat %d): %s", errResp.Category, errResp.Detail)
-	default:
-		return nil, fmt.Errorf("unexpected response type: 0x%02x", header.MessageType)
+		if current.Len() > 0 && current.Len()+len(line) > maxEvalSource {
+			chunks = append(chunks, current.String())
+			current.Reset()
+		}
+		current.WriteString(line)
+		if current.Len() >= maxEvalSource {
+			chunks = append(chunks, current.String())
+			current.Reset()
+		}
 	}
+	if current.Len() > 0 {
+		chunks = append(chunks, current.String())
+	}
+	return chunks
+}
+
+// Eval sends Froth source for evaluation and returns the result.
+// Source longer than 253 bytes is automatically chunked on line boundaries.
+func (s *Session) Eval(source string) (*protocol.EvalResponse, error) {
+	chunks := chunkSource(source)
+	var lastResp *protocol.EvalResponse
+
+	for _, chunk := range chunks {
+		reqID := s.allocReqID()
+
+		payload := protocol.BuildEvalPayload(chunk)
+
+		wire, err := protocol.EncodeWireFrame(protocol.EvalReq, reqID, payload)
+		if err != nil {
+			return nil, fmt.Errorf("build frame: %w", err)
+		}
+
+		if err := s.port.Write(wire); err != nil {
+			return nil, fmt.Errorf("write: %w", err)
+		}
+
+		header, respPayload, err := s.waitValidResponse(reqID, DefaultTimeout)
+		if err != nil {
+			return nil, err
+		}
+
+		switch header.MessageType {
+		case protocol.EvalRes:
+			resp, err := protocol.ParseEvalResponse(respPayload)
+			if err != nil {
+				return nil, err
+			}
+			lastResp = resp
+			if resp.Status != 0 {
+				return resp, nil
+			}
+		case protocol.Error:
+			errResp, parseErr := protocol.ParseErrorResponse(respPayload)
+			if parseErr != nil {
+				return nil, parseErr
+			}
+			return nil, fmt.Errorf("device error (cat %d): %s", errResp.Category, errResp.Detail)
+		default:
+			return nil, fmt.Errorf("unexpected response type: 0x%02x", header.MessageType)
+		}
+	}
+
+	if lastResp == nil {
+		return &protocol.EvalResponse{Status: 0, StackRepr: "[]"}, nil
+	}
+	return lastResp, nil
 }
 
 // allocReqID returns the next request ID in [1, 0xFFFE].

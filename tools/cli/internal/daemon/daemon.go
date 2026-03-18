@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -355,7 +356,45 @@ func (d *Daemon) shutdown() {
 	d.wg.Wait()
 }
 
+// maxEvalSource is the maximum source bytes per EVAL_REQ frame.
+// MaxPayload (256) minus 3 bytes of EVAL overhead (flags + source_len).
+const maxEvalSource = protocol.MaxPayload - 3
+
+// chunkSource splits source into pieces that each fit in one EVAL_REQ.
+// Splits on newline boundaries so expressions aren't cut mid-token.
+// A single line longer than maxEvalSource is sent as-is (the device
+// will reject it with a frame error, which is the correct behavior).
+func chunkSource(source string) []string {
+	lines := strings.SplitAfter(source, "\n")
+	var chunks []string
+	var current strings.Builder
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		// If adding this line would overflow, flush the current chunk
+		if current.Len() > 0 && current.Len()+len(line) > maxEvalSource {
+			chunks = append(chunks, current.String())
+			current.Reset()
+		}
+		current.WriteString(line)
+		// If a single line exceeds the limit, flush it as its own chunk
+		if current.Len() >= maxEvalSource {
+			chunks = append(chunks, current.String())
+			current.Reset()
+		}
+	}
+	if current.Len() > 0 {
+		chunks = append(chunks, current.String())
+	}
+	return chunks
+}
+
 // deviceEval sends an EVAL_REQ and returns the parsed response.
+// Source longer than 253 bytes is automatically split into chunks
+// on line boundaries. Each chunk is sent as a separate EVAL_REQ.
+// If any chunk errors, evaluation stops and the error is returned.
 // Serialized: only one device transaction at a time.
 func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 	d.portMu.Lock()
@@ -371,43 +410,57 @@ func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 
 	drainFrames(d.frameCh)
 
-	reqID := d.allocReqID()
-	payload := protocol.BuildEvalPayload(source)
-	wire, err := protocol.EncodeWireFrame(protocol.EvalReq, reqID, payload)
-	if err != nil {
-		return nil, fmt.Errorf("build frame: %w", err)
-	}
+	chunks := chunkSource(source)
+	var lastResult *EvalResult
 
-	if err := port.Write(wire); err != nil {
-		return nil, fmt.Errorf("write: %w", err)
-	}
+	for _, chunk := range chunks {
+		reqID := d.allocReqID()
+		payload := protocol.BuildEvalPayload(chunk)
+		wire, err := protocol.EncodeWireFrame(protocol.EvalReq, reqID, payload)
+		if err != nil {
+			return nil, fmt.Errorf("build frame: %w", err)
+		}
 
-	header, respPayload, err := d.waitValidResponse(reqID, rpcTimeout)
-	if err != nil {
-		return nil, err
-	}
+		if err := port.Write(wire); err != nil {
+			return nil, fmt.Errorf("write: %w", err)
+		}
 
-	switch header.MessageType {
-	case protocol.EvalRes:
-		resp, err := protocol.ParseEvalResponse(respPayload)
+		header, respPayload, err := d.waitValidResponse(reqID, rpcTimeout)
 		if err != nil {
 			return nil, err
 		}
-		return &EvalResult{
-			Status:    int(resp.Status),
-			ErrorCode: int(resp.ErrorCode),
-			FaultWord: resp.FaultWord,
-			StackRepr: resp.StackRepr,
-		}, nil
-	case protocol.Error:
-		errResp, err := protocol.ParseErrorResponse(respPayload)
-		if err != nil {
-			return nil, err
+
+		switch header.MessageType {
+		case protocol.EvalRes:
+			resp, err := protocol.ParseEvalResponse(respPayload)
+			if err != nil {
+				return nil, err
+			}
+			lastResult = &EvalResult{
+				Status:    int(resp.Status),
+				ErrorCode: int(resp.ErrorCode),
+				FaultWord: resp.FaultWord,
+				StackRepr: resp.StackRepr,
+			}
+			// Stop on first error from the device
+			if lastResult.Status != 0 {
+				return lastResult, nil
+			}
+		case protocol.Error:
+			errResp, err := protocol.ParseErrorResponse(respPayload)
+			if err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("device error (cat %d): %s", errResp.Category, errResp.Detail)
+		default:
+			return nil, fmt.Errorf("unexpected response type: 0x%02x", header.MessageType)
 		}
-		return nil, fmt.Errorf("device error (cat %d): %s", errResp.Category, errResp.Detail)
-	default:
-		return nil, fmt.Errorf("unexpected response type: 0x%02x", header.MessageType)
 	}
+
+	if lastResult == nil {
+		return &EvalResult{Status: 0, StackRepr: "[]"}, nil
+	}
+	return lastResult, nil
 }
 
 // deviceInfo sends an INFO_REQ and returns the parsed response.
