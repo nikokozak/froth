@@ -594,12 +594,15 @@ func (d *Daemon) allocReqID() uint16 {
 
 // waitValidResponse reads frames from frameCh until one decodes
 // successfully and has a matching request ID, or until timeout.
-// Corrupt frames and ID mismatches are discarded and retried.
-// This prevents stale or corrupt frames from poisoning subsequent RPCs.
+// Corrupt frames and ID mismatches are discarded (up to 3 retries).
+// This prevents stale frames from poisoning subsequent RPCs while
+// still failing fast when the actual response is corrupt.
 func (d *Daemon) waitValidResponse(reqID uint16, timeout time.Duration) (*protocol.Header, []byte, error) {
 	deadline := time.Now().Add(timeout)
+	maxRetries := 3
+	var lastErr error
 
-	for {
+	for attempt := 0; attempt <= maxRetries; attempt++ {
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
 			return nil, nil, fmt.Errorf("device response timeout")
@@ -615,28 +618,36 @@ func (d *Daemon) waitValidResponse(reqID uint16, timeout time.Duration) (*protoc
 			return nil, nil, fmt.Errorf("daemon shutting down")
 		}
 
-		// Decode COBS — if corrupt, discard and retry
+		// Decode COBS — if corrupt, count as a retry
 		decoded, err := protocol.COBSDecode(encoded)
 		if err != nil {
+			lastErr = fmt.Errorf("cobs decode: %w", err)
 			log.Printf("frame: discard corrupt COBS (%v)", err)
 			continue
 		}
 
-		// Parse header — if invalid, discard and retry
+		// Parse header — if invalid, count as a retry
 		header, payload, err := protocol.ParseFrame(decoded)
 		if err != nil {
+			lastErr = fmt.Errorf("parse frame: %w", err)
 			log.Printf("frame: discard bad frame (%v)", err)
 			continue
 		}
 
-		// Check request ID — if stale, discard and retry
+		// Check request ID — if stale, count as a retry
 		if header.RequestID != reqID {
+			lastErr = fmt.Errorf("stale response (got ID %d, want %d)", header.RequestID, reqID)
 			log.Printf("frame: discard stale response (got ID %d, want %d)", header.RequestID, reqID)
 			continue
 		}
 
 		return header, payload, nil
 	}
+
+	if lastErr != nil {
+		return nil, nil, fmt.Errorf("frame error after %d retries: %w", maxRetries, lastErr)
+	}
+	return nil, nil, fmt.Errorf("device response timeout")
 }
 
 func drainFrames(ch chan []byte) {

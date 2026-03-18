@@ -70,14 +70,16 @@ func (s *Session) SetPassthrough(w io.Writer) {
 
 // waitValidResponse reads frames from serial until one decodes
 // successfully and has a matching request ID, or until timeout.
-// Corrupt frames and ID mismatches are discarded and retried.
+// Corrupt frames and ID mismatches are discarded (up to 3 retries).
 func (s *Session) waitValidResponse(reqID uint16, timeout time.Duration) (*protocol.Header, []byte, error) {
 	deadline := time.Now().Add(timeout)
+	maxRetries := 3
+	var lastErr error
 
-	for {
+	for attempt := 0; attempt <= maxRetries; attempt++ {
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return nil, nil, fmt.Errorf("device response timeout")
+			break
 		}
 
 		encoded, err := s.port.ReadFrame(remaining)
@@ -87,23 +89,31 @@ func (s *Session) waitValidResponse(reqID uint16, timeout time.Duration) (*proto
 
 		decoded, err := protocol.COBSDecode(encoded)
 		if err != nil {
+			lastErr = fmt.Errorf("cobs decode: %w", err)
 			log.Printf("frame: discard corrupt COBS (%v)", err)
 			continue
 		}
 
 		header, payload, err := protocol.ParseFrame(decoded)
 		if err != nil {
+			lastErr = fmt.Errorf("parse frame: %w", err)
 			log.Printf("frame: discard bad frame (%v)", err)
 			continue
 		}
 
 		if header.RequestID != reqID {
+			lastErr = fmt.Errorf("stale response (got ID %d, want %d)", header.RequestID, reqID)
 			log.Printf("frame: discard stale response (got ID %d, want %d)", header.RequestID, reqID)
 			continue
 		}
 
 		return header, payload, nil
 	}
+
+	if lastErr != nil {
+		return nil, nil, fmt.Errorf("frame error after retries: %w", lastErr)
+	}
+	return nil, nil, fmt.Errorf("device response timeout")
 }
 
 // Reset sends a RESET_REQ, which resets the device state to a "bare" firmware boot (no user code).
