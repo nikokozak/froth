@@ -115,7 +115,12 @@
 - ESP-IDF link layer enabled: `FROTH_HAS_LINK=1` in ESP-IDF CMakeLists, transport/link/mux sources added. Full host CLI ↔ ESP32 protocol proven on real hardware: info, eval, reset, strings, redefine-after-reset.
 - ESP32 binary-safe UART: VFS line-ending conversion disabled (both RX and TX set to `ESP_LINE_ENDINGS_LF` = no conversion). CR → LF and CRLF coalescing handled at the mux/REPL level in direct mode only. Frame mode gets raw bytes. Fixes COBS frame corruption from 0x0D → 0x0A translation.
 - ESP32 `platform_key` 0x03 fix: sets interrupt flag as side effect but returns the byte normally. Mux clears the false interrupt in frame mode (0x03 is COBS data there). Direct mode and blocking REPL consume 0x03 as interrupt. `key` prim returns the byte, executor safe-point check fires interrupt. All three line endings (CR, LF, CRLF) tested and correct.
-- VS Code extension skeleton (`tools/vscode/`): TypeScript, strict mode, zero dependencies. `daemon-client.ts` (JSON-RPC 2.0 over Unix socket, mirrors Go client architecture). `extension.ts` (FrothController: auto-connect, reconnect, status bar with 3 states, `froth.sendSelection` Cmd+Enter, `froth.sendFile`, "Froth Console" output channel streaming daemon events). Self-review + Codex review, 5 issues found and fixed (socket error handling, concurrent connect guard, error_code undefined fallback, id type validation, buffer cleanup).
+- VS Code extension v0.0.2 (`tools/vscode/`): sidebar with device info (board, heap, slots, cell bits), action buttons (Interrupt, Reset, Save, Wipe), live heap/slot metrics via `info()` RPC (refreshed after each eval/reset). `sendFile` = reset + eval whole file (ADR-037). `Cmd+Shift+Enter` for Send File. `daemon-client.ts` exposes `reset()`, `interrupt()`, `info()`. Console output via OutputChannel.
+- `platform_emit_raw`: new platform API function for COBS frame output (no line-ending conversion). `platform_emit` on ESP32 prepends `\r` before `\n` for terminal output. Fixes REPL staircase caused by disabling VFS TX conversion.
+- Daemon resilience: `waitValidResponse` with COBS/CRC retry (bounded to 3 attempts), request ID matching (incrementing IDs, stale frame discard). Concurrent interrupt support (blocking RPCs dispatched in goroutines, interrupt handled inline).
+- Chunked eval: auto-splits source >253 bytes on top-level form boundaries (depth-aware, tracks `[ ] : ;` nesting). Same logic in daemon and direct session paths.
+- Daemon `interrupt` RPC: writes raw 0x03 to serial outside any frame. Wired through Go client and TypeScript client.
+- `froth reset` CLI command proven on real ESP32 hardware.
 
 ## In Progress
 
