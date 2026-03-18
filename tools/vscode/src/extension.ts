@@ -378,6 +378,7 @@ class FrothController {
 
     this.logResult(result);
     this.output.show(true);
+    await this.refreshDeviceInfo();
   }
 
   private logResult(result: EvalResult): void {
