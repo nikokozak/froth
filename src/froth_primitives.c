@@ -561,12 +561,20 @@ froth_error_t froth_prim_key(froth_vm_t *froth_vm) {
   uint8_t byte;
   FROTH_TRY(platform_key(&byte));
 
+  /* On ESP32, platform_key is byte-transparent (no 0x03 interception).
+     The key primitive is always in console context, so Ctrl-C should
+     interrupt. Set the flag here; the executor's safe-point check will
+     fire the interrupt before the next word executes. */
+  if (byte == 0x03) {
+    froth_vm->interrupted = 1;
+  }
+
   froth_cell_t result;
   FROTH_TRY(froth_make_cell(byte, FROTH_NUMBER, &result));
   FROTH_TRY(froth_stack_push(&froth_vm->ds, result));
 
   return FROTH_OK;
-};
+}
 
 froth_error_t froth_prim_key_ready(froth_vm_t *froth_vm) {
   bool ready = platform_key_ready();
