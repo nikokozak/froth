@@ -7,6 +7,7 @@ struct froth_vm_t;
 
 froth_error_t platform_init(void);
 froth_error_t platform_emit(uint8_t byte);
+froth_error_t platform_emit_raw(uint8_t byte); /* no line-ending conversion */
 froth_error_t platform_key(uint8_t *byte);
 bool platform_key_ready(void);
 void platform_check_interrupt(struct froth_vm_t *vm);

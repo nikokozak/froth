@@ -204,10 +204,10 @@ froth_error_t froth_link_send_frame(uint8_t message_type, uint16_t request_id,
   FROTH_TRY(froth_cobs_encode(raw_buf, raw_len, cobs_buf, sizeof(cobs_buf),
                                &enc_len));
 
-  FROTH_TRY(platform_emit(0x00));
+  FROTH_TRY(platform_emit_raw(0x00));
   for (uint16_t i = 0; i < enc_len; i++)
-    FROTH_TRY(platform_emit(cobs_buf[i]));
-  FROTH_TRY(platform_emit(0x00));
+    FROTH_TRY(platform_emit_raw(cobs_buf[i]));
+  FROTH_TRY(platform_emit_raw(0x00));
 
   return FROTH_OK;
 }

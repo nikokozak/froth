@@ -52,6 +52,15 @@ froth_error_t platform_init(void) {
 }
 
 froth_error_t platform_emit(uint8_t byte) {
+  /* Terminal expects \r\n. VFS conversion is off (binary safety for COBS),
+     so we prepend \r before \n here for REPL/console output. */
+  if (byte == '\n')
+    fputc('\r', stdout);
+  fputc(byte, stdout);
+  return FROTH_OK;
+}
+
+froth_error_t platform_emit_raw(uint8_t byte) {
   fputc(byte, stdout);
   return FROTH_OK;
 }

@@ -58,6 +58,13 @@ froth_error_t platform_emit(uint8_t byte) {
   return FROTH_OK;
 }
 
+froth_error_t platform_emit_raw(uint8_t byte) {
+  if (fputc(byte, stdout) == EOF) {
+    return FROTH_ERROR_IO;
+  }
+  return FROTH_OK;
+}
+
 froth_error_t platform_key(uint8_t *byte) {
   int c = fgetc(stdin);
   if (c == EOF) {
