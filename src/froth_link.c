@@ -158,7 +158,6 @@ static froth_error_t handle_eval(froth_vm_t *vm, uint16_t request_id,
   /* Evaluate */
   froth_cell_u_t ds_snap = vm->ds.pointer;
   froth_cell_u_t rs_snap = vm->rs.pointer;
-  froth_cell_u_t cd_snap = vm->call_depth;
   vm->last_error_slot = -1;
 
   froth_error_t eval_err = froth_evaluate_input(source, vm);
@@ -194,7 +193,6 @@ static froth_error_t handle_eval(froth_vm_t *vm, uint16_t request_id,
 
     vm->ds.pointer = ds_snap;
     vm->rs.pointer = rs_snap;
-    vm->call_depth = cd_snap;
   }
 
   return froth_link_send_frame(FROTH_LINK_EVAL_RES, request_id, resp_buf,

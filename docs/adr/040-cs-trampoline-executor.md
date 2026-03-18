@@ -51,61 +51,70 @@ Trade-offs:
 
 ### CS frame format
 
-Each frame is two cells:
+Each frame is two `froth_cell_u_t` values:
 
-1. **Resume offset**: heap byte offset of the next cell to execute in the parent quotation.
-2. **End offset**: heap byte offset one past the last cell in the parent quotation body.
+1. **`quote_offset`**: heap byte offset of the quotation.
+2. **`ip`**: next cell index to execute (1-based, since cell 0 is the length).
 
-Two `froth_cell_t` values per frame. At 20 frames (typical `FROTH_CS_CAPACITY`) on a 32-bit target, that's 160 bytes. Not worth a packing scheme.
+The length is read from `heap[quote_offset]` on each iteration. One extra memory access per resume, but it keeps frames small and avoids converting between byte offsets and cell indices.
 
-The CS entry type changes from `froth_cell_t` to a two-cell struct. The existing `froth_stack` infrastructure can be reused if the stack element type is widened, or the CS can use its own purpose-built push/pop with the struct type.
+Purpose-built `froth_cs_frame_t` struct and `froth_cs_t` stack type, separate from the generic `froth_stack_t` (which handles DS and RS).
 
 ### Executor loop
 
-```
-push initial quotation as (start+1, start+1+length)
+The trampoline peeks at the top CS frame, advances its `ip`, and dispatches the cell. No pop-and-repush needed for the parent frame.
 
-while CS is not empty:
-    pop frame (resume, end)
-    for cell in resume..end:
-        check interrupt
-        switch tag:
-            literal → push to DS
-            CALL → look up slot
-                if prim → call C function
-                if quote → push continuation (cell+1, end), push callee (start+1, start+1+length), break inner loop
-                if value → push to DS
-    // body finished: loop pops next CS frame (the caller's continuation)
+```
+push initial frame {quote_offset, ip=1}
+
+while CS not empty above cs_base:
+    frame = peek top
+    if frame.ip > length: pop, continue
+    check interrupt
+    cell = base[frame.ip++]
+    switch tag:
+        literal -> push to DS
+        CALL -> look up slot
+            if prim -> call C function (may re-enter trampoline)
+            if quote -> push new frame {callee_offset, 1}
+            if value -> push to DS
+    // body exhausted: pop frame, loop resumes parent
 ```
 
-When a quotation body finishes, the loop naturally pops the next CS frame, which is the caller's continuation. No explicit "return" instruction needed.
+When a CALL resolves to a quotation, the callee frame is pushed on top. The parent frame's `ip` was already advanced past the CALL cell, so when the callee finishes and is popped, the parent resumes at the right place.
+
+### Re-entrancy (cs_base partitioning)
+
+Primitives like `while`, `catch`, and `call` invoke `froth_execute_quote` from C. Each invocation snapshots `cs_base = vm->cs.pointer` and only processes frames above that base. This makes the trampoline re-entrant: nested invocations use their own partition of the shared CS array. The CS capacity bound applies globally.
 
 ### RS balance check
 
-The current executor checks RS depth on quotation exit (ADR-022). With the trampoline, this check moves to CS frame pop: when resuming a parent frame, verify RS depth matches what it was when the child was entered. This requires storing RS depth in the CS frame (third cell) or checking it at push/pop boundaries.
+Checked once at trampoline exit: RS depth must match the snapshot taken at entry. Per-frame RS checking was considered and rejected. The trampoline exit check catches imbalances, and the REPL/catch rolls back RS on error. No safety issue from delayed detection: the RS is a user-facing stack, not used by the trampoline itself, and leaked values cannot corrupt execution flow.
 
-Decision: add RS depth as a third field in the CS frame. Three cells per frame, 240 bytes at 20 frames on 32-bit. Still negligible.
+### Depth limits
 
-### call_depth removal
+Two separate limits:
 
-The `call_depth` counter on the VM becomes redundant. The CS capacity provides the same bound. `FROTH_CALL_DEPTH_MAX` is removed. `FROTH_ERROR_CALL_DEPTH` is reused for CS overflow (same user-visible meaning: "calls nested too deep").
+1. **`FROTH_CS_CAPACITY`** (default 256): total Froth call nesting depth. Bounds the CS frame array. Intra-trampoline CALL dispatches push frames here at zero C stack cost.
+
+2. **`FROTH_REENTRY_DEPTH_MAX`** (default 64): C-level re-entries into `froth_execute_quote`. Each re-entry adds one C stack frame (~40-60 bytes on ARM). Tracked by `trampoline_depth` counter on the VM. On ESP32 (8KB task stack), 64 re-entries is ~3-4KB, leaving room for prims, FFI callbacks, and platform code.
+
+`call_depth` is removed. `FROTH_ERROR_CALL_DEPTH` (code 18) is reused for both CS overflow and re-entry overflow.
 
 ### `while` and other loop primitives
 
-`while` already uses a C `for(;;)` loop. It calls `froth_execute_quote` for the condition and body. With the trampoline, `froth_execute_quote` becomes the trampoline entry point. `while` calls it, the trampoline runs to completion, `while` loops. No change to `while`'s structure.
-
-Same for `catch`, `times`, and any other primitive that calls `froth_execute_quote`.
+`while` calls `froth_execute_quote` for condition and body. Each call is one C re-entry (counted by `trampoline_depth`), runs the trampoline to completion, returns. No change to `while`'s structure. Same for `catch`, `call`, and any future prim that evaluates quotations.
 
 ## Consequences
 
-- C stack usage becomes O(1) for Froth execution regardless of call depth.
-- Maximum call depth is `FROTH_CS_CAPACITY` (CMake-configurable, default 20).
-- The CS is no longer unused. Its element type changes from `froth_cell_t` to a three-cell struct.
-- `froth_stack.h` may need a second stack type (for the wider frame), or the CS can use a purpose-built array with index. The generic stack was designed for single-cell elements.
-- The executor becomes slightly more complex (loop with CS management vs simple recursion), but each piece is small and testable.
-- `call_depth` field removed from VM struct. One less thing to manage in `reset`.
-- All existing tests must pass unchanged. The trampoline is an implementation change, not a semantic change.
-- Portability improves immediately. Smaller targets get predictable, configurable call depth without guessing C stack budgets.
+- Intra-trampoline Froth execution is O(1) C stack regardless of call depth.
+- C stack usage from prim-driven re-entries is bounded by `FROTH_REENTRY_DEPTH_MAX` (64).
+- Total Froth nesting depth is bounded by `FROTH_CS_CAPACITY` (256).
+- The CS element type changes from `froth_cell_t` to `froth_cs_frame_t` (two-cell struct).
+- `froth_stack.h` gains `froth_cs_frame_t` and `froth_cs_t` types alongside the generic `froth_stack_t`.
+- `call_depth` removed from VM struct. Replaced by `trampoline_depth`.
+- All existing tests pass unchanged. The trampoline is an implementation change, not a semantic change.
+- Portability improves immediately. Smaller targets get predictable, configurable depth limits without guessing C stack budgets.
 
 ## Implementation priority
 

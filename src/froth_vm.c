@@ -1,9 +1,10 @@
 #include "froth_vm.h"
+#include "froth_stack.h"
 #include "froth_types.h"
 
 static froth_cell_t ds_memory[FROTH_DS_CAPACITY];
 static froth_cell_t rs_memory[FROTH_RS_CAPACITY];
-static froth_cell_t cs_memory[FROTH_CS_CAPACITY];
+static froth_cs_frame_t cs_memory[FROTH_CS_CAPACITY];
 static uint8_t heap_memory[FROTH_HEAP_SIZE];
 
 froth_vm_t froth_vm = {
