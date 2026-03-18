@@ -60,7 +60,7 @@ func New(portPath string) *Daemon {
 		portPath:   portPath,
 		socketPath: filepath.Join(frothDir, "daemon.sock"),
 		pidPath:    filepath.Join(frothDir, "daemon.pid"),
-		frameCh:    make(chan []byte, 2),
+		frameCh:    make(chan []byte, 16),
 		clients:    make(map[*rpcConn]struct{}),
 		done:       make(chan struct{}),
 	}
@@ -220,7 +220,7 @@ func (d *Daemon) serialReadLoop() {
 				select {
 				case d.frameCh <- frameCopy:
 				default:
-					// Drop if nobody waiting (stale response)
+					log.Printf("frame: channel full, dropping %d-byte frame", len(frameCopy))
 				}
 			}
 			frame = frame[:0]

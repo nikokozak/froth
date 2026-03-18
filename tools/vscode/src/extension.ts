@@ -176,17 +176,20 @@ class FrothController {
   }
 
   async interrupt(): Promise<void> {
-    if (!this.client) {
-      vscode.window.showWarningMessage("Not connected to Froth daemon");
-      return;
-    }
-
+    // Interrupt uses a fresh, short-lived daemon connection so it can
+    // execute even while the main connection is blocked on a long eval.
+    // The main connection's serve() loop is blocked reading the eval
+    // response, so it can't process the interrupt request inline.
+    const interruptClient = new DaemonClient();
     try {
-      await this.client.interrupt();
+      await interruptClient.connect();
+      await interruptClient.interrupt();
       this.output.appendLine("[froth] interrupt sent");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       vscode.window.showErrorMessage(`Interrupt failed: ${msg}`);
+    } finally {
+      interruptClient.dispose();
     }
   }
 

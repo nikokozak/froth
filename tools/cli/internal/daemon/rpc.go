@@ -111,19 +111,33 @@ type ConnectedEvent struct {
 
 // rpcConn is a server-side per-client connection handler.
 type rpcConn struct {
-	nc      net.Conn
-	daemon  *Daemon
-	scanner *bufio.Scanner
-	enc     *json.Encoder
-	mu      sync.Mutex
+	nc       net.Conn
+	daemon   *Daemon
+	scanner  *bufio.Scanner
+	enc      *json.Encoder
+	mu       sync.Mutex
+	notifyCh chan *rpcNotification // buffered channel for async notifications
 }
 
 func newRPCConn(nc net.Conn, d *Daemon) *rpcConn {
-	return &rpcConn{
-		nc:      nc,
-		daemon:  d,
-		scanner: bufio.NewScanner(nc),
-		enc:     json.NewEncoder(nc),
+	c := &rpcConn{
+		nc:       nc,
+		daemon:   d,
+		scanner:  bufio.NewScanner(nc),
+		enc:      json.NewEncoder(nc),
+		notifyCh: make(chan *rpcNotification, 64),
+	}
+	go c.notifyLoop()
+	return c
+}
+
+// notifyLoop drains the notification channel and writes to the socket.
+// Runs in its own goroutine so broadcast never blocks the serial read loop.
+func (c *rpcConn) notifyLoop() {
+	for n := range c.notifyCh {
+		c.mu.Lock()
+		c.enc.Encode(n)
+		c.mu.Unlock()
 	}
 }
 
@@ -150,22 +164,21 @@ func (c *rpcConn) serve() {
 
 func (c *rpcConn) handleRequest(req *rpcRequest) {
 	switch req.Method {
-	// Interrupt and status are handled inline so they can execute
-	// while a blocking eval/reset is in progress on this connection.
+	// Interrupt bypasses the normal request flow: it writes a raw byte
+	// to the serial port and does not acquire reqMu. This is the ONLY
+	// method that can execute while another request is in progress.
 	case "interrupt":
-		c.handleInterrupt(req)
+		go c.handleInterrupt(req)
+	case "hello":
+		c.handleHello(req)
+	case "eval":
+		c.handleEval(req)
+	case "info":
+		c.handleInfo(req)
 	case "status":
 		c.handleStatus(req)
-	// Blocking device operations are dispatched in a goroutine so
-	// the RPC reader stays live for interrupt requests.
-	case "hello":
-		go c.handleHello(req)
-	case "eval":
-		go c.handleEval(req)
-	case "info":
-		go c.handleInfo(req)
 	case "reset":
-		go c.handleReset(req)
+		c.handleReset(req)
 	default:
 		c.sendError(req.ID, errMethodNotFound, "unknown method: "+req.Method)
 	}
@@ -270,15 +283,19 @@ func (c *rpcConn) sendError(id interface{}, code int, msg string) {
 }
 
 func (c *rpcConn) sendNotification(method string, params interface{}) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.enc.Encode(&rpcNotification{
+	n := &rpcNotification{
 		JSONRPC: "2.0",
 		Method:  method,
 		Params:  params,
-	})
+	}
+	select {
+	case c.notifyCh <- n:
+	default:
+		// Client too slow, drop notification rather than block serial read loop
+	}
 }
 
 func (c *rpcConn) close() {
+	close(c.notifyCh)
 	c.nc.Close()
 }
