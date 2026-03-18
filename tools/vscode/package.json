@@ -2,7 +2,7 @@
   "name": "froth",
   "displayName": "Froth",
   "description": "Live development for Froth microcontrollers",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "froth",
   "engines": {
     "vscode": "^1.85.0"
@@ -18,11 +18,38 @@
     "commands": [
       {
         "command": "froth.sendSelection",
-        "title": "Froth: Send Selection / Line"
+        "title": "Froth: Send Selection / Line",
+        "icon": "$(play)"
       },
       {
         "command": "froth.sendFile",
-        "title": "Froth: Send File"
+        "title": "Froth: Send File (Reset + Eval)",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "froth.interrupt",
+        "title": "Froth: Interrupt",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "froth.reset",
+        "title": "Froth: Reset to Baseline",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "froth.save",
+        "title": "Froth: Save Snapshot",
+        "icon": "$(save)"
+      },
+      {
+        "command": "froth.wipe",
+        "title": "Froth: Wipe Snapshots",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "froth.refreshSidebar",
+        "title": "Froth: Refresh Device Info",
+        "icon": "$(refresh)"
       }
     ],
     "keybindings": [
@@ -31,8 +58,40 @@
         "key": "ctrl+enter",
         "mac": "cmd+enter",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "froth.sendFile",
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "editorTextFocus"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "froth",
+          "title": "Froth",
+          "icon": "$(symbol-misc)"
+        }
+      ]
+    },
+    "views": {
+      "froth": [
+        {
+          "id": "frothDeviceView",
+          "name": "Device"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "froth.refreshSidebar",
+          "when": "view == frothDeviceView",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "compile": "tsc -p ./",

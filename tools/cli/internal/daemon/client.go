@@ -209,6 +209,11 @@ func (c *Client) Reset() (*ResetResult, error) {
 	return &result, nil
 }
 
+func (c *Client) Interrupt() error {
+	_, err := c.Call("interrupt", nil)
+	return err
+}
+
 func (c *Client) Status() (*StatusResult, error) {
 	raw, err := c.Call("status", nil)
 	if err != nil {

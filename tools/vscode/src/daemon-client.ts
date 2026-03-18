@@ -52,6 +52,16 @@ export interface InfoResult {
   version: string;
 }
 
+export interface ResetResult {
+  status: number;
+  heap_size: number;
+  heap_used: number;
+  heap_overlay_used: number;
+  slot_count: number;
+  slot_overlay_count: number;
+  version: string;
+}
+
 export interface StatusResult {
   running: boolean;
   connected: boolean;
@@ -144,10 +154,6 @@ export class DaemonClient {
       });
 
       sock.on("error", (err: Error) => {
-        // Before connect: reject the promise. After connect: the
-        // close event fires next and handleSocketClose cleans up.
-        // We must always handle this event to prevent Node from
-        // throwing an unhandled error.
         if (!settled) {
           settled = true;
           reject(err);
@@ -181,6 +187,14 @@ export class DaemonClient {
 
   async info(): Promise<InfoResult> {
     return (await this.call("info")) as InfoResult;
+  }
+
+  async reset(): Promise<ResetResult> {
+    return (await this.call("reset")) as ResetResult;
+  }
+
+  async interrupt(): Promise<void> {
+    await this.call("interrupt");
   }
 
   async status(): Promise<StatusResult> {
@@ -226,7 +240,6 @@ export class DaemonClient {
       this.pending.set(id, { resolve, reject });
 
       const line = JSON.stringify(request) + "\n";
-      // socket is confirmed non-null at function entry and JS is single-threaded
       this.socket!.write(line, (err) => {
         if (err) {
           this.pending.delete(id);
@@ -257,8 +270,6 @@ export class DaemonClient {
       return;
     }
 
-    // Classification mirrors Go client readLoop: if "method" is present
-    // and "id" is absent, it's a notification. Otherwise it's a response.
     if (typeof msg["method"] === "string" && !("id" in msg)) {
       this.emitter.emit("notification", {
         method: msg["method"],

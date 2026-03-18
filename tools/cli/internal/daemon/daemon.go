@@ -571,6 +571,21 @@ func (d *Daemon) deviceReset() (*ResetResult, error) {
 	}, nil
 }
 
+// deviceInterrupt sends a raw 0x03 (Ctrl-C) byte to the device
+// outside of any COBS frame. This sets the device's interrupt flag
+// and causes the current evaluation to abort with ERR.INTERRUPT.
+func (d *Daemon) deviceInterrupt() error {
+	d.portMu.Lock()
+	port := d.port
+	d.portMu.Unlock()
+
+	if port == nil {
+		return fmt.Errorf("device not connected")
+	}
+
+	return port.Write([]byte{0x03})
+}
+
 // allocReqID returns a unique request ID in the range [1, 0xFFFE].
 func (d *Daemon) allocReqID() uint16 {
 	id := d.reqIDSeq.Add(1)

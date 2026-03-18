@@ -6,6 +6,7 @@ import {
   ConsoleEvent,
   ConnectedEvent,
   EvalResult,
+  StatusResult,
 } from "./daemon-client";
 
 const RECONNECT_INTERVAL_MS = 3000;
@@ -21,9 +22,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const controller = new FrothController(output, statusItem);
 
+  // Sidebar tree view
+  const sidebarProvider = new FrothSidebarProvider(controller);
+  const treeView = vscode.window.createTreeView("frothDeviceView", {
+    treeDataProvider: sidebarProvider,
+  });
+
   context.subscriptions.push(
     output,
     statusItem,
+    treeView,
     { dispose: () => controller.dispose() },
     vscode.commands.registerCommand("froth.sendSelection", () =>
       controller.sendSelection(),
@@ -31,29 +39,68 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("froth.sendFile", () =>
       controller.sendFile(),
     ),
+    vscode.commands.registerCommand("froth.interrupt", () =>
+      controller.interrupt(),
+    ),
+    vscode.commands.registerCommand("froth.reset", () =>
+      controller.reset(),
+    ),
+    vscode.commands.registerCommand("froth.save", () =>
+      controller.evalCommand("save"),
+    ),
+    vscode.commands.registerCommand("froth.wipe", () =>
+      controller.evalCommand("wipe"),
+    ),
+    vscode.commands.registerCommand("froth.refreshSidebar", () =>
+      controller.refreshDeviceInfo(),
+    ),
   );
+
+  // Refresh sidebar when controller state changes
+  controller.onStateChange(() => sidebarProvider.refresh());
 
   statusItem.show();
   controller.start();
 }
 
-export function deactivate(): void {
-  // Cleanup handled by ExtensionContext.subscriptions
-}
+export function deactivate(): void {}
 
-// Owns the daemon connection lifecycle and command handlers.
+// --- Controller ---
+
+type StateChangeListener = () => void;
+
 class FrothController {
   private client: DaemonClient | null = null;
   private state: ConnectionState = "no-daemon";
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connecting = false;
   private disposed = false;
+  private deviceStatus: StatusResult | null = null;
+  private stateListeners: StateChangeListener[] = [];
 
   constructor(
     private readonly output: vscode.OutputChannel,
     private readonly statusItem: vscode.StatusBarItem,
   ) {
     this.updateStatusBar();
+  }
+
+  onStateChange(listener: StateChangeListener): void {
+    this.stateListeners.push(listener);
+  }
+
+  private notifyStateChange(): void {
+    for (const l of this.stateListeners) {
+      l();
+    }
+  }
+
+  getState(): ConnectionState {
+    return this.state;
+  }
+
+  getDeviceStatus(): StatusResult | null {
+    return this.deviceStatus;
   }
 
   start(): void {
@@ -102,7 +149,89 @@ class FrothController {
       return;
     }
 
+    if (!this.client) {
+      vscode.window.showWarningMessage("Not connected to Froth daemon");
+      return;
+    }
+
+    // ADR-037: Send File = reset + eval whole file
+    this.output.appendLine("[froth] reset");
+    try {
+      await this.client.reset();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`Reset failed: ${msg}`);
+      return;
+    }
+
+    this.output.appendLine(`[froth] evaluating ${editor.document.fileName}`);
     await this.evalAndLog(text);
+    await this.refreshDeviceInfo();
+  }
+
+  async interrupt(): Promise<void> {
+    if (!this.client) {
+      vscode.window.showWarningMessage("Not connected to Froth daemon");
+      return;
+    }
+
+    try {
+      await this.client.interrupt();
+      this.output.appendLine("[froth] interrupt sent");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`Interrupt failed: ${msg}`);
+    }
+  }
+
+  async reset(): Promise<void> {
+    if (!this.client) {
+      vscode.window.showWarningMessage("Not connected to Froth daemon");
+      return;
+    }
+
+    try {
+      await this.client.reset();
+      this.output.appendLine("[froth] reset");
+      await this.refreshDeviceInfo();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`Reset failed: ${msg}`);
+    }
+  }
+
+  async evalCommand(cmd: string): Promise<void> {
+    if (!this.client) {
+      vscode.window.showWarningMessage("Not connected to Froth daemon");
+      return;
+    }
+
+    try {
+      const result = await this.client.eval(cmd);
+      if (result.status !== 0) {
+        this.output.appendLine(
+          `[froth] ${cmd}: error(${result.error_code ?? 0})`,
+        );
+      } else {
+        this.output.appendLine(`[froth] ${cmd}: ok`);
+      }
+      await this.refreshDeviceInfo();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`${cmd} failed: ${msg}`);
+    }
+  }
+
+  async refreshDeviceInfo(): Promise<void> {
+    if (!this.client) {
+      return;
+    }
+    try {
+      this.deviceStatus = await this.client.status();
+      this.notifyStateChange();
+    } catch {
+      // ignore
+    }
   }
 
   // --- Connection lifecycle ---
@@ -122,9 +251,6 @@ class FrothController {
     try {
       await client.connect();
     } catch {
-      // Socket doesn't exist or daemon isn't running.
-      // Dispose the client so its deferred close event doesn't
-      // trigger our handleSocketClose with a spurious log line.
       client.dispose();
       this.connecting = false;
       this.setState("no-daemon");
@@ -135,13 +261,12 @@ class FrothController {
     this.client = client;
     this.connecting = false;
 
-    // Ask the daemon whether a device is attached
     try {
-      const st = await client.status();
-      this.setState(st.connected ? "connected" : "disconnected");
-      if (st.connected && st.device) {
+      this.deviceStatus = await client.status();
+      this.setState(this.deviceStatus.connected ? "connected" : "disconnected");
+      if (this.deviceStatus.connected && this.deviceStatus.device) {
         this.output.appendLine(
-          `[froth] connected: ${st.device.board} (${st.device.version})`,
+          `[froth] connected: ${this.deviceStatus.device.board} (${this.deviceStatus.device.version})`,
         );
       }
     } catch {
@@ -166,10 +291,12 @@ class FrothController {
             `[froth] device connected: ${params.device.board} (${params.device.version})`,
           );
         }
+        this.refreshDeviceInfo();
         break;
       }
       case "disconnected":
         this.setState("disconnected");
+        this.deviceStatus = null;
         this.output.appendLine("[froth] device disconnected");
         break;
       case "reconnecting":
@@ -179,11 +306,11 @@ class FrothController {
   }
 
   private handleSocketClose(): void {
-    // The daemon socket dropped. Dispose old client, retry later.
     if (this.client) {
       this.client.dispose();
       this.client = null;
     }
+    this.deviceStatus = null;
     this.setState("no-daemon");
     this.output.appendLine("[froth] daemon connection lost");
     this.scheduleReconnect();
@@ -254,6 +381,7 @@ class FrothController {
   private setState(state: ConnectionState): void {
     this.state = state;
     this.updateStatusBar();
+    this.notifyStateChange();
   }
 
   private updateStatusBar(): void {
@@ -278,6 +406,105 @@ class FrothController {
           "statusBarItem.errorBackground",
         );
         break;
+    }
+  }
+}
+
+// --- Sidebar ---
+
+class FrothSidebarProvider implements vscode.TreeDataProvider<SidebarItem> {
+  private _onDidChangeTreeData = new vscode.EventEmitter<
+    SidebarItem | undefined
+  >();
+  readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+
+  constructor(private readonly controller: FrothController) {}
+
+  refresh(): void {
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  getTreeItem(element: SidebarItem): vscode.TreeItem {
+    return element;
+  }
+
+  getChildren(element?: SidebarItem): SidebarItem[] {
+    if (element) {
+      return [];
+    }
+
+    const state = this.controller.getState();
+    const status = this.controller.getDeviceStatus();
+    const items: SidebarItem[] = [];
+
+    if (state === "no-daemon") {
+      items.push(
+        new SidebarItem("No daemon running", "", "$(circle-slash)"),
+      );
+      items.push(
+        new SidebarItem(
+          "Run: froth daemon start",
+          "",
+          "$(terminal)",
+        ),
+      );
+      return items;
+    }
+
+    if (state === "disconnected" || !status?.device) {
+      items.push(
+        new SidebarItem("No device connected", "", "$(debug-disconnect)"),
+      );
+      return items;
+    }
+
+    const dev = status.device;
+    items.push(new SidebarItem(`${dev.board}`, `v${dev.version}`, "$(circuit-board)"));
+    items.push(
+      new SidebarItem(
+        `Heap: ${status.device.heap_used} / ${status.device.heap_size}`,
+        "",
+        "$(database)",
+      ),
+    );
+    items.push(
+      new SidebarItem(
+        `Slots: ${status.device.slot_count}`,
+        "",
+        "$(symbol-variable)",
+      ),
+    );
+    items.push(
+      new SidebarItem(
+        `${dev.cell_bits}-bit cells`,
+        "",
+        "$(symbol-numeric)",
+      ),
+    );
+
+    // Action buttons as tree items with commands
+    items.push(new SidebarItem("", "", ""));
+    items.push(actionItem("$(debug-stop) Interrupt", "froth.interrupt"));
+    items.push(actionItem("$(refresh) Reset", "froth.reset"));
+    items.push(actionItem("$(save) Save", "froth.save"));
+    items.push(actionItem("$(trash) Wipe", "froth.wipe"));
+
+    return items;
+  }
+}
+
+function actionItem(label: string, commandId: string): SidebarItem {
+  const item = new SidebarItem(label, "", "");
+  item.command = { command: commandId, title: label };
+  return item;
+}
+
+class SidebarItem extends vscode.TreeItem {
+  constructor(label: string, description: string, icon: string) {
+    super(label, vscode.TreeItemCollapsibleState.None);
+    this.description = description;
+    if (icon) {
+      this.iconPath = new vscode.ThemeIcon(icon.replace("$(", "").replace(")", ""));
     }
   }
 }

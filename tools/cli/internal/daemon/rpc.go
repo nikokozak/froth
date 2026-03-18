@@ -160,6 +160,8 @@ func (c *rpcConn) handleRequest(req *rpcRequest) {
 		c.handleStatus(req)
 	case "reset":
 		c.handleReset(req)
+	case "interrupt":
+		c.handleInterrupt(req)
 	default:
 		c.sendError(req.ID, errMethodNotFound, "unknown method: "+req.Method)
 	}
@@ -212,6 +214,15 @@ func (c *rpcConn) handleReset(req *rpcRequest) {
 	}
 
 	c.sendResult(req.ID, result)
+}
+
+func (c *rpcConn) handleInterrupt(req *rpcRequest) {
+	err := c.daemon.deviceInterrupt()
+	if err != nil {
+		c.sendError(req.ID, errDeviceError, err.Error())
+		return
+	}
+	c.sendResult(req.ID, struct{}{})
 }
 
 func (c *rpcConn) handleStatus(req *rpcRequest) {
