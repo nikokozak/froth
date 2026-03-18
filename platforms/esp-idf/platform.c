@@ -70,41 +70,29 @@ froth_error_t platform_key(uint8_t *byte) {
   if (c == EOF) {
     return FROTH_ERROR_IO;
   }
-  /* Set interrupt flag on 0x03 but still return the byte. The caller
-     decides context: the mux clears the flag in frame mode (0x03 is
-     data there), direct mode and the blocking REPL consume it as an
-     interrupt, and the key prim returns it to user code where the
-     executor's safe-point check will fire the interrupt. */
-  if (c == 0x03) {
-    froth_vm.interrupted = 1;
-  }
+  /* Byte-transparent. No 0x03 interception. Callers (mux, REPL, boot)
+     own interpretation based on context. */
   *byte = (uint8_t)c;
   return FROTH_OK;
 }
 
 bool platform_key_ready(void) {
-  fd_set rfds;                  // Set of file descriptors to watch for reading.
-  struct timeval tv = {0, 0};   // 0 timeout, return immediately
-  FD_ZERO(&rfds);               // Zero them
-  FD_SET(fileno(stdin), &rfds); // Add stdin file descriptor to set
-
-  int ret = select(fileno(stdin) + 1, &rfds, NULL, NULL, &tv); // do the check
-  if (ret > 0) {
-    return true;
-  } // we have a byte
-  else {
-    return false;
-  }
+  fd_set rfds;
+  struct timeval tv = {0, 0};
+  FD_ZERO(&rfds);
+  FD_SET(fileno(stdin), &rfds);
+  return select(fileno(stdin) + 1, &rfds, NULL, NULL, &tv) > 0;
 }
 
 void platform_check_interrupt(struct froth_vm_t *vm) {
-  if (platform_key_ready()) {
-    int c = fgetc(stdin);
-    if (c == 0x03) {
-      vm->interrupted = 1;
-    } else {
-      ungetc(c, stdin);
-    }
+  if (!platform_key_ready()) {
+    return;
+  }
+  int c = fgetc(stdin);
+  if (c == 0x03) {
+    vm->interrupted = 1;
+  } else if (c != EOF) {
+    ungetc(c, stdin);
   }
 }
 

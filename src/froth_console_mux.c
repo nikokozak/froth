@@ -34,10 +34,6 @@ froth_error_t froth_console_mux_start(froth_vm_t *vm) {
         mode = MUX_DIRECT;
       } else {
         froth_link_frame_byte(byte);
-        /* On ESP32, platform_key sets the interrupt flag for any 0x03.
-           Inside a COBS frame, 0x03 is data, not an interrupt. */
-        if (byte == 0x03)
-          vm->interrupted = 0;
       }
       continue;
     }

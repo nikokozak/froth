@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -20,8 +21,16 @@ import (
 const (
 	reconnectInterval = 2 * time.Second
 	serialReadTimeout = 100 * time.Millisecond
-	rpcTimeout        = 5 * time.Second
 )
+
+var ErrDisconnected = errors.New("device disconnected")
+
+// frameResponse is a decoded frame delivered by the serial reader.
+type frameResponse struct {
+	header  *protocol.Header
+	payload []byte
+	err     error
+}
 
 // Daemon owns a serial connection and multiplexes RPC access for
 // CLI and editor clients over a Unix domain socket.
@@ -35,10 +44,21 @@ type Daemon struct {
 	hello  *protocol.HelloResponse
 	portMu sync.Mutex
 
+	// Serial write serialization. Both framed writes and raw interrupt
+	// bytes acquire this to prevent interleaving on the wire.
+	writeMu sync.Mutex
+
 	// One FROTH-LINK/1 transaction at a time
 	reqMu    sync.Mutex
-	frameCh  chan []byte
 	reqIDSeq atomic.Uint32
+
+	// Single pending response slot. The serial reader delivers decoded
+	// frames here. Only one goroutine waits on replyCh at a time
+	// (enforced by reqMu).
+	replyCh chan frameResponse
+
+	// Closed by handleDisconnect to unblock any waiting eval/reset/info.
+	disconnectCh chan struct{}
 
 	// Connected RPC clients
 	clients   map[*rpcConn]struct{}
@@ -57,12 +77,13 @@ func New(portPath string) *Daemon {
 	frothDir := filepath.Join(home, ".froth")
 
 	return &Daemon{
-		portPath:   portPath,
-		socketPath: filepath.Join(frothDir, "daemon.sock"),
-		pidPath:    filepath.Join(frothDir, "daemon.pid"),
-		frameCh:    make(chan []byte, 16),
-		clients:    make(map[*rpcConn]struct{}),
-		done:       make(chan struct{}),
+		portPath:     portPath,
+		socketPath:   filepath.Join(frothDir, "daemon.sock"),
+		pidPath:      filepath.Join(frothDir, "daemon.pid"),
+		replyCh:      make(chan frameResponse, 1),
+		disconnectCh: make(chan struct{}),
+		clients:      make(map[*rpcConn]struct{}),
+		done:         make(chan struct{}),
 	}
 }
 
@@ -155,6 +176,8 @@ func (d *Daemon) connect() error {
 	if d.portPath == "" {
 		d.portPath = port.Path()
 	}
+	// Fresh disconnect channel for this connection
+	d.disconnectCh = make(chan struct{})
 	d.portMu.Unlock()
 
 	log.Printf("device: %s on %s (%d-bit) at %s", hello.Version, hello.Board, hello.CellBits, port.Path())
@@ -166,6 +189,8 @@ func (d *Daemon) connect() error {
 	return nil
 }
 
+// serialReadLoop reads from the serial port, classifies bytes as
+// console text or COBS frames, and delivers decoded frames to replyCh.
 func (d *Daemon) serialReadLoop() {
 	defer d.wg.Done()
 
@@ -215,13 +240,8 @@ func (d *Daemon) serialReadLoop() {
 				consoleBuf = consoleBuf[:0]
 			}
 			if inFrame && len(frame) > 0 {
-				frameCopy := make([]byte, len(frame))
-				copy(frameCopy, frame)
-				select {
-				case d.frameCh <- frameCopy:
-				default:
-					log.Printf("frame: channel full, dropping %d-byte frame", len(frameCopy))
-				}
+				// Decode and deliver directly to the pending waiter
+				d.deliverFrame(frame)
 			}
 			frame = frame[:0]
 			inFrame = true
@@ -240,6 +260,29 @@ func (d *Daemon) serialReadLoop() {
 	}
 }
 
+// deliverFrame decodes a raw COBS frame and sends it to replyCh.
+// If nobody is waiting, the frame is logged and dropped.
+func (d *Daemon) deliverFrame(raw []byte) {
+	decoded, err := protocol.COBSDecode(raw)
+	if err != nil {
+		log.Printf("frame: corrupt COBS (%v)", err)
+		return
+	}
+
+	header, payload, err := protocol.ParseFrame(decoded)
+	if err != nil {
+		log.Printf("frame: bad header (%v)", err)
+		return
+	}
+
+	resp := frameResponse{header: header, payload: payload}
+	select {
+	case d.replyCh <- resp:
+	default:
+		log.Printf("frame: no waiter, dropping %s (id=%d)", msgTypeName(header.MessageType), header.RequestID)
+	}
+}
+
 func (d *Daemon) handleDisconnect(err error) {
 	d.portMu.Lock()
 	if d.port == nil {
@@ -249,6 +292,8 @@ func (d *Daemon) handleDisconnect(err error) {
 	d.port.Close()
 	d.port = nil
 	d.hello = nil
+	// Signal any blocked waitResponse
+	close(d.disconnectCh)
 	d.portMu.Unlock()
 
 	log.Printf("device disconnected: %v", err)
@@ -356,14 +401,14 @@ func (d *Daemon) shutdown() {
 	d.wg.Wait()
 }
 
+// --- Device operations ---
+
 // maxEvalSource is the maximum source bytes per EVAL_REQ frame.
-// MaxPayload (256) minus 3 bytes of EVAL overhead (flags + source_len).
 const maxEvalSource = protocol.MaxPayload - 3
 
 // chunkSource splits source into pieces that each fit in one EVAL_REQ.
 // Splits only at top-level boundaries (after newlines where bracket and
-// colon depth is zero), so multi-line forms like `: foo\n  dup +\n;`
-// are never broken across chunks.
+// colon depth is zero), so multi-line forms are never broken across chunks.
 func chunkSource(source string) []string {
 	lines := strings.SplitAfter(source, "\n")
 	var chunks []string
@@ -377,8 +422,6 @@ func chunkSource(source string) []string {
 
 		current.WriteString(line)
 
-		// Track nesting depth. This is a lightweight scan, not a full
-		// parser — it counts [ ] : ; to decide when we're at top level.
 		for _, ch := range line {
 			switch ch {
 			case '[':
@@ -392,22 +435,13 @@ func chunkSource(source string) []string {
 			}
 		}
 
-		// Only consider flushing at top-level (depth == 0) and at a
-		// newline boundary. If the chunk is approaching the limit,
-		// flush it. If a single form exceeds the limit, let it through
-		// as one chunk — the device will evaluate it if it fits in its
-		// own payload, or error cleanly if it doesn't.
 		if depth == 0 && current.Len() > 0 {
 			if current.Len() >= maxEvalSource || !strings.HasSuffix(line, "\n") {
 				chunks = append(chunks, current.String())
 				current.Reset()
-			} else {
-				// Check if the next line would overflow
-				// For now, just flush if we're past 75% capacity
-				if current.Len() > maxEvalSource*3/4 {
-					chunks = append(chunks, current.String())
-					current.Reset()
-				}
+			} else if current.Len() > maxEvalSource*3/4 {
+				chunks = append(chunks, current.String())
+				current.Reset()
 			}
 		}
 	}
@@ -417,24 +451,69 @@ func chunkSource(source string) []string {
 	return chunks
 }
 
-// deviceEval sends an EVAL_REQ and returns the parsed response.
-// Source longer than 253 bytes is automatically split into chunks
-// on line boundaries. Each chunk is sent as a separate EVAL_REQ.
-// If any chunk errors, evaluation stops and the error is returned.
-// Serialized: only one device transaction at a time.
-func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
+// sendFrame acquires writeMu, builds and writes a COBS frame.
+func (d *Daemon) sendFrame(msgType byte, reqID uint16, payload []byte) error {
+	wire, err := protocol.EncodeWireFrame(msgType, reqID, payload)
+	if err != nil {
+		return fmt.Errorf("build frame: %w", err)
+	}
+
+	d.writeMu.Lock()
+	defer d.writeMu.Unlock()
+
 	d.portMu.Lock()
 	port := d.port
 	d.portMu.Unlock()
 
 	if port == nil {
-		return nil, fmt.Errorf("device not connected")
+		return ErrDisconnected
+	}
+
+	return port.Write(wire)
+}
+
+// waitResponse blocks until the serial reader delivers a frame, the
+// device disconnects, or the daemon shuts down. No timeout — eval can
+// run indefinitely. The caller holds reqMu so only one waiter exists.
+func (d *Daemon) waitResponse(reqID uint16) (*protocol.Header, []byte, error) {
+	// Drain any stale frame from a previous request
+	select {
+	case <-d.replyCh:
+	default:
+	}
+
+	for {
+		select {
+		case resp := <-d.replyCh:
+			if resp.err != nil {
+				return nil, nil, resp.err
+			}
+			// Check request ID — discard stale responses
+			if resp.header.RequestID != reqID {
+				log.Printf("frame: discard stale (got ID %d, want %d)", resp.header.RequestID, reqID)
+				continue
+			}
+			return resp.header, resp.payload, nil
+		case <-d.disconnectCh:
+			return nil, nil, ErrDisconnected
+		case <-d.done:
+			return nil, nil, fmt.Errorf("daemon shutting down")
+		}
+	}
+}
+
+// deviceEval sends source for evaluation. Automatically chunks if needed.
+// Blocks until all chunks complete or an error occurs. No timeout.
+func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
+	d.portMu.Lock()
+	port := d.port
+	d.portMu.Unlock()
+	if port == nil {
+		return nil, ErrDisconnected
 	}
 
 	d.reqMu.Lock()
 	defer d.reqMu.Unlock()
-
-	drainFrames(d.frameCh)
 
 	chunks := chunkSource(source)
 	var lastResult *EvalResult
@@ -442,16 +521,12 @@ func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 	for _, chunk := range chunks {
 		reqID := d.allocReqID()
 		payload := protocol.BuildEvalPayload(chunk)
-		wire, err := protocol.EncodeWireFrame(protocol.EvalReq, reqID, payload)
-		if err != nil {
-			return nil, fmt.Errorf("build frame: %w", err)
-		}
 
-		if err := port.Write(wire); err != nil {
+		if err := d.sendFrame(protocol.EvalReq, reqID, payload); err != nil {
 			return nil, fmt.Errorf("write: %w", err)
 		}
 
-		header, respPayload, err := d.waitValidResponse(reqID, rpcTimeout)
+		header, respPayload, err := d.waitResponse(reqID)
 		if err != nil {
 			return nil, err
 		}
@@ -468,7 +543,6 @@ func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 				FaultWord: resp.FaultWord,
 				StackRepr: resp.StackRepr,
 			}
-			// Stop on first error from the device
 			if lastResult.Status != 0 {
 				return lastResult, nil
 			}
@@ -494,27 +568,19 @@ func (d *Daemon) deviceInfo() (*InfoResult, error) {
 	d.portMu.Lock()
 	port := d.port
 	d.portMu.Unlock()
-
 	if port == nil {
-		return nil, fmt.Errorf("device not connected")
+		return nil, ErrDisconnected
 	}
 
 	d.reqMu.Lock()
 	defer d.reqMu.Unlock()
 
-	drainFrames(d.frameCh)
-
 	reqID := d.allocReqID()
-	wire, err := protocol.EncodeWireFrame(protocol.InfoReq, reqID, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build frame: %w", err)
-	}
-
-	if err := port.Write(wire); err != nil {
+	if err := d.sendFrame(protocol.InfoReq, reqID, nil); err != nil {
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
-	header, respPayload, err := d.waitValidResponse(reqID, rpcTimeout)
+	header, respPayload, err := d.waitResponse(reqID)
 	if err != nil {
 		return nil, err
 	}
@@ -543,27 +609,19 @@ func (d *Daemon) deviceReset() (*ResetResult, error) {
 	d.portMu.Lock()
 	port := d.port
 	d.portMu.Unlock()
-
 	if port == nil {
-		return nil, fmt.Errorf("device not connected")
+		return nil, ErrDisconnected
 	}
 
 	d.reqMu.Lock()
 	defer d.reqMu.Unlock()
 
-	drainFrames(d.frameCh)
-
 	reqID := d.allocReqID()
-	wire, err := protocol.EncodeWireFrame(protocol.ResetReq, reqID, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build frame: %w", err)
-	}
-
-	if err := port.Write(wire); err != nil {
+	if err := d.sendFrame(protocol.ResetReq, reqID, nil); err != nil {
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
-	header, respPayload, err := d.waitValidResponse(reqID, rpcTimeout)
+	header, respPayload, err := d.waitResponse(reqID)
 	if err != nil {
 		return nil, err
 	}
@@ -597,16 +655,18 @@ func (d *Daemon) deviceReset() (*ResetResult, error) {
 	}, nil
 }
 
-// deviceInterrupt sends a raw 0x03 (Ctrl-C) byte to the device
-// outside of any COBS frame. This sets the device's interrupt flag
-// and causes the current evaluation to abort with ERR.INTERRUPT.
+// deviceInterrupt sends a raw 0x03 (Ctrl-C) byte to the device.
+// Uses writeMu (not reqMu) so it can execute while eval is in progress.
 func (d *Daemon) deviceInterrupt() error {
+	d.writeMu.Lock()
+	defer d.writeMu.Unlock()
+
 	d.portMu.Lock()
 	port := d.port
 	d.portMu.Unlock()
 
 	if port == nil {
-		return fmt.Errorf("device not connected")
+		return ErrDisconnected
 	}
 
 	return port.Write([]byte{0x03})
@@ -618,74 +678,6 @@ func (d *Daemon) allocReqID() uint16 {
 	return uint16((id % 0xFFFE) + 1)
 }
 
-// waitValidResponse reads frames from frameCh until one decodes
-// successfully and has a matching request ID, or until timeout.
-// Corrupt frames and ID mismatches are discarded (up to 3 retries).
-// This prevents stale frames from poisoning subsequent RPCs while
-// still failing fast when the actual response is corrupt.
-func (d *Daemon) waitValidResponse(reqID uint16, timeout time.Duration) (*protocol.Header, []byte, error) {
-	deadline := time.Now().Add(timeout)
-	maxRetries := 3
-	var lastErr error
-
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return nil, nil, fmt.Errorf("device response timeout")
-		}
-
-		// Wait for next raw COBS frame from the serial read loop
-		var encoded []byte
-		select {
-		case encoded = <-d.frameCh:
-		case <-time.After(remaining):
-			return nil, nil, fmt.Errorf("device response timeout")
-		case <-d.done:
-			return nil, nil, fmt.Errorf("daemon shutting down")
-		}
-
-		// Decode COBS — if corrupt, count as a retry
-		decoded, err := protocol.COBSDecode(encoded)
-		if err != nil {
-			lastErr = fmt.Errorf("cobs decode: %w", err)
-			log.Printf("frame: discard corrupt COBS (%v)", err)
-			continue
-		}
-
-		// Parse header — if invalid, count as a retry
-		header, payload, err := protocol.ParseFrame(decoded)
-		if err != nil {
-			lastErr = fmt.Errorf("parse frame: %w", err)
-			log.Printf("frame: discard bad frame (%v)", err)
-			continue
-		}
-
-		// Check request ID — if stale, count as a retry
-		if header.RequestID != reqID {
-			lastErr = fmt.Errorf("stale response (got ID %d, want %d)", header.RequestID, reqID)
-			log.Printf("frame: discard stale response (got ID %d, want %d)", header.RequestID, reqID)
-			continue
-		}
-
-		return header, payload, nil
-	}
-
-	if lastErr != nil {
-		return nil, nil, fmt.Errorf("frame error after %d retries: %w", maxRetries, lastErr)
-	}
-	return nil, nil, fmt.Errorf("device response timeout")
-}
-
-func drainFrames(ch chan []byte) {
-	for {
-		select {
-		case <-ch:
-		default:
-			return
-		}
-	}
-}
-
 func helloToResult(h *protocol.HelloResponse) HelloResult {
 	return HelloResult{
 		CellBits:   int(h.CellBits),
@@ -695,5 +687,22 @@ func helloToResult(h *protocol.HelloResponse) HelloResult {
 		SlotCount:  int(h.SlotCount),
 		Version:    h.Version,
 		Board:      h.Board,
+	}
+}
+
+func msgTypeName(t byte) string {
+	switch t {
+	case protocol.HelloRes:
+		return "HELLO_RES"
+	case protocol.EvalRes:
+		return "EVAL_RES"
+	case protocol.InfoRes:
+		return "INFO_RES"
+	case protocol.ResetRes:
+		return "RESET_RES"
+	case protocol.Error:
+		return "ERROR"
+	default:
+		return fmt.Sprintf("0x%02x", t)
 	}
 }

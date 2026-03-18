@@ -171,15 +171,16 @@ class FrothController {
     }
 
     this.output.appendLine(`[froth] evaluating ${editor.document.fileName}`);
-    await this.evalAndLog(text);
-    await this.refreshDeviceInfo();
+    // Fire-and-forget: eval may run indefinitely (while loops are normal).
+    // Results and errors are logged to the console when they arrive.
+    this.evalAndLog(text).then(() => this.refreshDeviceInfo());
   }
 
   async interrupt(): Promise<void> {
-    // Interrupt uses a fresh, short-lived daemon connection so it can
-    // execute even while the main connection is blocked on a long eval.
-    // The main connection's serve() loop is blocked reading the eval
-    // response, so it can't process the interrupt request inline.
+    // Uses a fresh daemon connection because the daemon handles one RPC
+    // at a time per socket (rpc.go serve loop). If eval is in progress
+    // on the main connection, a same-socket interrupt would queue behind
+    // it. A second socket gets its own serve() goroutine.
     const interruptClient = new DaemonClient();
     try {
       await interruptClient.connect();
