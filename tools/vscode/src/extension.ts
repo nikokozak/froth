@@ -12,7 +12,7 @@ import {
 
 const RECONNECT_INTERVAL_MS = 3000;
 
-type ConnectionState = "connected" | "disconnected" | "no-daemon";
+type ConnectionState = "connected" | "running" | "disconnected" | "no-daemon";
 
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel("Froth Console");
@@ -122,7 +122,27 @@ class FrothController {
     }
   }
 
+  // Returns true if the device is available for a framed command.
+  // Shows a warning and returns false if busy or not connected.
+  private requireIdle(): boolean {
+    if (this.state === "running") {
+      vscode.window.showWarningMessage(
+        "Device is running a program. Use Interrupt first.",
+      );
+      return false;
+    }
+    if (!this.client) {
+      vscode.window.showWarningMessage("Not connected to Froth daemon");
+      return false;
+    }
+    return true;
+  }
+
   async sendSelection(): Promise<void> {
+    if (!this.requireIdle()) {
+      return;
+    }
+
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       vscode.window.showWarningMessage("No active editor");
@@ -144,6 +164,10 @@ class FrothController {
   }
 
   async sendFile(): Promise<void> {
+    if (!this.requireIdle()) {
+      return;
+    }
+
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       vscode.window.showWarningMessage("No active editor");
@@ -155,15 +179,10 @@ class FrothController {
       return;
     }
 
-    if (!this.client) {
-      vscode.window.showWarningMessage("Not connected to Froth daemon");
-      return;
-    }
-
     // ADR-037: Send File = reset + eval whole file
     this.output.appendLine("[froth] reset");
     try {
-      await this.client.reset();
+      await this.client!.reset();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       vscode.window.showErrorMessage(`Reset failed: ${msg}`);
@@ -172,7 +191,7 @@ class FrothController {
 
     this.output.appendLine(`[froth] evaluating ${editor.document.fileName}`);
     // Fire-and-forget: eval may run indefinitely (while loops are normal).
-    // Results and errors are logged to the console when they arrive.
+    // evalAndLog sets state to "running" and clears it on completion.
     this.evalAndLog(text).then(() => this.refreshDeviceInfo());
   }
 
@@ -195,13 +214,12 @@ class FrothController {
   }
 
   async reset(): Promise<void> {
-    if (!this.client) {
-      vscode.window.showWarningMessage("Not connected to Froth daemon");
+    if (!this.requireIdle()) {
       return;
     }
 
     try {
-      await this.client.reset();
+      await this.client!.reset();
       this.output.appendLine("[froth] reset");
       await this.refreshDeviceInfo();
     } catch (err: unknown) {
@@ -211,13 +229,12 @@ class FrothController {
   }
 
   async evalCommand(cmd: string): Promise<void> {
-    if (!this.client) {
-      vscode.window.showWarningMessage("Not connected to Froth daemon");
+    if (!this.requireIdle()) {
       return;
     }
 
     try {
-      const result = await this.client.eval(cmd);
+      const result = await this.client!.eval(cmd);
       // Error code 20 is FROTH_ERROR_RESET, returned by wipe and
       // dangerous-reset. It's a success signal, not a real error.
       if (result.status !== 0 && result.error_code !== 20) {
@@ -367,10 +384,14 @@ class FrothController {
       source.length > 80 ? source.slice(0, 77) + "..." : source;
     this.output.appendLine(`> ${preview}`);
 
+    this.setState("running");
+
     let result: EvalResult;
     try {
       result = await this.client.eval(source);
     } catch (err: unknown) {
+      // Eval ended (error or disconnect). Return to connected/disconnected.
+      this.setState(this.client ? "connected" : "disconnected");
       if (err instanceof DaemonClientError && err.isNotConnected) {
         vscode.window.showWarningMessage("No device connected");
       } else {
@@ -380,6 +401,8 @@ class FrothController {
       return;
     }
 
+    // Eval completed normally.
+    this.setState("connected");
     this.logResult(result);
     this.output.show(true);
     await this.refreshDeviceInfo();
@@ -409,6 +432,12 @@ class FrothController {
 
   private updateStatusBar(): void {
     switch (this.state) {
+      case "running":
+        this.statusItem.text = "$(sync~spin) Froth: Running";
+        this.statusItem.tooltip =
+          "Program running on device. Use Interrupt to stop.";
+        this.statusItem.backgroundColor = undefined;
+        break;
       case "connected":
         this.statusItem.text = "$(plug) Froth: Connected";
         this.statusItem.tooltip = "Connected to Froth device via daemon";
@@ -478,6 +507,13 @@ class FrothSidebarProvider implements vscode.TreeDataProvider<SidebarItem> {
       items.push(
         new SidebarItem("No device connected", "", "$(debug-disconnect)"),
       );
+      return items;
+    }
+
+    if (state === "running") {
+      items.push(new SidebarItem("Program running...", "", "$(sync~spin)"));
+      items.push(new SidebarItem("", "", ""));
+      items.push(actionItem("$(debug-stop) Interrupt", "froth.interrupt"));
       return items;
     }
 
