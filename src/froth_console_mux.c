@@ -45,6 +45,17 @@ froth_error_t froth_console_mux_start(froth_vm_t *vm) {
     }
 #endif
 
+    /* Ctrl-C in direct mode triggers interrupt, not passed to REPL.
+       Inside a COBS frame, 0x03 is data (handled above in MUX_FRAME). */
+    if (byte == 0x03) {
+      vm->interrupted = 1;
+      continue;
+    }
+
+    /* CR → LF for REPL (VFS conversion is disabled for binary safety). */
+    if (byte == '\r')
+      byte = '\n';
+
     /* Direct-mode byte → REPL */
     FROTH_TRY(froth_repl_accept_byte(vm, byte, &reader_state));
 

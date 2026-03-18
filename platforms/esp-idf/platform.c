@@ -30,7 +30,10 @@ froth_error_t platform_init(void) {
   vTaskDelay(pdMS_TO_TICKS(50));
   uart_flush(UART_NUM_0); // Get rid of dirty RX data
   esp_vfs_dev_uart_use_driver(UART_NUM_0);
-  esp_vfs_dev_uart_port_set_rx_line_endings(UART_NUM_0, ESP_LINE_ENDINGS_CR);
+  /* No line-ending conversion in either direction. Binary frames (COBS)
+     need raw bytes. CR → LF for the REPL is handled at the mux/REPL level. */
+  esp_vfs_dev_uart_port_set_rx_line_endings(UART_NUM_0, ESP_LINE_ENDINGS_LF);
+  esp_vfs_dev_uart_port_set_tx_line_endings(UART_NUM_0, ESP_LINE_ENDINGS_LF);
 
   // Set up the NVS partition system
   err = nvs_flash_init();
@@ -58,10 +61,9 @@ froth_error_t platform_key(uint8_t *byte) {
   if (c == EOF) {
     return FROTH_ERROR_IO;
   }
-  if (c == 0x03) {
-    froth_vm.interrupted = 1;
-    return FROTH_ERROR_IO;
-  }
+  /* Return raw bytes including 0x03 (Ctrl-C). Interrupt handling
+     belongs to the caller (mux or blocking REPL), which knows whether
+     the byte is inside a COBS frame (data) or direct mode (interrupt). */
   *byte = (uint8_t)c;
   return FROTH_OK;
 }

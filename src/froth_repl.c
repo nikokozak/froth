@@ -374,6 +374,17 @@ froth_error_t froth_repl_start(froth_vm_t *vm) {
     if (err != FROTH_OK)
       continue;
 
+    /* Ctrl-C sets interrupt flag, not passed to the line buffer.
+       On ESP32, platform_key returns 0x03 as a raw byte (no signals). */
+    if (byte == 0x03) {
+      vm->interrupted = 1;
+      continue;
+    }
+
+    /* CR → LF (VFS conversion is disabled for binary safety on ESP32). */
+    if (byte == '\r')
+      byte = '\n';
+
     FROTH_TRY(froth_repl_accept_byte(vm, byte, &state));
 
     if (state == 1) {
