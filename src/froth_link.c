@@ -1,8 +1,8 @@
 #include "froth_link.h"
 #include "froth_evaluator.h"
-#include "froth_fmt.h"
-#include "froth_transport.h"
+#include "froth_primitives.h"
 #include "froth_slot_table.h"
+#include "froth_transport.h"
 #include "froth_vm.h"
 #include <stdio.h>
 #include <string.h>
@@ -58,10 +58,12 @@ static int format_stack(froth_vm_t *vm, char *buf, int cap) {
   int pos = 0;
   froth_cell_u_t depth = froth_stack_depth(&vm->ds);
 
-  if (pos < cap) buf[pos++] = '[';
+  if (pos < cap)
+    buf[pos++] = '[';
 
   for (froth_cell_u_t i = 0; i < depth; i++) {
-    if (i > 0 && pos < cap) buf[pos++] = ' ';
+    if (i > 0 && pos < cap)
+      buf[pos++] = ' ';
 
     froth_cell_t cell = vm->ds.data[i];
     froth_cell_t tag = FROTH_CELL_GET_TAG(cell);
@@ -93,12 +95,18 @@ static int format_stack(froth_vm_t *vm, char *buf, int cap) {
       wrote = snprintf(buf + pos, cap - pos, "<%d>", (int)tag);
       break;
     }
-    if (wrote > 0 && pos + wrote < cap) pos += wrote;
-    else if (wrote > 0) { pos = cap - 3; break; } /* room for ] \0 */
+    if (wrote > 0 && pos + wrote < cap)
+      pos += wrote;
+    else if (wrote > 0) {
+      pos = cap - 3;
+      break;
+    } /* room for ] \0 */
   }
 
-  if (pos < 0) pos = 0;
-  if (pos < cap - 1) buf[pos++] = ']';
+  if (pos < 0)
+    pos = 0;
+  if (pos < cap - 1)
+    buf[pos++] = ']';
   buf[pos] = '\0';
 
   return pos;
@@ -118,20 +126,19 @@ static froth_error_t handle_hello(froth_vm_t *vm, uint16_t request_id) {
   FROTH_TRY(pw_u32(&pw, FROTH_HEAP_SIZE));
   FROTH_TRY(pw_u32(&pw, vm->heap.pointer));
   FROTH_TRY(pw_u16(&pw, froth_slot_count()));
-  FROTH_TRY(pw_u8(&pw, 0));                      /* flags (reserved) */
+  FROTH_TRY(pw_u8(&pw, 0)); /* flags (reserved) */
   FROTH_TRY(pw_str(&pw, FROTH_VERSION));
   FROTH_TRY(pw_str(&pw, FROTH_BOARD_NAME));
-  FROTH_TRY(pw_u8(&pw, 0));                      /* capability_count */
+  FROTH_TRY(pw_u8(&pw, 0)); /* capability_count */
 
-  return froth_link_send_frame(FROTH_LINK_HELLO_RES, request_id,
-                               resp_buf, pw.pos);
+  return froth_link_send_frame(FROTH_LINK_HELLO_RES, request_id, resp_buf,
+                               pw.pos);
 }
 
 /* ── EVAL ────────────────────────────────────────────────────────── */
 
 static froth_error_t handle_eval(froth_vm_t *vm, uint16_t request_id,
-                                 const uint8_t *payload,
-                                 uint16_t payload_len) {
+                                 const uint8_t *payload, uint16_t payload_len) {
   if (payload_len < 3)
     return FROTH_ERROR_LINK_TOO_LARGE;
 
@@ -163,15 +170,15 @@ static froth_error_t handle_eval(froth_vm_t *vm, uint16_t request_id,
     char stack_buf[128];
     format_stack(vm, stack_buf, sizeof(stack_buf));
 
-    FROTH_TRY(pw_u8(&pw, 0));             /* status: success */
-    FROTH_TRY(pw_u16(&pw, 0));            /* error_code */
-    FROTH_TRY(pw_str(&pw, ""));           /* fault_word */
-    FROTH_TRY(pw_str(&pw, stack_buf));    /* stack_repr */
+    FROTH_TRY(pw_u8(&pw, 0));          /* status: success */
+    FROTH_TRY(pw_u16(&pw, 0));         /* error_code */
+    FROTH_TRY(pw_str(&pw, ""));        /* fault_word */
+    FROTH_TRY(pw_str(&pw, stack_buf)); /* stack_repr */
   } else {
     froth_cell_t code =
         (eval_err == FROTH_ERROR_THROW) ? vm->thrown : (froth_cell_t)eval_err;
 
-    FROTH_TRY(pw_u8(&pw, 1));              /* status: error */
+    FROTH_TRY(pw_u8(&pw, 1));               /* status: error */
     FROTH_TRY(pw_u16(&pw, (uint16_t)code)); /* error_code */
 
     /* fault word */
@@ -190,8 +197,8 @@ static froth_error_t handle_eval(froth_vm_t *vm, uint16_t request_id,
     vm->call_depth = cd_snap;
   }
 
-  return froth_link_send_frame(FROTH_LINK_EVAL_RES, request_id,
-                               resp_buf, pw.pos);
+  return froth_link_send_frame(FROTH_LINK_EVAL_RES, request_id, resp_buf,
+                               pw.pos);
 }
 
 /* ── INFO ────────────────────────────────────────────────────────── */
@@ -218,11 +225,50 @@ static froth_error_t handle_info(froth_vm_t *vm, uint16_t request_id) {
   }
   FROTH_TRY(pw_u16(&pw, overlay_slots));
 
-  FROTH_TRY(pw_u8(&pw, 0));                 /* flags */
+  FROTH_TRY(pw_u8(&pw, 0)); /* flags */
   FROTH_TRY(pw_str(&pw, FROTH_VERSION));
 
-  return froth_link_send_frame(FROTH_LINK_INFO_RES, request_id,
-                               resp_buf, pw.pos);
+  return froth_link_send_frame(FROTH_LINK_INFO_RES, request_id, resp_buf,
+                               pw.pos);
+}
+
+/* ── RESET ────────────────────────────────────────────────────────── */
+
+static froth_error_t handle_reset(froth_vm_t *vm, uint16_t request_id) {
+  payload_writer_t pw = {resp_buf, sizeof(resp_buf), 0};
+
+  /* Reset clears VM stacks, overlay slots, and heap back to watermark.
+     The REPL line buffer is intentionally NOT cleared: the link and REPL
+     own separate input streams. Any partially typed direct-mode input
+     remains the user's intent regardless of host-triggered resets. */
+  froth_error_t err = froth_prim_dangerous_reset(vm);
+  uint32_t status = (err == FROTH_ERROR_RESET) ? 0 : (uint32_t)err;
+  FROTH_TRY(pw_u32(&pw, status));
+
+  FROTH_TRY(pw_u32(&pw, FROTH_HEAP_SIZE));
+  FROTH_TRY(pw_u32(&pw, vm->heap.pointer));
+
+  /* overlay heap usage = current - boot watermark */
+  uint32_t overlay_used = 0;
+  if (vm->heap.pointer > vm->watermark_heap_offset)
+    overlay_used = vm->heap.pointer - vm->watermark_heap_offset;
+  FROTH_TRY(pw_u32(&pw, overlay_used));
+
+  FROTH_TRY(pw_u16(&pw, froth_slot_count()));
+
+  /* overlay slot count */
+  uint16_t overlay_slots = 0;
+  for (uint16_t i = 0; i < froth_slot_count(); i++) {
+    if (froth_slot_is_overlay(i))
+      overlay_slots++;
+  }
+  FROTH_TRY(pw_u16(&pw, overlay_slots));
+
+  FROTH_TRY(pw_u8(&pw, 0)); /* flags */
+  FROTH_TRY(pw_str(&pw, FROTH_VERSION));
+
+  return froth_link_send_frame(FROTH_LINK_RESET_RES, request_id, resp_buf,
+                               pw.pos);
 }
 
 /* ── ERROR response ──────────────────────────────────────────────── */
@@ -244,12 +290,13 @@ froth_error_t froth_link_dispatch(froth_vm_t *vm,
   case FROTH_LINK_HELLO_REQ:
     return handle_hello(vm, header->request_id);
   case FROTH_LINK_EVAL_REQ:
-    return handle_eval(vm, header->request_id, payload,
-                       header->payload_length);
+    return handle_eval(vm, header->request_id, payload, header->payload_length);
   case FROTH_LINK_INFO_REQ:
     return handle_info(vm, header->request_id);
   case FROTH_LINK_INSPECT_REQ:
     return send_error(header->request_id, 1, "not implemented");
+  case FROTH_LINK_RESET_REQ:
+    return handle_reset(vm, header->request_id);
   default:
     return send_error(header->request_id, 0, "unknown message type");
   }

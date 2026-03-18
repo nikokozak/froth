@@ -197,6 +197,18 @@ func (c *Client) Info() (*InfoResult, error) {
 	return &result, nil
 }
 
+func (c *Client) Reset() (*ResetResult, error) {
+	raw, err := c.Call("reset", nil)
+	if err != nil {
+		return nil, err
+	}
+	var result ResetResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 func (c *Client) Status() (*StatusResult, error) {
 	raw, err := c.Call("status", nil)
 	if err != nil {

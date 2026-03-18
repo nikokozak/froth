@@ -39,7 +39,6 @@ const (
 	errParseError     = -32700
 	errInvalidRequest = -32600
 	errMethodNotFound = -32601
-	errInternalError  = -32603
 	errDeviceError    = -32000
 	errNotConnected   = -32001
 )
@@ -76,6 +75,16 @@ type HelloResult struct {
 }
 
 type InfoResult struct {
+	HeapSize         int    `json:"heap_size"`
+	HeapUsed         int    `json:"heap_used"`
+	HeapOverlayUsed  int    `json:"heap_overlay_used"`
+	SlotCount        int    `json:"slot_count"`
+	SlotOverlayCount int    `json:"slot_overlay_count"`
+	Version          string `json:"version"`
+}
+
+type ResetResult struct {
+	Status           int    `json:"status"`
 	HeapSize         int    `json:"heap_size"`
 	HeapUsed         int    `json:"heap_used"`
 	HeapOverlayUsed  int    `json:"heap_overlay_used"`
@@ -149,6 +158,8 @@ func (c *rpcConn) handleRequest(req *rpcRequest) {
 		c.handleInfo(req)
 	case "status":
 		c.handleStatus(req)
+	case "reset":
+		c.handleReset(req)
 	default:
 		c.sendError(req.ID, errMethodNotFound, "unknown method: "+req.Method)
 	}
@@ -185,6 +196,16 @@ func (c *rpcConn) handleEval(req *rpcRequest) {
 
 func (c *rpcConn) handleInfo(req *rpcRequest) {
 	result, err := c.daemon.deviceInfo()
+	if err != nil {
+		c.sendError(req.ID, errDeviceError, err.Error())
+		return
+	}
+
+	c.sendResult(req.ID, result)
+}
+
+func (c *rpcConn) handleReset(req *rpcRequest) {
+	result, err := c.daemon.deviceReset()
 	if err != nil {
 		c.sendError(req.ID, errDeviceError, err.Error())
 		return

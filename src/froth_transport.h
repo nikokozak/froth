@@ -8,7 +8,8 @@
 
 /* Raw frame = 12-byte header + payload. COBS adds at most 1 byte per 254. */
 #define FROTH_LINK_MAX_FRAME (12 + FROTH_LINK_MAX_PAYLOAD)
-#define FROTH_LINK_COBS_MAX  (FROTH_LINK_MAX_FRAME + (FROTH_LINK_MAX_FRAME / 254) + 1)
+#define FROTH_LINK_COBS_MAX                                                    \
+  (FROTH_LINK_MAX_FRAME + (FROTH_LINK_MAX_FRAME / 254) + 1)
 
 #define FROTH_LINK_HEADER_SIZE 12
 #define FROTH_LINK_MAGIC_0 'F'
@@ -16,16 +17,18 @@
 #define FROTH_LINK_VERSION 1
 
 /* Message types (Phase 1) */
-#define FROTH_LINK_HELLO_REQ   0x01
-#define FROTH_LINK_HELLO_RES   0x02
-#define FROTH_LINK_EVAL_REQ    0x03
-#define FROTH_LINK_EVAL_RES    0x04
+#define FROTH_LINK_HELLO_REQ 0x01
+#define FROTH_LINK_HELLO_RES 0x02
+#define FROTH_LINK_EVAL_REQ 0x03
+#define FROTH_LINK_EVAL_RES 0x04
 #define FROTH_LINK_INSPECT_REQ 0x05
 #define FROTH_LINK_INSPECT_RES 0x06
-#define FROTH_LINK_INFO_REQ    0x07
-#define FROTH_LINK_INFO_RES    0x08
-#define FROTH_LINK_EVENT       0xFE
-#define FROTH_LINK_ERROR       0xFF
+#define FROTH_LINK_INFO_REQ 0x07
+#define FROTH_LINK_INFO_RES 0x08
+#define FROTH_LINK_RESET_REQ 0x09
+#define FROTH_LINK_RESET_RES 0x0A
+#define FROTH_LINK_EVENT 0xFE
+#define FROTH_LINK_ERROR 0xFF
 
 /* Sentinel request ID for unparseable requests */
 #define FROTH_LINK_REQ_ID_NONE 0xFFFF

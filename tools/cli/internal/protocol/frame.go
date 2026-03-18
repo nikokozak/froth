@@ -8,10 +8,10 @@ import (
 
 // Frame layout constants matching ADR-033 and froth_transport.h.
 const (
-	HeaderSize     = 12
-	MaxPayload     = 256
-	Magic0         = 'F'
-	Magic1         = 'L'
+	HeaderSize      = 12
+	MaxPayload      = 256
+	Magic0          = 'F'
+	Magic1          = 'L'
 	ProtocolVersion = 1
 )
 
@@ -25,6 +25,8 @@ const (
 	InspectRes = 0x06
 	InfoReq    = 0x07
 	InfoRes    = 0x08
+	ResetReq   = 0x09
+	ResetRes   = 0x0A
 	Event      = 0xFE
 	Error      = 0xFF
 )

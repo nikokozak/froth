@@ -60,6 +60,8 @@ func Execute() error {
 		return runFlash()
 	case "daemon":
 		return runDaemon(remaining[1:])
+	case "reset":
+		return runReset()
 	default:
 		return fmt.Errorf("unknown command: %s", remaining[0])
 	}

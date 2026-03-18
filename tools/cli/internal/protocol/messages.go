@@ -80,7 +80,7 @@ func BuildEvalPayload(source string) []byte {
 
 // EvalResponse holds parsed EVAL_RES payload fields.
 type EvalResponse struct {
-	Status    uint8  // 0 = success, 1 = error
+	Status    uint8 // 0 = success, 1 = error
 	ErrorCode uint16
 	FaultWord string
 	StackRepr string
@@ -147,6 +147,53 @@ func ParseInfoResponse(p []byte) (*InfoResponse, error) {
 		return nil, fmt.Errorf("parse INFO_RES: %w", r.err)
 	}
 	return info, nil
+}
+
+// --- RESET ---
+
+// ResetResponse holds parsed RESET_RES payload fields.
+type ResetResponse struct {
+	Status           uint32
+	HeapSize         uint32
+	HeapUsed         uint32
+	HeapOverlayUsed  uint32
+	SlotCount        uint16
+	SlotOverlayCount uint16
+	Flags            uint8
+	Version          string
+}
+
+// ParseResetResponse decodes an RESET_RES binary payload.
+func ParseResetResponse(p []byte) (*ResetResponse, error) {
+	// Payload layout (from froth_link.c handle_reset):
+	//   u32  status -- corresponds to the froth_error_t returned by froth_prim_dangerous_reset (0 if OK)
+	//   u32  heap_size
+	//   u32  heap_used
+	//   u32  heap_overlay_used
+	//   u16  slot_count
+	//   u16  slot_overlay_count
+	//   u8   flags
+	//   str  version
+
+	r := &payloadReader{data: p}
+
+	reset := &ResetResponse{}
+	reset.Status = r.u32()
+	reset.HeapSize = r.u32()
+	reset.HeapUsed = r.u32()
+	reset.HeapOverlayUsed = r.u32()
+	reset.SlotCount = r.u16()
+	reset.SlotOverlayCount = r.u16()
+	reset.Flags = r.u8()
+	reset.Version = r.str()
+
+	if r.err != nil {
+		return nil, fmt.Errorf("parse RESET_RES: %w", r.err)
+	}
+	if reset.Status != 0 {
+		return nil, fmt.Errorf("RESET_RES device reset error: %d", reset.Status)
+	}
+	return reset, nil
 }
 
 // --- ERROR ---

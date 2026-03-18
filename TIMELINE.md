@@ -232,7 +232,7 @@
 - [x] Fix ESP32 NVS serialization bug (stack overflow in platform read/write — static staging buffer)
 - [x] **Proof**: flash ESP32, define word, save, power cycle, verify persistence. A/B rotation, wipe, multiple saves all work.
 - [x] `dangerous-reset` primitive (ADR-037, ADR-041: strict bare identifiers fix)
-- [ ] `RESET_REQ`/`RESET_RES` protocol messages (ADR-037: prerequisite for honest Send File)
+- [x] `RESET_REQ`/`RESET_RES` protocol messages (ADR-037: prerequisite for honest Send File)
 - [ ] CS trampoline executor (ADR-040: replace C recursion, O(1) C stack, portable call depth)
 - [ ] Embedded user program support (CMake `FROTH_USER_PROGRAM`, boot sequence slot)
 - [ ] Streaming snapshot serializer v2 (ADR-038: ~344B writer, ~280B reader, format change)

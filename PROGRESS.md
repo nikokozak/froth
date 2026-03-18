@@ -93,7 +93,8 @@
 - ESP32 persistence proven on hardware: define word, save, power cycle, restore. A/B rotation, wipe, multiple saves all verified.
 - `dangerous-reset` primitive (ADR-037): clears overlay slots, restores heap to watermark, zeroes DS/RS/CS, clears thrown/last_error_slot/call_depth/mark. Returns `FROTH_ERROR_RESET` (code 20) which the REPL catches as a clean top-level abort (prints "reset", no error display, no stale snapshot restore). Available on all targets (not gated behind `FROTH_HAS_SNAPSHOTS`). Named `dangerous-reset` to prevent accidental invocation.
 - `wipe` revised (ADR-037): now calls `froth_prim_dangerous_reset` internally instead of duplicating overlay-clear logic. Erases both snapshot slots, then resets.
-- Strict bare identifiers (ADR-041): top-level bare identifier resolution no longer creates slots. `froth_evaluator_handle_identifier` uses `froth_slot_find_name` directly; undefined names error without side effects. Forward references inside quotations, tick-identifiers, and colon sugar still create slots via `resolve_or_create_slot`. Fixes ghost slot bug where typos after `reset` left dangling heap pointers that poisoned subsequent `restore`.
+- Strict bare identifiers (ADR-041): top-level bare identifier resolution no longer creates slots.
+- `RESET_REQ`/`RESET_RES` protocol messages (ADR-037): message types 0x09/0x0A. Device-side `handle_reset` in `froth_link.c` calls `froth_prim_dangerous_reset`, maps `FROTH_ERROR_RESET` sentinel to status 0, returns INFO-shaped payload (heap, slots, version). Go CLI: `froth reset` command (serial + daemon paths), `session.Reset()`, daemon `deviceReset()` RPC. REPL buffer intentionally untouched (link and REPL own separate input streams). End-to-end proven via socat PTY pair. `froth_evaluator_handle_identifier` uses `froth_slot_find_name` directly; undefined names error without side effects. Forward references inside quotations, tick-identifiers, and colon sugar still create slots via `resolve_or_create_slot`. Fixes ghost slot bug where typos after `reset` left dangling heap pointers that poisoned subsequent `restore`.
 - ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards), 032 (mark/release heap watermark), 033 (link transport v1: COBS binary framing), 034 (console multiplexer architecture), 035 (host daemon architecture), 036 (protocol sideband probes), 037 (host-centric deployment with overlay user program), 039 (host tooling UX and daemon lifecycle), 040 (CS trampoline executor), 041 (strict bare identifiers)
 - VS Code extension design: `docs/concepts/vscode-extension-design.md`. Two modes (live/project), form-level sync, subscription probes at safe points, thin TypeScript over daemon. Workshop skeleton: connect, send selection, console, status bar.
 - Host tooling roadmap: `docs/concepts/host-tooling-roadmap.md`. Phased plan with status tracking for AI agents.
@@ -114,7 +115,7 @@
 
 ## In Progress
 
-- ADR-037 host-centric deployment: `reset` primitive done. Remaining: `RESET_REQ`/`RESET_RES` protocol messages, embedded user program support.
+- ADR-037 host-centric deployment: `reset` primitive and `RESET_REQ`/`RESET_RES` protocol messages done. Remaining: embedded user program support.
 - ADR-038 streaming snapshot serializer: accepted. Current static BSS workspace is a band-aid (~2.8KB + 2KB NVS staging). Streaming v2 format targets ~344B writer, ~280B reader.
 
 ## Blocked / Waiting
@@ -124,9 +125,8 @@
 
 ## Next Up
 
-1. `RESET_REQ`/`RESET_RES` protocol messages (ADR-037: prerequisite for honest Send File)
-2. CS trampoline executor (ADR-040: replace C recursion with explicit call stack, O(1) C stack usage)
-3. Embedded user program support (CMake `FROTH_USER_PROGRAM` variable, boot sequence slot)
+1. CS trampoline executor (ADR-040: replace C recursion with explicit call stack, O(1) C stack usage)
+2. Embedded user program support (CMake `FROTH_USER_PROGRAM` variable, boot sequence slot)
 4. ESP32 workshop prep: audio FFI decision (synth under reconsideration), 15 pre-flashed boards
 5. Daemon PTY passthrough (Phase 2 of ADR-035, post-workshop)
 6. Interleaved kernel work: FROTH-Addr

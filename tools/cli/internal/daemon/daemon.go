@@ -321,7 +321,7 @@ func (d *Daemon) acceptLoop() {
 	}
 }
 
-func (d *Daemon) broadcast(event string, params interface{}) {
+func (d *Daemon) broadcast(event string, params any) {
 	d.clientsMu.Lock()
 	targets := make([]*rpcConn, 0, len(d.clients))
 	for c := range d.clients {
@@ -467,6 +467,74 @@ func (d *Daemon) deviceInfo() (*InfoResult, error) {
 	}
 
 	return &InfoResult{
+		HeapSize:         int(resp.HeapSize),
+		HeapUsed:         int(resp.HeapUsed),
+		HeapOverlayUsed:  int(resp.HeapOverlayUsed),
+		SlotCount:        int(resp.SlotCount),
+		SlotOverlayCount: int(resp.SlotOverlayCount),
+		Version:          resp.Version,
+	}, nil
+}
+
+// deviceReset sends a RESET_REQ and returns the parsed response.
+func (d *Daemon) deviceReset() (*ResetResult, error) {
+	d.portMu.Lock()
+	port := d.port
+	d.portMu.Unlock()
+
+	if port == nil {
+		return nil, fmt.Errorf("device not connected")
+	}
+
+	d.reqMu.Lock()
+	defer d.reqMu.Unlock()
+
+	drainFrames(d.frameCh)
+
+	wire, err := protocol.EncodeWireFrame(protocol.ResetReq, 1, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build frame: %w", err)
+	}
+
+	if err := port.Write(wire); err != nil {
+		return nil, fmt.Errorf("write: %w", err)
+	}
+
+	encoded, err := d.waitFrame(rpcTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	decoded, err := protocol.COBSDecode(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("cobs decode: %w", err)
+	}
+
+	header, respPayload, err := protocol.ParseFrame(decoded)
+	if err != nil {
+		return nil, fmt.Errorf("parse frame: %w", err)
+	}
+
+	switch header.MessageType {
+	case protocol.ResetRes:
+		// handled below
+	case protocol.Error:
+		errResp, parseErr := protocol.ParseErrorResponse(respPayload)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		return nil, fmt.Errorf("device error (cat %d): %s", errResp.Category, errResp.Detail)
+	default:
+		return nil, fmt.Errorf("unexpected response type: 0x%02x", header.MessageType)
+	}
+
+	resp, err := protocol.ParseResetResponse(respPayload)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ResetResult{
+		Status:           int(resp.Status),
 		HeapSize:         int(resp.HeapSize),
 		HeapUsed:         int(resp.HeapUsed),
 		HeapOverlayUsed:  int(resp.HeapOverlayUsed),

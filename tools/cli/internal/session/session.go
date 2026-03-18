@@ -66,6 +66,48 @@ func (s *Session) SetPassthrough(w io.Writer) {
 	s.port.PassthroughWriter = w
 }
 
+// Reset sends a RESET_REQ, which resets the device state to a "bare" firmware boot (no user code).
+func (s *Session) Reset() (*protocol.ResetResponse, error) {
+	reqID := s.allocReqID()
+
+	wire, err := protocol.EncodeWireFrame(protocol.ResetReq, reqID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build frame: %w", err)
+	}
+
+	if err := s.port.Write(wire); err != nil {
+		return nil, fmt.Errorf("write: %w", err)
+	}
+
+	encoded, err := s.port.ReadFrame(DefaultTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	decoded, err := protocol.COBSDecode(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("cobs decode: %w", err)
+	}
+
+	header, respPayload, err := protocol.ParseFrame(decoded)
+	if err != nil {
+		return nil, fmt.Errorf("parse frame: %w", err)
+	}
+
+	switch header.MessageType {
+	case protocol.ResetRes:
+		return protocol.ParseResetResponse(respPayload)
+	case protocol.Error:
+		errResp, parseErr := protocol.ParseErrorResponse(respPayload)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		return nil, fmt.Errorf("device error (cat %d): %s", errResp.Category, errResp.Detail)
+	default:
+		return nil, fmt.Errorf("unexpected response type: 0x%02x", header.MessageType)
+	}
+}
+
 // Eval sends Froth source for evaluation and returns the result.
 func (s *Session) Eval(source string) (*protocol.EvalResponse, error) {
 	reqID := s.allocReqID()
