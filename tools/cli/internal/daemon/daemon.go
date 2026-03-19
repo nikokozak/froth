@@ -169,6 +169,9 @@ func (d *Daemon) connect() error {
 			port.Close()
 			return fmt.Errorf("handshake: %w", err)
 		}
+		// Flush any remaining boot garbage so the serial read loop
+		// starts with a clean buffer.
+		port.ResetInputBuffer()
 	} else {
 		port, hello, err = serial.Discover()
 		if err != nil {

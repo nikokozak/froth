@@ -73,6 +73,7 @@ func Discover() (*Port, *protocol.HelloResponse, error) {
 
 		resp, err := ProbeHello(conn)
 		if err == nil {
+			conn.ResetInputBuffer() // flush stale boot garbage
 			return conn, resp, nil
 		}
 		conn.Close()
