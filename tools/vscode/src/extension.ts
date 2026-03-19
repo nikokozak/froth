@@ -123,7 +123,7 @@ class FrothController {
   }
 
   // Returns true if the device is available for a framed command.
-  // Shows a warning and returns false if busy or not connected.
+  // Shows a warning and returns false if busy, not connected, or no daemon.
   private requireIdle(): boolean {
     if (this.state === "running") {
       vscode.window.showWarningMessage(
@@ -131,11 +131,22 @@ class FrothController {
       );
       return false;
     }
-    if (!this.client) {
-      vscode.window.showWarningMessage("Not connected to Froth daemon");
+    if (!this.client || this.state !== "connected") {
+      vscode.window.showWarningMessage("No device connected");
       return false;
     }
     return true;
+  }
+
+  // Determines the correct idle state based on client and device status.
+  private deriveIdleState(): ConnectionState {
+    if (!this.client) {
+      return "no-daemon";
+    }
+    if (this.deviceStatus?.connected) {
+      return "connected";
+    }
+    return "disconnected";
   }
 
   async sendSelection(): Promise<void> {
@@ -180,10 +191,14 @@ class FrothController {
     }
 
     // ADR-037: Send File = reset + eval whole file
+    // Set running immediately to prevent a second sendFile from
+    // queueing during the reset phase.
+    this.setState("running");
     this.output.appendLine("[froth] reset");
     try {
       await this.client!.reset();
     } catch (err: unknown) {
+      this.setState(this.deriveIdleState());
       const msg = err instanceof Error ? err.message : String(err);
       vscode.window.showErrorMessage(`Reset failed: ${msg}`);
       return;
@@ -390,8 +405,11 @@ class FrothController {
     try {
       result = await this.client.eval(source);
     } catch (err: unknown) {
-      // Eval ended (error or disconnect). Return to connected/disconnected.
-      this.setState(this.client ? "connected" : "disconnected");
+      // Only update state if we're still in "running". A disconnect or
+      // daemon-lost handler may have already set a more accurate state.
+      if (this.state === "running") {
+        this.setState(this.deriveIdleState());
+      }
       if (err instanceof DaemonClientError && err.isNotConnected) {
         vscode.window.showWarningMessage("No device connected");
       } else {
@@ -402,7 +420,9 @@ class FrothController {
     }
 
     // Eval completed normally.
-    this.setState("connected");
+    if (this.state === "running") {
+      this.setState("connected");
+    }
     this.logResult(result);
     this.output.show(true);
     await this.refreshDeviceInfo();

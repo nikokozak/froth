@@ -2,6 +2,7 @@ package serial
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 	"time"
 
@@ -10,14 +11,23 @@ import (
 	"github.com/nikokozak/froth/tools/cli/internal/protocol"
 )
 
-const DefaultProbeTimeout = 500 * time.Millisecond
+const (
+	// ProbeDeadline is the total time allowed for the HELLO handshake,
+	// including retries. Covers DTR-triggered reboot + boot sequence.
+	ProbeDeadline = 5 * time.Second
 
-// DrainDuration exceeds the device's 750ms safe-boot window.
-const DrainDuration = 1200 * time.Millisecond
+	// DrainDuration exceeds the device's 750ms safe-boot window.
+	DrainDuration = 1200 * time.Millisecond
+
+	// Maximum HELLO_REQ sends before giving up.
+	maxProbeRetries = 3
+)
 
 // candidatePattern matches likely USB-serial ports on macOS and Linux.
+// Prefers /dev/cu.* on macOS (avoids /dev/tty.* which can cause
+// additional DTR toggles during discovery).
 var candidatePattern = regexp.MustCompile(
-	`^/dev/(tty|cu)\.(usbserial|usbmodem|SLAB_USBtoUART|USB|ACM)` +
+	`^/dev/cu\.(usbserial|usbmodem|SLAB_USBtoUART|USB|ACM)` +
 		`|^/dev/tty(USB|ACM)`,
 )
 
@@ -61,7 +71,7 @@ func Discover() (*Port, *protocol.HelloResponse, error) {
 
 		conn.Drain(DrainDuration)
 
-		resp, err := ProbeHello(conn, DefaultProbeTimeout)
+		resp, err := ProbeHello(conn)
 		if err == nil {
 			return conn, resp, nil
 		}
@@ -71,35 +81,72 @@ func Discover() (*Port, *protocol.HelloResponse, error) {
 	return nil, nil, fmt.Errorf("no Froth device found")
 }
 
-// ProbeHello sends a HELLO_REQ and waits for a HELLO_RES.
-func ProbeHello(port *Port, timeout time.Duration) (*protocol.HelloResponse, error) {
-	frame, err := protocol.EncodeWireFrame(protocol.HelloReq, 0, nil)
+// ProbeHello sends HELLO_REQ and waits for a valid HELLO_RES, retrying
+// on COBS decode errors and stale/garbage frames. This handles the
+// ESP32 boot contamination that occurs after a DTR-triggered reset
+// on macOS serial port open.
+func ProbeHello(port *Port) (*protocol.HelloResponse, error) {
+	deadline := time.Now().Add(ProbeDeadline)
+
+	helloFrame, err := protocol.EncodeWireFrame(protocol.HelloReq, 0, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build HELLO_REQ: %w", err)
 	}
 
-	if err := port.Write(frame); err != nil {
-		return nil, err
+	// Flush any garbage from the OS serial buffer before starting.
+	port.ResetInputBuffer()
+
+	for attempt := 0; attempt < maxProbeRetries; attempt++ {
+		if time.Now().After(deadline) {
+			break
+		}
+
+		if err := port.Write(helloFrame); err != nil {
+			return nil, fmt.Errorf("write: %w", err)
+		}
+
+		// Read frames until we get a valid HELLO_RES or run out of time.
+		for {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				break
+			}
+			// Cap per-frame read at 2 seconds so we can retry HELLO_REQ
+			// if the device hasn't responded (e.g., still booting).
+			readTimeout := remaining
+			if readTimeout > 2*time.Second {
+				readTimeout = 2 * time.Second
+			}
+
+			encoded, err := port.ReadFrame(readTimeout)
+			if err != nil {
+				// Timeout reading a frame — retry with a new HELLO_REQ.
+				break
+			}
+
+			decoded, err := protocol.COBSDecode(encoded)
+			if err != nil {
+				log.Printf("probe: discard corrupt COBS (%v)", err)
+				continue // Read next frame
+			}
+
+			header, payload, err := protocol.ParseFrame(decoded)
+			if err != nil {
+				log.Printf("probe: discard bad frame (%v)", err)
+				continue
+			}
+
+			if header.MessageType != protocol.HelloRes {
+				log.Printf("probe: discard unexpected type 0x%02x", header.MessageType)
+				continue
+			}
+
+			return protocol.ParseHelloResponse(payload)
+		}
+
+		// Flush before retrying
+		port.ResetInputBuffer()
 	}
 
-	encoded, err := port.ReadFrame(timeout)
-	if err != nil {
-		return nil, err
-	}
-
-	decoded, err := protocol.COBSDecode(encoded)
-	if err != nil {
-		return nil, fmt.Errorf("COBS decode: %w", err)
-	}
-
-	header, payload, err := protocol.ParseFrame(decoded)
-	if err != nil {
-		return nil, fmt.Errorf("parse frame: %w", err)
-	}
-
-	if header.MessageType != protocol.HelloRes {
-		return nil, fmt.Errorf("unexpected response type: 0x%02x", header.MessageType)
-	}
-
-	return protocol.ParseHelloResponse(payload)
+	return nil, fmt.Errorf("no HELLO_RES after %d attempts", maxProbeRetries)
 }

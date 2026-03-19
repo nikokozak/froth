@@ -164,7 +164,7 @@ func (d *Daemon) connect() error {
 			return fmt.Errorf("open %s: %w", d.portPath, err)
 		}
 		port.Drain(serial.DrainDuration)
-		hello, err = serial.ProbeHello(port, serial.DefaultProbeTimeout)
+		hello, err = serial.ProbeHello(port)
 		if err != nil {
 			port.Close()
 			return fmt.Errorf("handshake: %w", err)

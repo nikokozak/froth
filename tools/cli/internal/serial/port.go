@@ -110,6 +110,11 @@ func (p *Port) Path() string {
 	return p.path
 }
 
+// ResetInputBuffer flushes the OS-level serial input buffer.
+func (p *Port) ResetInputBuffer() {
+	p.port.ResetInputBuffer()
+}
+
 // Drain reads and discards all bytes for the given duration.
 // Clears boot messages before sending the first frame.
 func (p *Port) Drain(duration time.Duration) {

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -12,8 +13,10 @@ import (
 	"github.com/nikokozak/froth/tools/cli/internal/serial"
 )
 
-// Default timeout for request/response round-trips.
-const DefaultTimeout = 5 * time.Second
+// CommandTimeout is the safety timeout for non-eval operations (info,
+// reset, hello). These should respond within milliseconds. 10s catches
+// transport failures without interfering with normal operation.
+const CommandTimeout = 10 * time.Second
 
 // Session holds a live connection to a Froth device.
 // It owns the serial port and tracks the HELLO handshake result.
@@ -37,7 +40,7 @@ func Connect(portPath string) (*Session, error) {
 
 		port.Drain(serial.DrainDuration)
 
-		hello, err := serial.ProbeHello(port, DefaultTimeout)
+		hello, err := serial.ProbeHello(port)
 		if err != nil {
 			port.Close()
 			return nil, fmt.Errorf("handshake on %s: %w", portPath, err)
@@ -69,51 +72,85 @@ func (s *Session) SetPassthrough(w io.Writer) {
 }
 
 // waitValidResponse reads frames from serial until one decodes
-// successfully and has a matching request ID, or until timeout.
-// Corrupt frames and ID mismatches are discarded (up to 3 retries).
+// successfully and has a matching request ID.
+// If timeout > 0, gives up after that duration (for info/reset).
+// If timeout == 0, waits indefinitely (for eval).
+// Corrupt frames and ID mismatches are discarded (up to 3 retries
+// for timed operations, unlimited for no-timeout).
 func (s *Session) waitValidResponse(reqID uint16, timeout time.Duration) (*protocol.Header, []byte, error) {
-	deadline := time.Now().Add(timeout)
+	noTimeout := timeout == 0
+	var deadline time.Time
+	if !noTimeout {
+		deadline = time.Now().Add(timeout)
+	}
 	maxRetries := 3
+	attempt := 0
 	var lastErr error
 
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
+	for {
+		if !noTimeout {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				break
+			}
+			encoded, err := s.port.ReadFrame(remaining)
+			if err != nil {
+				return nil, nil, fmt.Errorf("read response: %w", err)
+			}
+			if header, payload, done := s.tryDecode(encoded, reqID, &lastErr); done {
+				return header, payload, nil
+			}
+		} else {
+			// No timeout: use a long read window, retry on timeout
+			encoded, err := s.port.ReadFrame(30 * time.Second)
+			if err != nil {
+				if errors.Is(err, serial.ErrTimeout) {
+					continue // Keep waiting
+				}
+				return nil, nil, fmt.Errorf("read response: %w", err)
+			}
+			if header, payload, done := s.tryDecode(encoded, reqID, &lastErr); done {
+				return header, payload, nil
+			}
+		}
+
+		attempt++
+		if !noTimeout && attempt > maxRetries {
 			break
 		}
-
-		encoded, err := s.port.ReadFrame(remaining)
-		if err != nil {
-			return nil, nil, fmt.Errorf("read response: %w", err)
-		}
-
-		decoded, err := protocol.COBSDecode(encoded)
-		if err != nil {
-			lastErr = fmt.Errorf("cobs decode: %w", err)
-			log.Printf("frame: discard corrupt COBS (%v)", err)
-			continue
-		}
-
-		header, payload, err := protocol.ParseFrame(decoded)
-		if err != nil {
-			lastErr = fmt.Errorf("parse frame: %w", err)
-			log.Printf("frame: discard bad frame (%v)", err)
-			continue
-		}
-
-		if header.RequestID != reqID {
-			lastErr = fmt.Errorf("stale response (got ID %d, want %d)", header.RequestID, reqID)
-			log.Printf("frame: discard stale response (got ID %d, want %d)", header.RequestID, reqID)
-			continue
-		}
-
-		return header, payload, nil
 	}
 
 	if lastErr != nil {
 		return nil, nil, fmt.Errorf("frame error after retries: %w", lastErr)
 	}
 	return nil, nil, fmt.Errorf("device response timeout")
+}
+
+// tryDecode attempts COBS decode, frame parse, and ID match.
+// Returns (header, payload, true) on success, or logs and returns
+// (nil, nil, false) on failure (caller should retry).
+func (s *Session) tryDecode(encoded []byte, reqID uint16, lastErr *error) (*protocol.Header, []byte, bool) {
+	decoded, err := protocol.COBSDecode(encoded)
+	if err != nil {
+		*lastErr = fmt.Errorf("cobs decode: %w", err)
+		log.Printf("frame: discard corrupt COBS (%v)", err)
+		return nil, nil, false
+	}
+
+	header, payload, err := protocol.ParseFrame(decoded)
+	if err != nil {
+		*lastErr = fmt.Errorf("parse frame: %w", err)
+		log.Printf("frame: discard bad frame (%v)", err)
+		return nil, nil, false
+	}
+
+	if header.RequestID != reqID {
+		*lastErr = fmt.Errorf("stale response (got ID %d, want %d)", header.RequestID, reqID)
+		log.Printf("frame: discard stale (got ID %d, want %d)", header.RequestID, reqID)
+		return nil, nil, false
+	}
+
+	return header, payload, true
 }
 
 // Reset sends a RESET_REQ, which resets the device state to a "bare" firmware boot (no user code).
@@ -129,7 +166,7 @@ func (s *Session) Reset() (*protocol.ResetResponse, error) {
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
-	header, respPayload, err := s.waitValidResponse(reqID, DefaultTimeout)
+	header, respPayload, err := s.waitValidResponse(reqID, CommandTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +253,7 @@ func (s *Session) Eval(source string) (*protocol.EvalResponse, error) {
 			return nil, fmt.Errorf("write: %w", err)
 		}
 
-		header, respPayload, err := s.waitValidResponse(reqID, DefaultTimeout)
+		header, respPayload, err := s.waitValidResponse(reqID, 0) // no timeout: eval can run forever
 		if err != nil {
 			return nil, err
 		}
