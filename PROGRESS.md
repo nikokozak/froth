@@ -4,9 +4,9 @@
 
 ## Current Status
 
-**Phase**: Ecosystem. ESP32 persistence proven on hardware. Host tooling chain complete. ADR-037 (host-centric deployment) and ADR-038 (streaming snapshot serializer) accepted.
-**Blocking issues**: Serial terminal compatibility partially resolved (minicom works, screen has macOS PTY issues). Synth audio under reconsideration.
-**Morale check**: Full save/restore/wipe cycle works on ESP32 hardware. Workshop "save survives power cycle" DoD item checked off.
+**Phase**: Ecosystem. Host tooling hardened (daemon rewrite, resilient HELLO probe, spec updated to v0.6). ESP32 link layer proven on hardware: eval, reset, interrupt, console output, chunked file send all working.
+**Blocking issues**: `screen` unusable on macOS (PTY error, not a Froth issue). Synth audio under reconsideration.
+**Known limitations**: Console notifications lossy under sustained output (notification channel cap 64). Async eval model deferred (eval is still blocking RPC; long-running programs work but no start/accept acknowledgment).
 
 ## What's Done
 
@@ -117,28 +117,33 @@
 - ESP32 `platform_key` 0x03 fix: sets interrupt flag as side effect but returns the byte normally. Mux clears the false interrupt in frame mode (0x03 is COBS data there). Direct mode and blocking REPL consume 0x03 as interrupt. `key` prim returns the byte, executor safe-point check fires interrupt. All three line endings (CR, LF, CRLF) tested and correct.
 - VS Code extension v0.0.2 (`tools/vscode/`): sidebar with device info (board, heap, slots, cell bits), action buttons (Interrupt, Reset, Save, Wipe), live heap/slot metrics via `info()` RPC (refreshed after each eval/reset). `sendFile` = reset + eval whole file (ADR-037). `Cmd+Shift+Enter` for Send File. `daemon-client.ts` exposes `reset()`, `interrupt()`, `info()`. Console output via OutputChannel.
 - `platform_emit_raw`: new platform API function for COBS frame output (no line-ending conversion). `platform_emit` on ESP32 prepends `\r` before `\n` for terminal output. Fixes REPL staircase caused by disabling VFS TX conversion.
-- Daemon resilience: `waitValidResponse` with COBS/CRC retry (bounded to 3 attempts), request ID matching (incrementing IDs, stale frame discard). Concurrent interrupt support (blocking RPCs dispatched in goroutines, interrupt handled inline).
+- Daemon rewrite (Mar 18): removed `frameCh` channel (dropped frames), removed `rpcTimeout` (eval can run forever). Per-request registered waiter (`registerWaiter`/`waitResponse`): serial reader delivers decoded frames directly to the waiting goroutine, no buffering, no drain, no race. `writeMu` serializes all serial writes (frames and raw interrupt). Disconnect signals blocked waiters via `disconnectCh`. Safety timeout (10s) for info/reset; no timeout for eval. Non-blocking notification channels (capacity 64) for console broadcast.
 - Chunked eval: auto-splits source >253 bytes on top-level form boundaries (depth-aware, tracks `[ ] : ;` nesting). Same logic in daemon and direct session paths.
-- Daemon `interrupt` RPC: writes raw 0x03 to serial outside any frame. Wired through Go client and TypeScript client.
+- Daemon `interrupt` RPC: writes raw 0x03 to serial via `writeMu` (not `reqMu`). Works during in-progress eval. VS Code extension sends interrupt via fresh daemon connection (bypasses per-socket sequential RPC handling).
+- Extension running state: `idle/running/disconnected/no-daemon`. During `running`, all framed commands except interrupt are rejected. Status bar shows "Running" with spin icon. Sidebar shows only interrupt button. `sendFile` sets running before reset (prevents queueing race). State transitions guarded by `deriveIdleState()` (prevents clobbering by stale notifications).
+- `key` primitive Ctrl-C: throws `ERR.INTERRUPT` directly on 0x03 (ESP32) or on SIGINT-interrupted `fgetc` (POSIX). No stale interrupt flag, no byte pushed to stack. Consistent error code 14 on both platforms.
+- Resilient HELLO probe: retry loop with COBS error recovery, `ResetInputBuffer` between attempts, 5s deadline. Handles DTR-triggered boot contamination on macOS. First-after-flash command now succeeds reliably. Discovery filtered to `/dev/cu.*` only (avoids double DTR resets from `tty.*` aliases).
+- Session path updated: `CommandTimeout` (10s) for reset/info, no timeout for eval. `errors.Is` for timeout detection.
+- ESP32 `platform_emit`: suppresses NUL (0x00) to prevent COBS frame delimiter corruption on multiplexed serial line.
+- Spec v0.6: Interactive Development spec updated from STX/ETX text framing to COBS binary framing. Interrupt semantics clarified for multiplexed console. Host tooling section updated. References ADR-033, ADR-034.
 - `froth reset` CLI command proven on real ESP32 hardware.
 
 ## In Progress
 
-- ADR-037 host-centric deployment: `reset` primitive and `RESET_REQ`/`RESET_RES` protocol messages done. Remaining: embedded user program support.
 - ADR-038 streaming snapshot serializer: accepted. Current static BSS workspace is a band-aid (~2.8KB + 2KB NVS staging). Streaming v2 format targets ~344B writer, ~280B reader.
 
 ## Blocked / Waiting
 
-- ~~ESP32 flash death spiral~~: diagnosed (DTR-triggered reset + UART RX contamination). Mitigated with UART flush, settle window, halt-not-restart. Clean workflow: `idf.py monitor --no-reset` + manual EN reset.
 - `screen` unusable on macOS: "Sorry Could not find a PTY" error. Not a Froth issue, but limits serial monitor options.
 
 ## Next Up
 
-1. Embedded user program support (CMake `FROTH_USER_PROGRAM` variable, boot sequence slot)
-4. ESP32 workshop prep: audio FFI decision (synth under reconsideration), 15 pre-flashed boards
-5. Daemon PTY passthrough (Phase 2 of ADR-035, post-workshop)
-6. Interleaved kernel work: FROTH-Addr
-7. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
+1. Embedded user program support (CMake `FROTH_USER_PROGRAM` variable, boot sequence slot, ADR-037)
+2. ESP32 workshop prep: audio FFI decision (synth under reconsideration), 15 pre-flashed boards
+3. Daemon PTY passthrough (Phase 2 of ADR-035, post-workshop)
+4. Async eval model: `eval.start` returns ack, completion arrives as event (eliminates blocking RPC)
+5. Interleaved kernel work: FROTH-Addr
+6. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
 
 ## Open Questions
 

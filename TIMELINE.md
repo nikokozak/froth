@@ -228,12 +228,26 @@
 - [x] ADR-037: host-centric deployment model (embedded user program as overlay, `reset` primitive, editor workflow, snapshot hash)
 - [ ] **Proof**: flash ESP32, define word, save, power cycle, verify persistence
 
-### Kernel work (Mar 18–21, priority order)
+### Kernel work (Mar 18, priority order)
 - [x] Fix ESP32 NVS serialization bug (stack overflow in platform read/write — static staging buffer)
 - [x] **Proof**: flash ESP32, define word, save, power cycle, verify persistence. A/B rotation, wipe, multiple saves all work.
 - [x] `dangerous-reset` primitive (ADR-037, ADR-041: strict bare identifiers fix)
 - [x] `RESET_REQ`/`RESET_RES` protocol messages (ADR-037: prerequisite for honest Send File)
 - [x] CS trampoline executor (ADR-040: replace C recursion, O(1) C stack, portable call depth)
+
+### Host tooling hardening (Mar 18)
+- [x] ESP32 link layer enabled (`FROTH_HAS_LINK`, transport/link/mux sources, binary-safe UART)
+- [x] ESP32 `platform_key` transparent (no 0x03 interception), mux owns byte classification
+- [x] Daemon rewrite: per-request waiter, no eval timeout, `writeMu` for interrupt safety, `disconnectCh`
+- [x] Resilient HELLO probe: retry/resync, `ResetInputBuffer`, `/dev/cu.*` only discovery
+- [x] Chunked eval: depth-aware line splitting for >253 byte sources
+- [x] Extension: running state, `requireIdle` gate, fire-and-forget sendFile, fresh-connection interrupt
+- [x] `key` prim: throws ERR.INTERRUPT on 0x03 (ESP32) and SIGINT (POSIX), cross-platform consistent
+- [x] Session path: no-timeout eval, `CommandTimeout` for info/reset, `errors.Is` for timeout detection
+- [x] Spec v0.6: Link Mode updated from STX/ETX to COBS binary framing, interrupt semantics clarified
+- [x] **Proof**: all paths tested (POSIX REPL, POSIX socat link, ESP32 direct serial, ESP32 daemon)
+
+### Remaining work
 - [ ] Embedded user program support (CMake `FROTH_USER_PROGRAM`, boot sequence slot)
 - [ ] Streaming snapshot serializer v2 (ADR-038: ~344B writer, ~280B reader, format change)
 - [ ] ESP32 audio FFI (synth under reconsideration)
