@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import {
   DaemonClient,
@@ -15,10 +15,9 @@ import {
   StatusResult,
 } from "./daemon-client";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const SOCKET_PATH = path.join(os.homedir(), ".froth", "daemon.sock");
-const RECONNECT_INTERVAL_MS = 3000;
 const DAEMON_START_TIMEOUT_MS = 5000;
 const DAEMON_START_POLL_MS = 100;
 
@@ -110,7 +109,6 @@ type StateChangeListener = () => void;
 class FrothController {
   private client: DaemonClient | null = null;
   private state: ConnectionState = "idle";
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connecting = false;
   private disposed = false;
   private deactivating = false;
@@ -119,6 +117,7 @@ class FrothController {
   private stateListeners: StateChangeListener[] = [];
   private extensionOwnsDaemon = false;
   private selectedTarget: TargetMode = "serial";
+  private cliPathCache: string | null = null;
 
   constructor(
     private readonly output: vscode.OutputChannel,
@@ -136,7 +135,6 @@ class FrothController {
 
   dispose(): void {
     this.disposed = true;
-    this.clearReconnectTimer();
     this.disposeClient();
   }
 
@@ -198,9 +196,17 @@ class FrothController {
   }
 
   async runDoctor(): Promise<void> {
-    const terminal = vscode.window.createTerminal("Froth Doctor");
+    const cliPath = await this.getCliPath();
+    if (!cliPath) {
+      return;
+    }
+
+    const terminal = vscode.window.createTerminal({
+      name: "Froth Doctor",
+      shellPath: cliPath,
+      shellArgs: ["doctor"],
+    });
     terminal.show(true);
-    terminal.sendText("froth doctor");
   }
 
   async refresh(): Promise<void> {
@@ -384,6 +390,23 @@ class FrothController {
     }
 
     this.applyStatus(status);
+
+    // If the daemon is up but the device isn't connected yet (e.g., still
+    // in the HELLO probe / reconnect loop after a fresh start), wait for
+    // the "connected" notification rather than failing immediately.
+    if (!status.connected && !status.reconnecting) {
+      return true; // Daemon up, device not expected (e.g., no hardware)
+    }
+    if (!status.connected && status.reconnecting) {
+      this.setState("disconnected");
+      this.output.appendLine("[froth] waiting for device...");
+      const connected = await this.waitForConnection(10000);
+      if (!connected) {
+        this.output.appendLine("[froth] no device found");
+        return true; // Daemon is up, just no device — caller decides
+      }
+    }
+
     return true;
   }
 
@@ -466,8 +489,14 @@ class FrothController {
   }
 
   private async execFroth(args: string): Promise<void> {
+    const cliPath = await this.getCliPath();
+    if (!cliPath) {
+      throw new Error("Froth CLI not found");
+    }
+
     const cwd = this.workspaceCwd();
-    await execAsync(`froth ${args}`, { cwd });
+    const argv = args.split(" ").filter((part) => part.length > 0);
+    await execFileAsync(cliPath, argv, { cwd });
   }
 
   private workspaceCwd(): string {
@@ -485,6 +514,38 @@ class FrothController {
     }
 
     return process.cwd();
+  }
+
+  // Waits for the daemon to report a connected device (via status polling).
+  // Used after daemon start when the device is still in HELLO/reconnect.
+  private waitForConnection(timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+
+    return new Promise<boolean>((resolve) => {
+      const poll = async () => {
+        if (this.disposed || Date.now() >= deadline) {
+          resolve(false);
+          return;
+        }
+
+        try {
+          if (this.client) {
+            const st = this.normalizeStatus(await this.client.status());
+            this.applyStatus(st);
+            if (st.connected) {
+              resolve(true);
+              return;
+            }
+          }
+        } catch {
+          // Daemon may still be settling
+        }
+
+        setTimeout(poll, 500);
+      };
+
+      setTimeout(poll, 500);
+    });
   }
 
   private waitForSocket(): Promise<boolean> {
@@ -592,28 +653,11 @@ class FrothController {
     this.disposeClient();
     this.deviceStatus = null;
     this.liveInfo = null;
-    this.setState("no-daemon");
+    this.extensionOwnsDaemon = false;
+    this.setState("idle");
     this.output.appendLine("[froth] daemon connection lost");
-    this.scheduleReconnect();
   }
 
-  private scheduleReconnect(): void {
-    if (this.disposed || this.reconnectTimer !== null) {
-      return;
-    }
-
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      void this.connectToDaemon(false);
-    }, RECONNECT_INTERVAL_MS);
-  }
-
-  private clearReconnectTimer(): void {
-    if (this.reconnectTimer !== null) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-  }
 
   private async evalAndLog(source: string): Promise<void> {
     if (!this.client) {
@@ -744,6 +788,73 @@ class FrothController {
 
   private selectedTargetCommand(): string {
     return this.selectedTarget === "local" ? "froth.tryLocal" : "froth.connect";
+  }
+
+  private async getCliPath(): Promise<string | null> {
+    if (this.cliPathCache) {
+      return this.cliPathCache;
+    }
+
+    const configuredPath = vscode.workspace
+      .getConfiguration("froth")
+      .get<string>("cliPath");
+    if (configuredPath && configuredPath.trim().length > 0) {
+      const resolved = this.resolveCliCandidate(configuredPath.trim());
+      if (resolved) {
+        this.cliPathCache = resolved;
+        return resolved;
+      }
+    }
+
+    for (const candidate of this.cliCandidates()) {
+      const resolved = this.resolveCliCandidate(candidate);
+      if (resolved) {
+        this.cliPathCache = resolved;
+        return resolved;
+      }
+    }
+
+    vscode.window.showErrorMessage(
+      "Froth CLI not found. Set froth.cliPath or install/build froth-cli.",
+    );
+    return null;
+  }
+
+  private cliCandidates(): string[] {
+    const candidates = [
+      "froth",
+      "froth-cli",
+      "/opt/homebrew/bin/froth",
+      "/usr/local/bin/froth",
+      path.join(this.workspaceCwd(), "tools", "cli", "froth-cli"),
+      path.join(this.workspaceCwd(), "tools", "cli", "cli"),
+    ];
+
+    return candidates;
+  }
+
+  private resolveCliCandidate(candidate: string): string | null {
+    if (path.isAbsolute(candidate)) {
+      return fs.existsSync(candidate) ? candidate : null;
+    }
+
+    if (candidate.includes(path.sep)) {
+      const absolute = path.resolve(this.workspaceCwd(), candidate);
+      return fs.existsSync(absolute) ? absolute : null;
+    }
+
+    const pathEnv = process.env.PATH ?? "";
+    for (const dir of pathEnv.split(path.delimiter)) {
+      if (!dir) {
+        continue;
+      }
+      const fullPath = path.join(dir, candidate);
+      if (fs.existsSync(fullPath)) {
+        return fullPath;
+      }
+    }
+
+    return null;
   }
 
   private normalizeStatus(status: StatusResult): StatusResult {
