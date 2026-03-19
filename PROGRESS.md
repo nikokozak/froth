@@ -1,12 +1,12 @@
 # Froth Implementation Progress
 
-*Last updated: 2026-03-18*
+*Last updated: 2026-03-19*
 
 ## Current Status
 
-**Phase**: Ecosystem. Host tooling hardened (daemon rewrite, resilient HELLO probe, spec updated to v0.6). ESP32 link layer proven on hardware: eval, reset, interrupt, console output, chunked file send all working.
-**Blocking issues**: `screen` unusable on macOS (PTY error, not a Froth issue). Synth audio under reconsideration.
-**Known limitations**: Console notifications lossy under sustained output (notification channel cap 64). Async eval model deferred (eval is still blocking RPC; long-running programs work but no start/accept acknowledgment).
+**Phase**: Thesis push (Phase 3). Workshop Mar 24. Thesis deadline Apr 20. Immediate focus: user programs, HAL bindings (LEDC/PWM, I2C), string bridge. Then WiFi, library system, RP2040 port.
+**Blocking issues**: `screen` unusable on macOS (PTY error, not a Froth issue).
+**Known limitations**: Console notifications remain lossy under sustained output, but the daemon now emits an explicit dropped-output notice instead of failing silently. Async eval model deferred (eval is still blocking RPC; long-running programs work but no start/accept acknowledgment).
 
 ## What's Done
 
@@ -128,6 +128,7 @@
 - ESP32 `platform_emit`: suppresses NUL (0x00) to prevent COBS frame delimiter corruption on multiplexed serial line.
 - Spec v0.6: Interactive Development spec updated from STX/ETX text framing to COBS binary framing. Interrupt semantics clarified for multiplexed console. Host tooling section updated. References ADR-033, ADR-034.
 - `froth reset` CLI command proven on real ESP32 hardware.
+- Host-tooling hardening tranche (Mar 19): shared `serial.Transport` helpers now back both direct CLI sessions and daemon backends; lexical chunking moved into `internal/session` with tests for comments, strings, patterns, and oversized-form rejection; daemon `status` now reports pid + daemon/api versions; extension supervision moved into a dedicated module with strict API-version enforcement, owned-PID shutdown, explicit local runtime path support, and deterministic wrong-mode restart; daemon startup now probes for stale sockets, writes the pid file only after bind, accepts `status` before device handshake completes, and background start waits for ready before printing the pid. Local POSIX mode now uses explicit runtime selection and unbuffered non-TTY stdio, which fixes the stdin/stdout transport path.
 
 ## In Progress
 
@@ -139,12 +140,25 @@
 
 ## Next Up
 
-1. Embedded user program support (CMake `FROTH_USER_PROGRAM` variable, boot sequence slot, ADR-037)
-2. ESP32 workshop prep: audio FFI decision (synth under reconsideration), 15 pre-flashed boards
-3. Daemon PTY passthrough (Phase 2 of ADR-035, post-workshop)
-4. Async eval model: `eval.start` returns ack, completion arrives as event (eliminates blocking RPC)
-5. Interleaved kernel work: FROTH-Addr
-6. Evaluator refactor: split into `froth_toplevel.c` + `froth_builder.c` (if time permits)
+### Workshop (Mar 20–23, workshop Mar 24)
+1. User programs: `FROTH_USER_PROGRAM` CMake embed + cold-boot eval (ADR-037)
+2. LEDC/PWM bindings: `ledc.setup`, `ledc.duty`, `ledc.freq`
+3. I2C bindings: `i2c.init`, `i2c.write-byte`, `i2c.read-byte`
+4. Fix 4-table FFI metadata limit (silent truncation in `froth_ffi.c`)
+5. String bridge ADR + `froth_pop_bstring` / `froth_push_bstring` public API
+6. Flash 15 boards, test workshop flow
+
+### Post-workshop thesis push (Mar 27 — Apr 20)
+7. WiFi bindings (uses string bridge): `wifi.connect`, `wifi.status`, `wifi.ip`
+8. HTTP client or server (phone-controllable demo)
+9. Library/include system: ADR + host-side include resolution
+10. VS Code syntax highlighting (TextMate grammar for `.froth`)
+11. `catch` truth convention ADR (resolve before public release)
+12. RP2040 platform port (proves multi-target portability)
+13. One ported library (stepper, servo, or sensor driver)
+14. Thesis demo project
+15. Getting started guide
+8. Shared host request engine unification deferred: daemon and direct CLI still share transport/chunking/probe code, but request execution is not fully collapsed into one host core yet. Defer until after manual editor validation so the refactor has a clean baseline.
 
 ## Open Questions
 

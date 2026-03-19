@@ -6,6 +6,9 @@
 #include "froth_repl.h"
 #include "froth_vm.h"
 #include "platform.h"
+#ifdef FROTH_HAS_USER_PROGRAM
+#include "froth_user_program.h"
+#endif
 
 #ifdef FROTH_HAS_LINK
 #include "froth_console_mux.h"
@@ -75,12 +78,22 @@ void froth_boot(const froth_ffi_entry_t *board_bindings) {
   safe_boot = poll_for_safe_boot();
   if (!safe_boot) {
 
+    bool restored = false;
 #ifdef FROTH_HAS_SNAPSHOTS
     /* Attempt restore from snapshot storage. Failure is not fatal —
      * first boot has no snapshot, corrupt snapshots are skipped. */
     froth_error_t snap_err = froth_evaluate_input("restore", &froth_vm);
     if (snap_err != FROTH_OK) {
       froth_vm.ds.pointer = 0;
+    } else {
+      restored = true;
+    }
+#endif
+#ifdef FROTH_HAS_USER_PROGRAM
+    if (!restored) {
+      err = froth_evaluate_input(froth_user_program, &froth_vm);
+      if (err)
+        boot_fail("user program load", err);
     }
 #endif
 

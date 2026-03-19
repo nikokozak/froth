@@ -1,7 +1,7 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-16 (CLI skeleton proven)*
-*Source: Froth Implementation Roadmap v0.4 (Feb 25 → Workshop week of Mar 15)*
+*Last reviewed: 2026-03-19 (thesis roadmap restructure)*
+*Source: Froth Implementation Roadmap v0.5 (Feb 25 → Thesis deadline Apr 20)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
 > Format: `[status] Milestone — target date (original date if slipped)`
@@ -254,12 +254,57 @@
 - [x] Status: `target` and `reconnecting` fields, target-aware UI labels
 - [x] **Proof**: serial device and local POSIX both tested via daemon (eval, string, reset)
 
-### Remaining work
-- [ ] Embedded user program support (CMake `FROTH_USER_PROGRAM`, boot sequence slot)
-- [ ] Streaming snapshot serializer v2 (ADR-038: ~344B writer, ~280B reader, format change)
-- [ ] ESP32 audio FFI (synth under reconsideration)
-- [ ] FROTH-Addr memory access primitives (ADR-024)
-- [ ] Evaluator refactor if time permits
+### Host tooling hardening tranche (Mar 19)
+- [x] Shared host transport helpers: direct CLI sessions and daemon backends now use the same frame-read and HELLO probe path
+- [x] Shared lexical chunker: moved into `internal/session`, with tests for comments, strings, patterns, escapes, and oversized top-level forms
+- [x] Daemon lifecycle hardening: stale-socket probe, pid written after bind, background start waits for ready and prints pid only when ready
+- [x] Daemon status contract: `pid`, `api_version`, and `daemon_version` exposed through JSON-RPC and CLI `daemon status`
+- [x] Extension supervision refactor: dedicated daemon supervisor owns start/stop/restart, owned-PID shutdown, local runtime selection, and API-version validation
+- [x] Local POSIX runtime reliability: explicit `--local-runtime`, repo/PATH fallback order, unbuffered non-TTY stdio, daemon accepts `status` before handshake completes
+- [x] Notification hardening: dropped console output is now surfaced with an explicit warning instead of silent loss
+- [x] **Proof**: local POSIX daemon tested in foreground and background; `status`, `info`, `send`, and `reset` all pass through the daemon
+
+---
+
+## Phase 3: Thesis Push (Mar 20 — Apr 20)
+
+> Phase 3 shifts from kernel correctness to ecosystem breadth and public readiness.
+> Goal: by Apr 20, Froth is a credible embedded language with multi-target support, growing HAL coverage, a library story, and polished tooling.
+
+### Phase 3a: Workshop + Foundation (Mar 20–23)
+
+- [ ] User programs: CMake `FROTH_USER_PROGRAM` variable, cold-boot eval when no snapshot exists (ADR-037 boot sequence). Proof: flash board with welcome program, power cycle, verify it runs. `reset` + EVAL replaces it.
+- [ ] LEDC/PWM bindings: `ledc.setup`, `ledc.duty`, `ledc.freq`. Numeric FFI, no new API surface. Proof: LED fade, piezo tone.
+- [ ] I2C bindings: `i2c.init`, `i2c.write-byte`, `i2c.read-byte`. Numeric handle for bus instance. Proof: read a temperature sensor or accelerometer.
+- [ ] Fix FFI metadata 4-table limit: `FROTH_FFI_MAX_TABLES` bump or dynamic, error on overflow instead of silent truncation.
+- [ ] String bridge ADR + implementation: public `froth_pop_bstring` / `froth_push_bstring` in `froth_ffi.h`. Widens FFI API (ADR-019 addendum). Gates WiFi, HTTP, and every string-returning binding.
+- [ ] Flash 15 ESP32 boards with user program, test end-to-end workshop flow
+- [ ] **Workshop (Mar 24)**
+
+### Phase 3b: Ecosystem Breadth (Mar 27 — Apr 2)
+
+- [ ] WiFi bindings: `wifi.connect` (SSID + password strings), `wifi.status`, `wifi.ip` (returns string). Uses string bridge.
+- [ ] HTTP client or server for phone demo (direction TBD — server with buttons is more visceral, client polling is simpler FFI surface)
+- [ ] Library/include system: ADR + host-side implementation. CLI/extension resolves directives in `.froth` files, concatenates dependencies, sends merged source via EVAL. No device-side changes.
+- [ ] VS Code syntax highlighting: TextMate grammar for `.froth` files. Comments, strings, numbers, `: ;` definitions, known primitives. High visibility, low effort.
+- [ ] `catch` truth convention ADR: resolve before public release. Currently C-style (0 = success), conflicts with Froth truth (-1 = true). Audit spec for consistency.
+
+### Phase 3c: Second Target + Demo (Apr 3–9)
+
+- [ ] RP2040 platform port: `platform.c` (USB-CDC console I/O, `platform_delay_ms`, `platform_check_interrupt`), board FFI (GPIO, PWM), Pico SDK CMake integration. No `FROTH_HAS_SNAPSHOTS` — demonstrates host-centric deployment on a persistence-less target.
+- [ ] One ported library: stepper, servo, or sensor driver. Proves the library/include system works end-to-end. Froth-native API, C FFI backend where needed.
+- [ ] Thesis demo project: design and build. Should use WiFi or I2C, persistence, the library system, and host tooling workflow. Runs on ESP32; ideally a subset runs on RP2040 to demonstrate portability.
+
+### Phase 3d: Polish + Thesis Prep (Apr 10–16)
+
+- [ ] Demo project polished and reliable under presentation conditions
+- [ ] Getting started guide: flash, connect, write first program, include a library, deploy
+- [ ] Additional HAL bindings as demo demands (SPI, UART, timers — only what's needed)
+- [ ] Thesis chapter: Froth architecture, design decisions, comparison to ESP32forth/MicroPython/Lua
+
+### Buffer (Apr 17–20)
+
+Presentation prep. Fix anything that broke. Practice the demo.
 
 ## Kernel "Definition of Done"
 
@@ -277,32 +322,53 @@
 - [x] `wipe` returns to base-only state
 - [x] `"Hello" s.emit` works
 - [x] Hex literals work (`0xFF`)
-- [ ] Synth audio controllable from Froth REPL
 - [x] Host tooling can push code to device (CLI or VS Code via FROTH-LINK/1)
+- [ ] User program boots on cold start, `reset` + Send File replaces it
+- [ ] LEDC/PWM bindings proven on hardware (LED fade or piezo tone)
+- [ ] I2C sensor read proven on hardware
 - [ ] 15 pre-flashed ESP32 boards ready
 
-## Deferred (post-workshop)
+## Thesis "Definition of Done"
 
-### IMPORTANT: `catch` return value vs Froth truth convention
+- [ ] Two targets running Froth (ESP32 + RP2040)
+- [ ] WiFi or network-controllable demo (phone controls hardware)
+- [ ] Library system: at least one non-trivial library included and used
+- [ ] VS Code syntax highlighting for `.froth` files
+- [ ] Non-trivial demo project running on real hardware
+- [ ] Getting started guide exists
+- [ ] `catch` truth convention resolved
 
-`catch` returns 0 on success, nonzero (error code) on failure — C/POSIX convention. But Froth's truth values are 0 = false, -1 = true. This means "success is falsy": you can't branch on a `catch` result with `if`/`choose` without inverting it. This affects any user code that wants to react to catch outcomes idiomatically. Needs an ADR to decide: do we flip `catch` to return Froth-truthy values (0 = error, -1 = success)? Return a flag + error code pair? Or accept the C convention and document it? Must also audit the spec for consistency — `key?` returns Froth-style true/false, so there's already a split if `catch` stays C-style. Resolve before shipping to users.
+## Deferred (post-thesis)
 
-### Near-term: ESP32 hardware deepening
+### Kernel deepening
 
-- **CALL tag decoupling** (ADR TBD): Move CALL/literal distinction out of the value-tag layer (ADR-009 rework). Frees tag 6 for NativeAddr. Prerequisite for FROTH-Addr. Independent cleanup — benefits the tag space regardless.
-- **FROTH-Addr profile** (ADR-024): Native address type for full-width machine addresses. Fixed address pool, width-specific memory access (`@8`/`@16`/`@32`, `!8`/`!16`/`!32`), `addr+`, `addr.pack`. FFI API additions (`froth_push_addr`/`froth_pop_addr`). Board packages provide named address constants (`gpio.base`). Target: implement when doing direct register work on ESP32, after the workshop HAL-level FFI is proven.
+- **CALL tag decoupling** (ADR TBD): Move CALL/literal distinction out of the value-tag layer (ADR-009 rework). Frees tag 6 for NativeAddr. Prerequisite for FROTH-Addr. Independent cleanup.
+- **FROTH-Addr profile** (ADR-024): Native address type for full-width machine addresses. Fixed address pool, width-specific memory access, FFI API additions. Target: post-thesis when doing direct register work.
 - FROTH-String (`s.pack` — explicit allocation from FFI buffers, `\0` support for binary buffers)
-- `/mod` overflow: make wrapping behavior normative in spec (currently implementation-defined via unsigned cast, ADR-011). Align with existing code behavior.
+- `/mod` overflow: make wrapping behavior normative in spec (ADR-011).
+- Streaming snapshot serializer v2 (ADR-038: ~344B writer, ~280B reader). Current static workspace is a known debt, not a blocker.
+- Evaluator refactor: split `froth_evaluator.c` into `froth_toplevel.c` + `froth_builder.c`.
 
-### Medium-term: language maturation
+### Build architecture
+
+- **Chip-level peripheral layer** (ADR TBD): chip-generic FFI modules (LEDC, I2C, SPI, WiFi) currently live in board directories but aren't board-specific. Introduce `chips/esp32/` (or `hal/esp32/`) for peripherals that work on any board using that chip. Boards compose their FFI surface from chip modules + board-specific pin/config words. Affects CMake, boot registration, and how RP2040 peripherals are organized. Target: immediately after Phase 3a.
+
+### Tooling deepening
+
+- Daemon PTY passthrough (Phase 2 of ADR-035)
+- Async eval model: `eval.start` returns ack, completion arrives as event
+- Shared host request engine unification (daemon + direct CLI collapse)
+- Daemon/supervisor integration tests (API mismatch, ownership, wrong-mode restart)
+
+### Language maturation
 
 - DTC/native promotion (FROTH-Perf)
 - Named frames compiler pass (FROTH-Named); consider a "Named Lite" path first
-- Checked kinds/contracts as selectable build profile (FROTH-Checked); FFI metadata makes this more practical
+- Checked kinds/contracts as selectable build profile (FROTH-Checked)
 - FROTH-Region-Strict (fail-fast allocation gating)
 - Step mode / trace mode for debugging
 - Richer `see` (pretty printing, source retention policies)
-- Stack effect and help text metadata for user-defined words (currently only primitives carry this via `froth_ffi_entry_t`). Would enable `see` to show full metadata for stdlib and user words. Needs a storage decision: slot table field, heap-allocated metadata, or a separate registry.
+- Stack effect and help text metadata for user-defined words
 
 ### Completed (moved out of deferred)
 
@@ -351,3 +417,5 @@
 | AI-assisted host buildout | Mar 19–21 | Mar 16 | CLI commands + daemon landed same day as skeleton. ADR-035, 6 review fixes. VS Code still pending. |
 | ESP32 NVS persistence | Mar 16–21 | Mar 17 | NVS backend written and compiles. Hardware test pending (Mar 18). |
 | Host-centric deployment ADR | Not scheduled | Mar 17 | ADR-037 accepted. Defines deployment model, reset primitive, editor workflow. |
+| ESP32 audio FFI | Mar 16–21 | Dropped | Pivoted to HAL breadth (LEDC/I2C/WiFi) for thesis punch. Piezo tones available via LEDC. |
+| Workshop | "week of Mar 15" | Mar 24 | Extended scope: user programs, HAL bindings, string bridge. Hardening tranche inserted Mar 19. |

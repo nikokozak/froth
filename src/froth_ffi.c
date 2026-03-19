@@ -3,7 +3,7 @@
 #include "froth_slot_table.h"
 #include <stddef.h>
 
-#define FROTH_FFI_MAX_TABLES 4
+#define FROTH_FFI_MAX_TABLES 8
 static const froth_ffi_entry_t *registered_tables[FROTH_FFI_MAX_TABLES];
 static froth_cell_u_t registered_table_count = 0;
 
@@ -43,9 +43,10 @@ froth_error_t froth_throw(froth_vm_t *vm, froth_cell_t error_code) {
 
 /* Register a null-terminated table of FFI bindings into the slot table. */
 froth_error_t froth_ffi_register(froth_vm_t *vm, const froth_ffi_entry_t *table) {
-  if (registered_table_count < FROTH_FFI_MAX_TABLES) {
-    registered_tables[registered_table_count++] = table;
+  if (registered_table_count >= FROTH_FFI_MAX_TABLES) {
+    return FROTH_ERROR_FFI_TABLE_FULL;
   }
+  registered_tables[registered_table_count++] = table;
   for (froth_cell_u_t i = 0; table[i].name != NULL; i++) {
     froth_cell_u_t slot_index;
     FROTH_TRY(froth_slot_create(table[i].name, &vm->heap, &slot_index));

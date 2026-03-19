@@ -61,6 +61,7 @@ set(FROTH_HAS_LINK ON CACHE BOOL "Enable FROTH-LINK/1 binary transport")
 set(FROTH_SNAPSHOT_BLOCK_SIZE "2048" CACHE STRING "Snapshot size in target memory (bytes)")
 set(FROTH_SNAPSHOT_PATH_A "froth_a.snap" CACHE STRING "Snapshot A file path (default froth_a.snap)")
 set(FROTH_SNAPSHOT_PATH_B "froth_b.snap" CACHE STRING "Snapshot B file path (default froth_b.snap)")
+set(FROTH_USER_PROGRAM "" CACHE STRING "User .froth program for flashing.")
 
 target_compile_definitions(Froth PRIVATE FROTH_CELL_SIZE_BITS=${FROTH_CELL_SIZE_BITS})
 target_compile_definitions(Froth PRIVATE FROTH_DS_CAPACITY=${FROTH_DS_CAPACITY})
@@ -72,7 +73,7 @@ target_compile_definitions(Froth PRIVATE FROTH_LINE_BUFFER_SIZE=${FROTH_LINE_BUF
 target_compile_definitions(Froth PRIVATE FROTH_MAX_PERM_SIZE=${FROTH_MAX_PERM_SIZE})
 target_compile_definitions(Froth PRIVATE FROTH_VERSION="${FROTH_VERSION}")
 target_compile_definitions(Froth PRIVATE FROTH_BOARD_NAME="${FROTH_BOARD}")
-if(${FROTH_HAS_SNAPSHOTS})
+if(FROTH_HAS_SNAPSHOTS)
   target_compile_definitions(Froth PRIVATE FROTH_HAS_SNAPSHOTS)
   target_compile_definitions(Froth PRIVATE FROTH_SNAPSHOT_BLOCK_SIZE=${FROTH_SNAPSHOT_BLOCK_SIZE})
   target_compile_definitions(Froth PRIVATE FROTH_SNAPSHOT_PATH_A="${FROTH_SNAPSHOT_PATH_A}")
@@ -80,6 +81,18 @@ if(${FROTH_HAS_SNAPSHOTS})
 endif()
 if(${FROTH_HAS_LINK})
   target_compile_definitions(Froth PRIVATE FROTH_HAS_LINK)
+endif()
+if(FROTH_USER_PROGRAM)
+  target_sources(Froth PRIVATE ${CMAKE_BINARY_DIR}/froth_user_program.h)
+  target_compile_definitions(Froth PRIVATE FROTH_HAS_USER_PROGRAM)
+  target_compile_definitions(Froth PRIVATE FROTH_USER_PROGRAM="${FROTH_USER_PROGRAM}")
+  # Used to compile .froth user files so that the c process can read them as embedded data.
+  add_custom_command(
+    COMMAND ${CMAKE_COMMAND} -DINPUT=${FROTH_USER_PROGRAM} -DOUTPUT=${CMAKE_BINARY_DIR}/froth_user_program.h -DVARNAME="froth_user_program" -P ${CMAKE_SOURCE_DIR}/cmake/embed_froth.cmake
+    OUTPUT ${CMAKE_BINARY_DIR}/froth_user_program.h
+    DEPENDS "${FROTH_USER_PROGRAM}"
+    COMMENT "Embedding user .froth file as C data..."
+  )
 endif()
 
 # Used to compile .froth lib files so that the c process can read them as embedded data.
@@ -89,3 +102,4 @@ add_custom_command(
   DEPENDS "${CMAKE_SOURCE_DIR}/src/lib/core.froth"
   COMMENT "Embedding .froth files as C data..."
 )
+

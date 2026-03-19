@@ -57,6 +57,8 @@ static const char *error_name(froth_error_t err) {
     return "call depth exceeded";
   case FROTH_ERROR_NO_MARK:
     return "no mark set";
+  case FROTH_ERROR_FFI_TABLE_FULL:
+    return "too many FFI tables registered";
   /* Reader/evaluator errors */
   case FROTH_ERROR_TOKEN_TOO_LONG:
     return "token too long";
