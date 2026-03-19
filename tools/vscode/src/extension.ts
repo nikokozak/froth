@@ -112,6 +112,7 @@ class FrothController {
   private connecting = false;
   private disposed = false;
   private deactivating = false;
+  private switchingTarget = false; // suppresses error state during intentional stop/restart
   private deviceStatus: StatusResult | null = null;
   private liveInfo: InfoResult | null = null;
   private stateListeners: StateChangeListener[] = [];
@@ -366,11 +367,13 @@ class FrothController {
         return false;
       }
 
+      // Intentional stop/restart — suppress socket close error state.
+      this.switchingTarget = true;
       await this.stopOwnedDaemon();
       this.disposeClient();
       this.deviceStatus = null;
       this.liveInfo = null;
-      this.setState("idle");
+      this.switchingTarget = false;
       status = null;
     }
 
@@ -391,19 +394,25 @@ class FrothController {
 
     this.applyStatus(status);
 
-    // If the daemon is up but the device isn't connected yet (e.g., still
-    // in the HELLO probe / reconnect loop after a fresh start), wait for
-    // the "connected" notification rather than failing immediately.
-    if (!status.connected && !status.reconnecting) {
-      return true; // Daemon up, device not expected (e.g., no hardware)
-    }
+    // If the daemon is up but the device isn't connected yet (still in
+    // HELLO probe / reconnect), wait briefly with visible progress.
     if (!status.connected && status.reconnecting) {
-      this.setState("disconnected");
-      this.output.appendLine("[froth] waiting for device...");
-      const connected = await this.waitForConnection(10000);
+      const waitMs = mode === "local" ? 2000 : 5000;
+      const label = mode === "local" ? "Starting local target..." : "Connecting to device...";
+
+      const connected = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: label,
+          cancellable: false,
+        },
+        () => this.waitForConnection(waitMs),
+      );
+
       if (!connected) {
-        this.output.appendLine("[froth] no device found");
-        return true; // Daemon is up, just no device — caller decides
+        this.output.appendLine("[froth] target not ready");
+        this.setState("disconnected");
+        return true; // Daemon is up, caller can proceed or show guidance
       }
     }
 
@@ -654,7 +663,13 @@ class FrothController {
     this.deviceStatus = null;
     this.liveInfo = null;
     this.extensionOwnsDaemon = false;
-    this.setState("idle");
+
+    if (this.switchingTarget) {
+      // Intentional stop during target switch — don't show error state.
+      return;
+    }
+
+    this.setState("no-daemon");
     this.output.appendLine("[froth] daemon connection lost");
   }
 
