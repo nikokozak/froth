@@ -1,10 +1,11 @@
 # Froth Interactive Development Specification
 
-**Status:** Candidate profile specification  
-**Version:** 0.5 (2026-02-26)  
-**Profiles defined:** `FROTH-Interactive` (Direct/Link modes), `FROTH-REPL` (conventions)  
-**Scope:** Defines Froth’s on-device interaction model and optional host augmentation.  
+**Status:** Candidate profile specification
+**Version:** 0.6 (2026-03-18)
+**Profiles defined:** `FROTH-Interactive` (Direct/Link modes), `FROTH-REPL` (conventions)
+**Scope:** Defines Froth’s on-device interaction model and optional host augmentation.
 **Non-scope:** Does not modify FROTH-Core semantics.
+**Changes from v0.5:** Link Mode updated from STX/ETX text framing to COBS binary framing (ADR-033). Interrupt semantics clarified for multiplexed console. See ADR-033, ADR-034.
 
 ## Foundational principle
 
@@ -80,61 +81,61 @@ This follows from Froth’s atomic `def` semantics.
 
 ### Link Mode (optional, host-augmented)
 
-Link Mode adds reliable framing, ACK/NAK responses, and definition-level tooling while preserving Direct Mode.
+Link Mode adds reliable binary framing, structured responses, and definition-level tooling while preserving Direct Mode. The transport is defined in ADR-033 (FROTH-LINK/1).
+
+#### Transport: COBS binary framing
+
+Link Mode uses COBS (Consistent Overhead Byte Stuffing) encoding with `0x00` as the frame delimiter. This shares the serial line with Direct Mode without byte collisions: `0x00` never appears in console text, and raw bytes outside frames are ordinary Direct Mode traffic.
+
+Wire format: `0x00` + COBS-encoded frame + `0x00`
+
+Each frame has a 12-byte header (magic "FL", version, message type, request ID, payload length, CRC32) followed by a binary payload. The CRC covers the header (excluding the CRC field) and the payload.
 
 #### Handshake
-The host requests Link Mode by sending:
 
-- `STX` + `FROTH-LINK` + `ETX` (0x02, ASCII, 0x03)
+The host sends a `HELLO_REQ` frame (message type 0x01, no payload). The device replies with `HELLO_RES` (message type 0x02) containing cell width, heap size, slot count, version, and board name.
 
-The device replies:
+If the device does not support Link Mode, the `0x00` delimiters are ignored (no console meaning) and the COBS bytes pass harmlessly through the REPL.
 
-- `STX` + `FROTH-LINK:OK:{version}` + `ETX`
+#### Message types
 
-If the device does not support Link Mode, it MUST treat the handshake bytes as ordinary input and remain in Direct Mode.
+| Type | Name | Direction | Purpose |
+|------|------|-----------|---------|
+| 0x01 | HELLO_REQ | host → device | Handshake |
+| 0x02 | HELLO_RES | device → host | Device capabilities |
+| 0x03 | EVAL_REQ | host → device | Evaluate source |
+| 0x04 | EVAL_RES | device → host | Evaluation result |
+| 0x07 | INFO_REQ | host → device | Query live state |
+| 0x08 | INFO_RES | device → host | Heap, slots, version |
+| 0x09 | RESET_REQ | host → device | Reset to stdlib baseline |
+| 0x0A | RESET_RES | device → host | Post-reset state |
+| 0xFF | ERROR | device → host | Protocol error |
 
-#### Framed input
-Each complete expression is transmitted as:
+#### Console multiplexer
 
-- `STX` `{id}` `:` `{expression}` `ETX`
+A console multiplexer classifies incoming bytes:
+- `0x00` starts COBS frame accumulation (Link Mode)
+- `0x03` outside a frame sets the interrupt flag (Direct Mode)
+- All other bytes outside a frame go to the REPL (Direct Mode)
 
-where `{id}` is a monotonically increasing decimal integer.
-
-The device MUST buffer bytes between `STX` and `ETX` before evaluating.
-
-If an `STX` is received while already buffering a frame, the device MUST discard the incomplete frame and treat the new `STX` as the start of a new frame.
-
-#### Responses (textual, machine-parsable)
-After evaluating a frame, the device MUST send exactly one response line:
-
-- Success: `#ACK {id} {stack}\n`
-- Error:  `#NAK {id} {err} {detail}\n`
-
-`{stack}` MUST be formatted as in the stack visualization protocol (Section 5).
-
-**Compatibility note (optional):** Implementations MAY additionally send legacy single-byte ACK/NAK (0x06 / 0x15), but the normative interface is the textual response line to avoid collisions with program output.
+Bytes inside a COBS frame are data, not control characters. A `0x03` inside a frame is just a data byte.
 
 #### Flow control
-The host MUST wait for `#ACK/#NAK` before sending the next frame (stop-and-wait). This is sufficient and robust for embedded targets.
+
+Stop-and-wait: the host sends one request frame, waits for the response frame before sending the next. During evaluation, the device may emit console text (e.g., from `emit` or `.`) as unframed bytes. The host parser separates these from the framed response using the `0x00` delimiters.
 
 #### Unframed input during Link Mode
-Unframed input (bytes not inside STX/ETX) MUST still be accepted and evaluated as in Direct Mode. This allows mixing manual REPL use with tool-driven frames.
 
-### Returning to Direct Mode
-Link Mode ends when:
-
-- the host sends `STX FROTH-UNLINK ETX`, or
-- the connection is lost / idle timeout occurs (implementation-defined), or
-- the device resets.
-
-After Link Mode ends, the device returns to Direct Mode.
+Unframed bytes (not inside `0x00` delimiters) are still accepted as Direct Mode input. This allows mixing manual REPL use with tool-driven frames on the same serial connection.
 
 ---
 
 ## Interrupt / “Ctrl-C” semantics
 
-### ETX interrupt flag
-If the console stream receives `ETX` (0x03, Ctrl-C), the implementation MUST set a VM-local **interrupt flag**.
+### Interrupt byte
+Raw `0x03` (Ctrl-C) outside a COBS frame sets a VM-local **interrupt flag**. Inside a COBS frame, `0x03` is data (the console multiplexer owns this distinction).
+
+On platforms with signal support (POSIX), the signal handler sets the interrupt flag. On platforms without signals (ESP32), the byte is detected by the console multiplexer in direct mode, by `platform_check_interrupt` at executor safe points, and by the `key` primitive in console context.
 
 ### Safe points
 The VM SHOULD check the interrupt flag at safe points:
@@ -145,7 +146,7 @@ The VM SHOULD check the interrupt flag at safe points:
 
 When the interrupt flag is observed, the VM MUST clear it and behave as if it executed `throw ERR.INTERRUPT`.
 
-This provides consistent “stop runaway code” behavior in both Direct Mode and Link Mode.
+This provides consistent “stop runaway code” behavior in both Direct Mode and Link Mode. From a host tool, interrupt is sent as a raw `0x03` byte outside any frame.
 
 ---
 
@@ -177,7 +178,7 @@ On power-up:
 To rescue from a bad `autorun` (infinite loop), implementations SHOULD provide at least one of:
 
 - a hardware safe-boot strap/pin to skip autorun,
-- a short “serial break window” where ETX (Ctrl-C) skips restore and autorun,
+- a short “serial break window” where Ctrl-C (0x03) skips restore and autorun,
 - a watchdog escape to prompt.
 
 ---
@@ -219,11 +220,10 @@ Implementations SHOULD format non-number values compactly:
 
 ## Host tooling (informative)
 
-A recommended host tool, `froth-link`, can provide:
+Host tools communicate with the device over FROTH-LINK/1 (ADR-033) via a daemon process (ADR-035) that owns the serial connection. The reference implementation includes:
 
-- framing + retransmit on error
-- `.froth` file send and watch mode
-- definition-level diffing
-- IDE integration
+- Go CLI (`froth-cli`): info, send, reset, interrupt, build, flash, daemon management
+- VS Code extension: send selection/file, interrupt/reset/save/wipe buttons, device info sidebar, console output streaming
+- Daemon: serial port ownership, device reconnection, JSON-RPC 2.0 for client access
 
-Host tooling MUST be optional and MUST not be required for normal operation.
+Host tooling MUST be optional and MUST not be required for normal operation. A person with a serial terminal and nothing else can write, test, and persist Froth programs.
