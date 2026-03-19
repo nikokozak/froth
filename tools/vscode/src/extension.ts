@@ -360,19 +360,17 @@ class FrothController {
 
     let status = await this.connectToDaemon(false);
     if (status && status.target !== mode) {
-      if (!this.extensionOwnsDaemon) {
-        vscode.window.showWarningMessage(
-          `A Froth daemon is already running in ${status.target} mode. Stop it before switching to ${mode} mode.`,
-        );
-        return false;
-      }
-
-      // Intentional stop/restart — suppress socket close error state.
+      // Wrong mode. Stop it and restart in the right mode.
       this.switchingTarget = true;
-      await this.stopOwnedDaemon();
       this.disposeClient();
+      try {
+        await this.execFroth("daemon stop");
+      } catch {
+        // Best effort
+      }
       this.deviceStatus = null;
       this.liveInfo = null;
+      this.extensionOwnsDaemon = false;
       this.switchingTarget = false;
       status = null;
     }
@@ -461,7 +459,9 @@ class FrothController {
       return status;
     } catch {
       client.dispose();
-      this.setState("no-daemon");
+      if (waitForSocket) {
+        this.setState("no-daemon");
+      }
       return null;
     } finally {
       this.connecting = false;
@@ -480,20 +480,6 @@ class FrothController {
       vscode.window.showErrorMessage(`Failed to start Froth daemon: ${msg}`);
       this.setState("no-daemon");
       return false;
-    }
-  }
-
-  private async stopOwnedDaemon(): Promise<void> {
-    if (!this.extensionOwnsDaemon) {
-      return;
-    }
-
-    this.extensionOwnsDaemon = false;
-
-    try {
-      await this.execFroth("daemon stop");
-    } catch {
-      // Daemon stop is best effort. The socket may already be gone.
     }
   }
 
@@ -837,12 +823,14 @@ class FrothController {
 
   private cliCandidates(): string[] {
     const candidates = [
+      // Workspace binaries first — during development, always use the
+      // freshly built CLI, not an older installed version on PATH.
+      path.join(this.workspaceCwd(), "tools", "cli", "froth-cli"),
+      path.join(this.workspaceCwd(), "tools", "cli", "cli"),
       "froth",
       "froth-cli",
       "/opt/homebrew/bin/froth",
       "/usr/local/bin/froth",
-      path.join(this.workspaceCwd(), "tools", "cli", "froth-cli"),
-      path.join(this.workspaceCwd(), "tools", "cli", "cli"),
     ];
 
     return candidates;
