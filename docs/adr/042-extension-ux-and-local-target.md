@@ -1,7 +1,7 @@
 # ADR-042: Extension UX, Daemon Lifecycle, and Local Target
 
 **Date**: 2026-03-18
-**Status**: Proposed
+**Status**: Accepted
 **Spec sections**: Froth_Interactive_Development_v0_6 (Link Mode, host tooling), ADR-035 (daemon architecture), ADR-037 (host-centric deployment), ADR-039 (tooling UX and daemon lifecycle)
 
 ## Context

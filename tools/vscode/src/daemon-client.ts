@@ -65,6 +65,8 @@ export interface ResetResult {
 export interface StatusResult {
   running: boolean;
   connected: boolean;
+  reconnecting?: boolean;
+  target: "serial" | "local";
   device?: HelloResult;
   port?: string;
 }

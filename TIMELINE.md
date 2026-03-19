@@ -247,6 +247,13 @@
 - [x] Spec v0.6: Link Mode updated from STX/ETX to COBS binary framing, interrupt semantics clarified
 - [x] **Proof**: all paths tested (POSIX REPL, POSIX socat link, ESP32 direct serial, ESP32 daemon)
 
+### Extension UX and local target (Mar 18, ADR-042)
+- [x] Extension rewrite: native VS Code action surfaces, viewsWelcome, lazy daemon start
+- [x] Local POSIX target: daemon `--local`, `localTransport` via stdin/stdout pipes
+- [x] Background daemon: `froth daemon start --background` with Setsid + re-exec
+- [x] Status: `target` and `reconnecting` fields, target-aware UI labels
+- [x] **Proof**: serial device and local POSIX both tested via daemon (eval, string, reset)
+
 ### Remaining work
 - [ ] Embedded user program support (CMake `FROTH_USER_PROGRAM`, boot sequence slot)
 - [ ] Streaming snapshot serializer v2 (ADR-038: ~344B writer, ~280B reader, format change)

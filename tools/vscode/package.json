@@ -17,6 +17,21 @@
   "contributes": {
     "commands": [
       {
+        "command": "froth.connect",
+        "title": "Froth: Connect Device",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "froth.tryLocal",
+        "title": "Froth: Try Local POSIX",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "froth.doctor",
+        "title": "Froth: Run Doctor",
+        "icon": "$(tools)"
+      },
+      {
         "command": "froth.sendSelection",
         "title": "Froth: Send Selection / Line",
         "icon": "$(play)"
@@ -57,13 +72,13 @@
         "command": "froth.sendSelection",
         "key": "ctrl+enter",
         "mac": "cmd+enter",
-        "when": "editorTextFocus"
+        "when": "editorTextFocus && resourceExtname == .froth"
       },
       {
         "command": "froth.sendFile",
         "key": "ctrl+shift+enter",
         "mac": "cmd+shift+enter",
-        "when": "editorTextFocus"
+        "when": "editorTextFocus && resourceExtname == .froth"
       }
     ],
     "viewsContainers": {
@@ -83,11 +98,54 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "frothDeviceView",
+        "contents": "Connect to a Froth device or start a local POSIX target.\n\n[Connect Device](command:froth.connect)\n[Try Local](command:froth.tryLocal)\n[Run Doctor](command:froth.doctor)"
+      }
+    ],
     "menus": {
       "view/title": [
         {
+          "command": "froth.interrupt",
+          "when": "view == frothDeviceView",
+          "group": "navigation"
+        },
+        {
           "command": "froth.refreshSidebar",
           "when": "view == frothDeviceView",
+          "group": "navigation"
+        },
+        {
+          "command": "froth.reset",
+          "when": "view == frothDeviceView",
+          "group": "2_actions"
+        },
+        {
+          "command": "froth.save",
+          "when": "view == frothDeviceView",
+          "group": "2_actions"
+        },
+        {
+          "command": "froth.wipe",
+          "when": "view == frothDeviceView",
+          "group": "2_actions"
+        },
+        {
+          "command": "froth.doctor",
+          "when": "view == frothDeviceView",
+          "group": "2_actions"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "froth.sendSelection",
+          "when": "resourceExtname == .froth",
+          "group": "navigation"
+        },
+        {
+          "command": "froth.sendFile",
+          "when": "resourceExtname == .froth",
           "group": "navigation"
         }
       ]

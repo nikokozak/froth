@@ -94,10 +94,12 @@ type ResetResult struct {
 }
 
 type StatusResult struct {
-	Running   bool         `json:"running"`
-	Connected bool         `json:"connected"`
-	Device    *HelloResult `json:"device,omitempty"`
-	Port      string       `json:"port,omitempty"`
+	Running      bool         `json:"running"`
+	Connected    bool         `json:"connected"`
+	Reconnecting bool         `json:"reconnecting"`
+	Target       string       `json:"target"`
+	Device       *HelloResult `json:"device,omitempty"`
+	Port         string       `json:"port,omitempty"`
 }
 
 type ConsoleEvent struct {
@@ -244,15 +246,22 @@ func (c *rpcConn) handleInterrupt(req *rpcRequest) {
 
 func (c *rpcConn) handleStatus(req *rpcRequest) {
 	c.daemon.portMu.Lock()
-	connected := c.daemon.port != nil
+	connected := c.daemon.conn != nil
 	hello := c.daemon.hello
 	portPath := c.daemon.portPath
+	reconnecting := c.daemon.reconnecting.Load()
+	target := "serial"
+	if c.daemon.local {
+		target = "local"
+	}
 	c.daemon.portMu.Unlock()
 
 	result := &StatusResult{
-		Running:   true,
-		Connected: connected,
-		Port:      portPath,
+		Running:      true,
+		Connected:    connected,
+		Reconnecting: reconnecting,
+		Target:       target,
+		Port:         portPath,
 	}
 	if hello != nil {
 		hr := helloToResult(hello)

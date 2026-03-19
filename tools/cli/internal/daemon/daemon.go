@@ -3,9 +3,11 @@ package daemon
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -30,6 +32,33 @@ const (
 
 var ErrDisconnected = errors.New("device disconnected")
 
+type transport interface {
+	Read(buf []byte) (int, error)
+	Write(data []byte) error
+	Close() error
+	Path() string
+	SetReadTimeout(d time.Duration) error
+	ResetInputBuffer()
+	Drain(duration time.Duration)
+}
+
+type localTransport struct {
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout io.ReadCloser
+
+	path string
+
+	readCh chan byte
+	done   chan struct{}
+
+	stateMu     sync.Mutex
+	readTimeout time.Duration
+	readErr     error
+
+	closeOnce sync.Once
+}
+
 // frameResponse is a decoded frame delivered by the serial reader.
 type frameResponse struct {
 	header  *protocol.Header
@@ -43,9 +72,10 @@ type Daemon struct {
 	portPath   string
 	socketPath string
 	pidPath    string
+	local      bool
 
-	// Serial connection (guarded by portMu)
-	port   *serial.Port
+	// Active transport (guarded by portMu)
+	conn   transport
 	hello  *protocol.HelloResponse
 	portMu sync.Mutex
 
@@ -61,8 +91,8 @@ type Daemon struct {
 	// a waiter with the expected request ID. The serial reader delivers
 	// matching frames directly. No buffering, no drain, no race.
 	waiterMu sync.Mutex
-	waiterID uint16              // expected request ID, 0 = no waiter
-	waiterCh chan frameResponse  // delivery channel, nil = no waiter
+	waiterID uint16             // expected request ID, 0 = no waiter
+	waiterCh chan frameResponse // delivery channel, nil = no waiter
 
 	// Closed by handleDisconnect to unblock any waiting request.
 	disconnectCh chan struct{}
@@ -79,7 +109,7 @@ type Daemon struct {
 	wg           sync.WaitGroup
 }
 
-func New(portPath string) *Daemon {
+func New(portPath string, local bool) *Daemon {
 	home, _ := os.UserHomeDir()
 	frothDir := filepath.Join(home, ".froth")
 
@@ -87,6 +117,7 @@ func New(portPath string) *Daemon {
 		portPath:     portPath,
 		socketPath:   filepath.Join(frothDir, "daemon.sock"),
 		pidPath:      filepath.Join(frothDir, "daemon.pid"),
+		local:        local,
 		disconnectCh: make(chan struct{}),
 		clients:      make(map[*rpcConn]struct{}),
 		done:         make(chan struct{}),
@@ -103,6 +134,229 @@ func SocketPath() string {
 func PIDPath() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".froth", "daemon.pid")
+}
+
+func newLocalTransport() (*localTransport, error) {
+	binary, err := findLocalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := exec.Command(binary)
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stdin pipe: %w", err)
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stdout pipe: %w", err)
+	}
+
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start local target: %w", err)
+	}
+
+	t := &localTransport{
+		cmd:    cmd,
+		stdin:  stdin,
+		stdout: stdout,
+		path:   "stdin/stdout",
+		readCh: make(chan byte, 4096),
+		done:   make(chan struct{}),
+	}
+
+	go t.readLoop()
+	go t.waitLoop()
+
+	return t, nil
+}
+
+func findLocalBinary() (string, error) {
+	if st, err := os.Stat(filepath.Join(".", "build64", "Froth")); err == nil && !st.IsDir() {
+		return filepath.Abs(filepath.Join(".", "build64", "Froth"))
+	}
+
+	if p, err := exec.LookPath("Froth"); err == nil {
+		return p, nil
+	}
+
+	if p, err := exec.LookPath("froth"); err == nil {
+		if exe, exeErr := os.Executable(); exeErr == nil {
+			candidate, candErr := filepath.EvalSymlinks(p)
+			current, currentErr := filepath.EvalSymlinks(exe)
+			if candErr == nil && currentErr == nil && candidate == current {
+				return "", fmt.Errorf(
+					"local Froth binary not found (froth on PATH resolves to the CLI, not the POSIX runtime)",
+				)
+			}
+		}
+		return p, nil
+	}
+
+	return "", fmt.Errorf("local Froth binary not found (expected ./build64/Froth or Froth on PATH)")
+}
+
+func (t *localTransport) readLoop() {
+	buf := make([]byte, 256)
+
+	for {
+		n, err := t.stdout.Read(buf)
+		if n > 0 {
+			for _, b := range buf[:n] {
+				select {
+				case t.readCh <- b:
+				case <-t.done:
+					return
+				}
+			}
+		}
+
+		if err != nil {
+			t.signalErr(err)
+			return
+		}
+	}
+}
+
+func (t *localTransport) waitLoop() {
+	err := t.cmd.Wait()
+	if err != nil {
+		t.signalErr(err)
+		return
+	}
+	t.signalErr(io.EOF)
+}
+
+func (t *localTransport) signalErr(err error) {
+	t.stateMu.Lock()
+	if t.readErr == nil {
+		t.readErr = err
+	}
+	t.stateMu.Unlock()
+
+	select {
+	case <-t.done:
+	default:
+		close(t.done)
+	}
+}
+
+func (t *localTransport) Read(buf []byte) (int, error) {
+	timeout := t.currentReadTimeout()
+
+	if timeout > 0 {
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+
+		select {
+		case b := <-t.readCh:
+			buf[0] = b
+			return 1, nil
+		case <-timer.C:
+			return 0, nil
+		case <-t.done:
+			return 0, t.currentReadErr()
+		}
+	}
+
+	select {
+	case b := <-t.readCh:
+		buf[0] = b
+		return 1, nil
+	case <-t.done:
+		return 0, t.currentReadErr()
+	}
+}
+
+func (t *localTransport) Write(data []byte) error {
+	n, err := t.stdin.Write(data)
+	if err != nil {
+		return fmt.Errorf("local write: %w", err)
+	}
+	if n != len(data) {
+		return fmt.Errorf("short write: wrote %d of %d bytes", n, len(data))
+	}
+	return nil
+}
+
+func (t *localTransport) Close() error {
+	var result error
+
+	t.closeOnce.Do(func() {
+		select {
+		case <-t.done:
+		default:
+			close(t.done)
+		}
+
+		if t.stdin != nil {
+			_ = t.stdin.Close()
+		}
+		if t.stdout != nil {
+			_ = t.stdout.Close()
+		}
+		if t.cmd.Process != nil {
+			if err := t.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+				result = err
+			}
+		}
+	})
+
+	return result
+}
+
+func (t *localTransport) Path() string {
+	return t.path
+}
+
+func (t *localTransport) SetReadTimeout(d time.Duration) error {
+	t.stateMu.Lock()
+	t.readTimeout = d
+	t.stateMu.Unlock()
+	return nil
+}
+
+func (t *localTransport) ResetInputBuffer() {
+	for {
+		select {
+		case <-t.readCh:
+		default:
+			return
+		}
+	}
+}
+
+func (t *localTransport) Drain(duration time.Duration) {
+	deadline := time.Now().Add(duration)
+	for time.Now().Before(deadline) {
+		remaining := time.Until(deadline)
+		if remaining > 10*time.Millisecond {
+			remaining = 10 * time.Millisecond
+		}
+		select {
+		case <-t.readCh:
+		case <-time.After(remaining):
+		}
+	}
+}
+
+func (t *localTransport) currentReadTimeout() time.Duration {
+	t.stateMu.Lock()
+	defer t.stateMu.Unlock()
+	return t.readTimeout
+}
+
+func (t *localTransport) currentReadErr() error {
+	t.stateMu.Lock()
+	defer t.stateMu.Unlock()
+	if t.readErr != nil {
+		return t.readErr
+	}
+	return io.EOF
 }
 
 // Start runs the daemon in the foreground until interrupted.
@@ -134,7 +388,7 @@ func (d *Daemon) Start() error {
 		go d.reconnectLoop()
 	} else {
 		d.wg.Add(1)
-		go d.serialReadLoop()
+		go d.transportReadLoop()
 	}
 
 	d.wg.Add(1)
@@ -154,11 +408,17 @@ func (d *Daemon) Start() error {
 }
 
 func (d *Daemon) connect() error {
-	var port *serial.Port
+	var conn transport
 	var hello *protocol.HelloResponse
 	var err error
 
-	if d.portPath != "" {
+	if d.local {
+		conn, hello, err = connectLocal()
+		if err != nil {
+			return err
+		}
+	} else if d.portPath != "" {
+		var port *serial.Port
 		port, err = serial.Open(d.portPath)
 		if err != nil {
 			return fmt.Errorf("open %s: %w", d.portPath, err)
@@ -169,38 +429,53 @@ func (d *Daemon) connect() error {
 			port.Close()
 			return fmt.Errorf("handshake: %w", err)
 		}
-		// Flush any remaining boot garbage so the serial read loop
-		// starts with a clean buffer.
 		port.ResetInputBuffer()
+		conn = port
 	} else {
+		var port *serial.Port
 		port, hello, err = serial.Discover()
 		if err != nil {
 			return err
 		}
+		conn = port
 	}
 
 	d.portMu.Lock()
-	d.port = port
+	d.conn = conn
 	d.hello = hello
-	if d.portPath == "" {
-		d.portPath = port.Path()
-	}
+	d.portPath = conn.Path()
 	// Fresh disconnect channel for this connection
 	d.disconnectCh = make(chan struct{})
 	d.portMu.Unlock()
 
-	log.Printf("device: %s on %s (%d-bit) at %s", hello.Version, hello.Board, hello.CellBits, port.Path())
+	log.Printf("device: %s on %s (%d-bit) at %s", hello.Version, hello.Board, hello.CellBits, conn.Path())
 	d.broadcast(EventConnected, &ConnectedEvent{
 		Device: helloToResult(hello),
-		Port:   port.Path(),
+		Port:   conn.Path(),
 	})
 
 	return nil
 }
 
-// serialReadLoop reads from the serial port, classifies bytes as
+func connectLocal() (transport, *protocol.HelloResponse, error) {
+	conn, err := newLocalTransport()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	hello, err := probeHelloTransport(conn)
+	if err != nil {
+		conn.Close()
+		return nil, nil, fmt.Errorf("handshake: %w", err)
+	}
+
+	conn.ResetInputBuffer()
+	return conn, hello, nil
+}
+
+// transportReadLoop reads from the active transport, classifies bytes as
 // console text or COBS frames, and delivers decoded frames to replyCh.
-func (d *Daemon) serialReadLoop() {
+func (d *Daemon) transportReadLoop() {
 	defer d.wg.Done()
 
 	buf := make([]byte, 1)
@@ -216,18 +491,18 @@ func (d *Daemon) serialReadLoop() {
 		}
 
 		d.portMu.Lock()
-		port := d.port
+		conn := d.conn
 		d.portMu.Unlock()
 
-		if port == nil {
+		if conn == nil {
 			return
 		}
 
-		if err := port.SetReadTimeout(serialReadTimeout); err != nil {
+		if err := conn.SetReadTimeout(serialReadTimeout); err != nil {
 			d.handleDisconnect(err)
 			return
 		}
-		n, err := port.Read(buf)
+		n, err := conn.Read(buf)
 		if err != nil {
 			d.handleDisconnect(err)
 			return
@@ -265,6 +540,108 @@ func (d *Daemon) serialReadLoop() {
 				d.broadcast(EventConsole, &ConsoleEvent{Text: string(consoleBuf)})
 				consoleBuf = consoleBuf[:0]
 			}
+		}
+	}
+}
+
+func probeHelloTransport(conn transport) (*protocol.HelloResponse, error) {
+	const maxHelloRetries = 3
+
+	deadline := time.Now().Add(serial.ProbeDeadline)
+	helloFrame, err := protocol.EncodeWireFrame(protocol.HelloReq, 0, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build HELLO_REQ: %w", err)
+	}
+
+	conn.ResetInputBuffer()
+
+	for attempt := 0; attempt < maxHelloRetries; attempt++ {
+		if time.Now().After(deadline) {
+			break
+		}
+
+		if err := conn.Write(helloFrame); err != nil {
+			return nil, fmt.Errorf("write: %w", err)
+		}
+
+		for {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				break
+			}
+
+			readTimeout := remaining
+			if readTimeout > 2*time.Second {
+				readTimeout = 2 * time.Second
+			}
+
+			encoded, err := readFrameTransport(conn, readTimeout)
+			if err != nil {
+				break
+			}
+
+			decoded, err := protocol.COBSDecode(encoded)
+			if err != nil {
+				log.Printf("probe: discard corrupt COBS (%v)", err)
+				continue
+			}
+
+			header, payload, err := protocol.ParseFrame(decoded)
+			if err != nil {
+				log.Printf("probe: discard bad frame (%v)", err)
+				continue
+			}
+
+			if header.MessageType != protocol.HelloRes {
+				log.Printf("probe: discard unexpected type 0x%02x", header.MessageType)
+				continue
+			}
+
+			return protocol.ParseHelloResponse(payload)
+		}
+
+		conn.ResetInputBuffer()
+	}
+
+	return nil, fmt.Errorf("no HELLO_RES after %d attempts", maxHelloRetries)
+}
+
+func readFrameTransport(conn transport, timeout time.Duration) ([]byte, error) {
+	deadline := time.Now().Add(timeout)
+	buf := make([]byte, 1)
+	var frame []byte
+	inFrame := false
+
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, fmt.Errorf("frame timeout")
+		}
+
+		if err := conn.SetReadTimeout(remaining); err != nil {
+			return nil, err
+		}
+
+		n, err := conn.Read(buf)
+		if err != nil {
+			return nil, err
+		}
+		if n == 0 {
+			return nil, fmt.Errorf("frame timeout")
+		}
+
+		b := buf[0]
+		if b == 0x00 {
+			if inFrame && len(frame) > 0 {
+				return frame, nil
+			}
+			frame = frame[:0]
+			inFrame = true
+			continue
+		}
+
+		if inFrame {
+			frame = append(frame, b)
 		}
 	}
 }
@@ -311,12 +688,12 @@ func (d *Daemon) deliverFrame(raw []byte) {
 
 func (d *Daemon) handleDisconnect(err error) {
 	d.portMu.Lock()
-	if d.port == nil {
+	if d.conn == nil {
 		d.portMu.Unlock()
 		return
 	}
-	d.port.Close()
-	d.port = nil
+	d.conn.Close()
+	d.conn = nil
 	d.hello = nil
 	// Signal any blocked waitResponse
 	close(d.disconnectCh)
@@ -358,7 +735,7 @@ func (d *Daemon) reconnectLoop() {
 
 		d.reconnecting.Store(false)
 		d.wg.Add(1)
-		go d.serialReadLoop()
+		go d.transportReadLoop()
 		return
 	}
 }
@@ -412,9 +789,9 @@ func (d *Daemon) shutdown() {
 	d.listener.Close()
 
 	d.portMu.Lock()
-	if d.port != nil {
-		d.port.Close()
-		d.port = nil
+	if d.conn != nil {
+		d.conn.Close()
+		d.conn = nil
 	}
 	d.portMu.Unlock()
 
@@ -488,14 +865,14 @@ func (d *Daemon) sendFrame(msgType byte, reqID uint16, payload []byte) error {
 	defer d.writeMu.Unlock()
 
 	d.portMu.Lock()
-	port := d.port
+	conn := d.conn
 	d.portMu.Unlock()
 
-	if port == nil {
+	if conn == nil {
 		return ErrDisconnected
 	}
 
-	return port.Write(wire)
+	return conn.Write(wire)
 }
 
 // registerWaiter sets up a per-request delivery channel. The serial
@@ -550,9 +927,9 @@ func (d *Daemon) waitResponse(ch chan frameResponse, timeout time.Duration) (*pr
 // Blocks until all chunks complete or an error occurs. No timeout.
 func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 	d.portMu.Lock()
-	port := d.port
+	conn := d.conn
 	d.portMu.Unlock()
-	if port == nil {
+	if conn == nil {
 		return nil, ErrDisconnected
 	}
 
@@ -612,9 +989,9 @@ func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 // deviceInfo sends an INFO_REQ and returns the parsed response.
 func (d *Daemon) deviceInfo() (*InfoResult, error) {
 	d.portMu.Lock()
-	port := d.port
+	conn := d.conn
 	d.portMu.Unlock()
-	if port == nil {
+	if conn == nil {
 		return nil, ErrDisconnected
 	}
 
@@ -655,9 +1032,9 @@ func (d *Daemon) deviceInfo() (*InfoResult, error) {
 // deviceReset sends a RESET_REQ and returns the parsed response.
 func (d *Daemon) deviceReset() (*ResetResult, error) {
 	d.portMu.Lock()
-	port := d.port
+	conn := d.conn
 	d.portMu.Unlock()
-	if port == nil {
+	if conn == nil {
 		return nil, ErrDisconnected
 	}
 
@@ -712,14 +1089,14 @@ func (d *Daemon) deviceInterrupt() error {
 	defer d.writeMu.Unlock()
 
 	d.portMu.Lock()
-	port := d.port
+	conn := d.conn
 	d.portMu.Unlock()
 
-	if port == nil {
+	if conn == nil {
 		return ErrDisconnected
 	}
 
-	return port.Write([]byte{0x03})
+	return conn.Write([]byte{0x03})
 }
 
 // allocReqID returns a unique request ID in the range [1, 0xFFFE].
