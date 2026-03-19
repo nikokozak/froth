@@ -4,6 +4,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { DaemonSupervisor } from "./daemon-supervisor";
 import {
   DaemonClient,
   DaemonClientError,
@@ -18,8 +19,6 @@ import {
 const execFileAsync = promisify(execFile);
 
 const SOCKET_PATH = path.join(os.homedir(), ".froth", "daemon.sock");
-const DAEMON_START_TIMEOUT_MS = 5000;
-const DAEMON_START_POLL_MS = 100;
 
 type ConnectionState =
   | "idle"
@@ -107,16 +106,14 @@ export function deactivate(): Thenable<void> | undefined {
 type StateChangeListener = () => void;
 
 class FrothController {
+  private readonly supervisor: DaemonSupervisor;
   private client: DaemonClient | null = null;
   private state: ConnectionState = "idle";
-  private connecting = false;
   private disposed = false;
   private deactivating = false;
-  private switchingTarget = false; // suppresses error state during intentional stop/restart
   private deviceStatus: StatusResult | null = null;
   private liveInfo: InfoResult | null = null;
   private stateListeners: StateChangeListener[] = [];
-  private extensionOwnsDaemon = false;
   private selectedTarget: TargetMode = "serial";
   private cliPathCache: string | null = null;
 
@@ -125,6 +122,14 @@ class FrothController {
     private readonly statusItem: vscode.StatusBarItem,
     private readonly interruptItem: vscode.StatusBarItem,
   ) {
+    this.supervisor = new DaemonSupervisor(
+      SOCKET_PATH,
+      (args) => this.execFroth(args),
+      {
+        onNotification: (n) => this.handleNotification(n),
+        onClose: () => this.handleSocketClose(),
+      },
+    );
     this.statusItem.command = "froth.connect";
     this.interruptItem.command = "froth.interrupt";
     this.updateStatusBar();
@@ -145,17 +150,8 @@ class FrothController {
     }
     this.deactivating = true;
 
-    const stopOwnedDaemon = this.extensionOwnsDaemon;
     this.dispose();
-
-    if (stopOwnedDaemon) {
-      this.extensionOwnsDaemon = false;
-      try {
-        await this.execFroth("daemon stop");
-      } catch {
-        // Best effort only. The daemon may already be gone.
-      }
-    }
+    await this.supervisor.deactivate();
   }
 
   onStateChange(listener: StateChangeListener): void {
@@ -337,18 +333,33 @@ class FrothController {
   }
 
   async refreshDeviceInfo(): Promise<void> {
-    if (!this.client) {
+    let status: StatusResult | null;
+    try {
+      status = await this.supervisor.refreshStatus();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`Froth daemon error: ${msg}`);
+      this.disposeClient();
+      this.deviceStatus = null;
+      this.liveInfo = null;
+      this.setState("no-daemon");
+      return;
+    }
+
+    this.client = this.supervisor.getClient();
+    if (!status) {
+      return;
+    }
+
+    this.applyStatus(this.normalizeStatus(status));
+    if (!status.connected || !this.client) {
+      this.liveInfo = null;
+      this.notifyStateChange();
       return;
     }
 
     try {
-      const status = this.normalizeStatus(await this.client.status());
-      this.applyStatus(status);
-      if (status.connected) {
-        this.liveInfo = await this.client.info();
-      } else {
-        this.liveInfo = null;
-      }
+      this.liveInfo = await this.client.info();
       this.notifyStateChange();
     } catch {
       // Leave the current UI state intact if the daemon vanishes mid-refresh.
@@ -357,141 +368,31 @@ class FrothController {
 
   private async ensureDaemonMode(mode: TargetMode): Promise<boolean> {
     this.selectedTarget = mode;
-
-    let status = await this.connectToDaemon(false);
-    if (status && status.target !== mode) {
-      // Wrong mode. Stop it and restart in the right mode.
-      this.switchingTarget = true;
-      this.disposeClient();
-      try {
-        await this.execFroth("daemon stop");
-      } catch {
-        // Best effort
-      }
-      this.deviceStatus = null;
-      this.liveInfo = null;
-      this.extensionOwnsDaemon = false;
-      this.switchingTarget = false;
-      status = null;
-    }
-
-    if (!status) {
-      const started = await this.startDaemon(mode);
-      if (!started) {
-        return false;
-      }
-
-      status = await this.connectToDaemon(true);
-      if (!status) {
-        vscode.window.showErrorMessage(
-          "Froth daemon started, but the extension could not connect to it.",
-        );
-        return false;
-      }
-    }
-
-    this.applyStatus(status);
-
-    // If the daemon is up but the device isn't connected yet (still in
-    // HELLO probe / reconnect), wait briefly with visible progress.
-    if (!status.connected && status.reconnecting) {
-      const waitMs = mode === "local" ? 2000 : 5000;
-      const label = mode === "local" ? "Starting local target..." : "Connecting to device...";
-
-      const connected = await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: label,
-          cancellable: false,
-        },
-        () => this.waitForConnection(waitMs),
+    try {
+      const status = this.normalizeStatus(
+        await this.supervisor.ensureMode(mode, this.localRuntimePath()),
       );
-
-      if (!connected) {
-        this.output.appendLine("[froth] target not ready");
-        this.setState("disconnected");
-        return true; // Daemon is up, caller can proceed or show guidance
-      }
-    }
-
-    return true;
-  }
-
-  private async connectToDaemon(
-    waitForSocket: boolean,
-  ): Promise<StatusResult | null> {
-    if (this.disposed) {
-      return null;
-    }
-
-    if (this.client) {
-      try {
-        const status = this.normalizeStatus(await this.client.status());
-        this.applyStatus(status);
-        return status;
-      } catch {
-        this.disposeClient();
-      }
-    }
-
-    if (waitForSocket) {
-      const ready = await this.waitForSocket();
-      if (!ready) {
-        this.setState("no-daemon");
-        return null;
-      }
-    }
-
-    if (this.connecting) {
-      return null;
-    }
-    this.connecting = true;
-
-    const client = new DaemonClient();
-    client.onNotification((n: DaemonNotification) => this.handleNotification(n));
-    client.onClose(() => this.handleSocketClose());
-
-    try {
-      await client.connect();
-      this.client = client;
-      const status = this.normalizeStatus(await client.status());
+      this.client = this.supervisor.getClient();
       this.applyStatus(status);
-      return status;
-    } catch {
-      client.dispose();
-      if (waitForSocket) {
-        this.setState("no-daemon");
-      }
-      return null;
-    } finally {
-      this.connecting = false;
-    }
-  }
-
-  private async startDaemon(mode: TargetMode): Promise<boolean> {
-    const modeArgs = mode === "local" ? " --local" : "";
-
-    try {
-      await this.execFroth(`daemon start --background${modeArgs}`);
-      this.extensionOwnsDaemon = true;
       return true;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      vscode.window.showErrorMessage(`Failed to start Froth daemon: ${msg}`);
+      vscode.window.showErrorMessage(`Froth daemon error: ${msg}`);
       this.setState("no-daemon");
       return false;
     }
   }
 
-  private async execFroth(args: string): Promise<void> {
+  private async execFroth(
+    args: string[],
+  ): Promise<{ stdout: string; stderr: string }> {
     const cliPath = await this.getCliPath();
     if (!cliPath) {
       throw new Error("Froth CLI not found");
     }
 
     const cwd = this.workspaceCwd();
-    const argv = args.split(" ").filter((part) => part.length > 0);
-    await execFileAsync(cliPath, argv, { cwd });
+    return execFileAsync(cliPath, args, { cwd });
   }
 
   private workspaceCwd(): string {
@@ -509,65 +410,6 @@ class FrothController {
     }
 
     return process.cwd();
-  }
-
-  // Waits for the daemon to report a connected device (via status polling).
-  // Used after daemon start when the device is still in HELLO/reconnect.
-  private waitForConnection(timeoutMs: number): Promise<boolean> {
-    const deadline = Date.now() + timeoutMs;
-
-    return new Promise<boolean>((resolve) => {
-      const poll = async () => {
-        if (this.disposed || Date.now() >= deadline) {
-          resolve(false);
-          return;
-        }
-
-        try {
-          if (this.client) {
-            const st = this.normalizeStatus(await this.client.status());
-            this.applyStatus(st);
-            if (st.connected) {
-              resolve(true);
-              return;
-            }
-          }
-        } catch {
-          // Daemon may still be settling
-        }
-
-        setTimeout(poll, 500);
-      };
-
-      setTimeout(poll, 500);
-    });
-  }
-
-  private waitForSocket(): Promise<boolean> {
-    const deadline = Date.now() + DAEMON_START_TIMEOUT_MS;
-
-    return new Promise<boolean>((resolve) => {
-      const poll = () => {
-        if (this.disposed) {
-          resolve(false);
-          return;
-        }
-
-        if (fs.existsSync(SOCKET_PATH)) {
-          resolve(true);
-          return;
-        }
-
-        if (Date.now() >= deadline) {
-          resolve(false);
-          return;
-        }
-
-        setTimeout(poll, DAEMON_START_POLL_MS);
-      };
-
-      poll();
-    });
   }
 
   private requireIdle(): boolean {
@@ -609,6 +451,14 @@ class FrothController {
     }
   }
 
+  private localRuntimePath(): string {
+    return (
+      vscode.workspace
+        .getConfiguration("froth")
+        .get<string>("localRuntimePath") ?? ""
+    );
+  }
+
   private handleNotification(n: DaemonNotification): void {
     switch (n.method) {
       case "console": {
@@ -648,17 +498,9 @@ class FrothController {
     this.disposeClient();
     this.deviceStatus = null;
     this.liveInfo = null;
-    this.extensionOwnsDaemon = false;
-
-    if (this.switchingTarget) {
-      // Intentional stop during target switch — don't show error state.
-      return;
-    }
-
     this.setState("no-daemon");
     this.output.appendLine("[froth] daemon connection lost");
   }
-
 
   private async evalAndLog(source: string): Promise<void> {
     if (!this.client) {

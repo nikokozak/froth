@@ -14,6 +14,7 @@
 // Keep term state so we can reset at end.
 static struct termios original;
 static struct termios modified;
+static int term_configured = 0;
 
 static void interrupt_handler(int signum) {
   if (signum != SIGINT) {
@@ -25,7 +26,11 @@ static void interrupt_handler(int signum) {
 
 void platform_delay_ms(froth_cell_u_t ms) { usleep((useconds_t)ms * 1000); }
 
-static void cleanup_term(void) { tcsetattr(STDIN_FILENO, TCSANOW, &original); }
+static void cleanup_term(void) {
+  if (!term_configured)
+    return;
+  tcsetattr(STDIN_FILENO, TCSANOW, &original);
+}
 
 froth_error_t platform_init(void) {
   static struct sigaction sig;
@@ -37,14 +42,24 @@ froth_error_t platform_init(void) {
     return FROTH_ERROR_IO;
   }
 
+  setvbuf(stdin, NULL, _IONBF, 0);
+  setvbuf(stdout, NULL, _IONBF, 0);
+
   // We need to set term behavior so that it matches
   // a "raw" state that most embedded devices have, and so
   // we can build on it for things like multiline, etc.
-  tcgetattr(STDIN_FILENO, &original);
-  modified = original;
-  modified.c_lflag &= ~ECHO;
-  modified.c_lflag &= ~ICANON;
-  tcsetattr(STDIN_FILENO, TCSANOW, &modified);
+  if (isatty(STDIN_FILENO)) {
+    if (tcgetattr(STDIN_FILENO, &original) == -1) {
+      return FROTH_ERROR_IO;
+    }
+    modified = original;
+    modified.c_lflag &= ~ECHO;
+    modified.c_lflag &= ~ICANON;
+    if (tcsetattr(STDIN_FILENO, TCSANOW, &modified) == -1) {
+      return FROTH_ERROR_IO;
+    }
+    term_configured = 1;
+  }
 
   atexit(cleanup_term);
 

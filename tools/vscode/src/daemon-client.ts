@@ -63,6 +63,9 @@ export interface ResetResult {
 }
 
 export interface StatusResult {
+  pid: number;
+  api_version: number;
+  daemon_version: string;
   running: boolean;
   connected: boolean;
   reconnecting?: boolean;

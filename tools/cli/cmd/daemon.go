@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/nikokozak/froth/tools/cli/internal/daemon"
 )
@@ -22,7 +23,7 @@ func runDaemon(args []string) error {
 	case "start":
 		return runDaemonStart(args[1:])
 	case "stop":
-		return runDaemonStop()
+		return runDaemonStop(args[1:])
 	case "status":
 		return runDaemonStatus()
 	default:
@@ -33,31 +34,46 @@ func runDaemon(args []string) error {
 func runDaemonStart(args []string) error {
 	background := false
 	local := false
+	localRuntimePath := ""
 
-	for _, arg := range args {
-		switch arg {
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
 		case "--background":
 			background = true
 		case "--local":
 			local = true
+		case "--local-runtime":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--local-runtime requires a path")
+			}
+			localRuntimePath = args[i+1]
+			i++
 		default:
-			return fmt.Errorf("unknown daemon start flag: %s", arg)
+			return fmt.Errorf("unknown daemon start flag: %s", args[i])
 		}
 	}
 
 	if local && portFlag != "" {
 		return fmt.Errorf("--local cannot be combined with --port")
 	}
-
-	if background {
-		return startDaemonInBackground(local)
+	if localRuntimePath != "" && !local {
+		return fmt.Errorf("--local-runtime requires --local")
 	}
 
-	d := daemon.New(portFlag, local)
+	if status, err := healthyDaemonStatus(); err == nil && status.Running {
+		fmt.Printf("daemon already running (pid %d)\n", status.PID)
+		return nil
+	}
+
+	if background {
+		return startDaemonInBackground(local, localRuntimePath)
+	}
+
+	d := daemon.New(portFlag, local, localRuntimePath)
 	return d.Start()
 }
 
-func startDaemonInBackground(local bool) error {
+func startDaemonInBackground(local bool, localRuntimePath string) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolve executable: %w", err)
@@ -94,6 +110,9 @@ func startDaemonInBackground(local bool) error {
 	if local {
 		childArgs = append(childArgs, "--local")
 	}
+	if localRuntimePath != "" {
+		childArgs = append(childArgs, "--local-runtime", localRuntimePath)
+	}
 
 	cmd := exec.Command(exe, childArgs...)
 	cmd.Stdin = devNull
@@ -105,20 +124,65 @@ func startDaemonInBackground(local bool) error {
 		return fmt.Errorf("start background daemon: %w", err)
 	}
 
+	childPID := cmd.Process.Pid
+
+	if err := waitForDaemonReady(5*time.Second, childPID); err != nil {
+		_ = cmd.Process.Kill()
+		return err
+	}
+
 	if err := cmd.Process.Release(); err != nil {
 		return fmt.Errorf("release background daemon: %w", err)
 	}
 
-	fmt.Printf("daemon started in background (log: %s)\n", logPath)
+	fmt.Printf("%d\n", childPID)
 	return nil
 }
 
-func runDaemonStop() error {
+func waitForDaemonReady(timeout time.Duration, pid int) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		status, err := healthyDaemonStatus()
+		if err == nil && status.Running && status.PID == pid {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("daemon failed to become ready")
+}
+
+func healthyDaemonStatus() (*daemon.StatusResult, error) {
 	client, err := daemon.Dial()
 	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	return client.Status()
+}
+
+func runDaemonStop(args []string) error {
+	expectedPID := 0
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--pid":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--pid requires a value")
+			}
+			pid, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				return fmt.Errorf("invalid pid: %s", args[i+1])
+			}
+			expectedPID = pid
+			i++
+		default:
+			return fmt.Errorf("unknown daemon stop flag: %s", args[i])
+		}
+	}
+
+	if _, err := healthyDaemonStatus(); err != nil {
 		return fmt.Errorf("daemon not running")
 	}
-	client.Close()
 
 	data, err := os.ReadFile(daemon.PIDPath())
 	if err != nil {
@@ -128,6 +192,10 @@ func runDaemonStop() error {
 	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil {
 		return fmt.Errorf("invalid pid file")
+	}
+	if expectedPID != 0 && pid != expectedPID {
+		fmt.Printf("daemon pid changed (%d != %d); not stopping\n", pid, expectedPID)
+		return nil
 	}
 
 	proc, err := os.FindProcess(pid)
@@ -157,6 +225,8 @@ func runDaemonStatus() error {
 	}
 
 	fmt.Println("daemon: running")
+	fmt.Printf("pid: %d\n", status.PID)
+	fmt.Printf("daemon: %s (api %d)\n", status.DaemonVersion, status.APIVersion)
 	fmt.Printf("target: %s\n", status.Target)
 	if status.Reconnecting {
 		fmt.Println("device: reconnecting")

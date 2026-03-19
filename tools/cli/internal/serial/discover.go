@@ -21,7 +21,37 @@ const (
 
 	// Maximum HELLO_REQ sends before giving up.
 	maxProbeRetries = 3
+
+	// Retry a fresh open once. This is intentionally tied to DrainDuration
+	// instead of a board-specific magic number. Both waits exist for the
+	// same reason: opening the port can reset the target, and the early
+	// post-open window is often contaminated by boot noise or a half-settled
+	// USB-serial bridge. Keeping the reopen delay derived from the drain
+	// window makes the behavior conservative by default and avoids baking
+	// an ESP32-only timing guess into discovery.
+	maxOpenProbeAttempts = 2
+	openProbeRetryDelay  = DrainDuration / 2
 )
+
+var discoverPorts = serial.GetPortsList
+var discoverSleep = time.Sleep
+var openAndProbePath = openAndProbeWithRetry
+var openAndProbeOnce = openAndProbeOnceImpl
+
+// DiscoverError preserves the last failed candidate probe without
+// changing the user-facing "no Froth device found" contract.
+type DiscoverError struct {
+	Path string
+	Err  error
+}
+
+func (e *DiscoverError) Error() string {
+	return "no Froth device found"
+}
+
+func (e *DiscoverError) Unwrap() error {
+	return e.Err
+}
 
 // candidatePattern matches likely USB-serial ports on macOS and Linux.
 // Prefers /dev/cu.* on macOS (avoids /dev/tty.* which can cause
@@ -38,7 +68,7 @@ func IsCandidate(path string) bool {
 
 // ListCandidates returns all port paths matching the USB-serial pattern.
 func ListCandidates() ([]string, error) {
-	ports, err := serial.GetPortsList()
+	ports, err := discoverPorts()
 	if err != nil {
 		return nil, err
 	}
@@ -54,39 +84,83 @@ func ListCandidates() ([]string, error) {
 // Discover probes available serial ports for a Froth device.
 // Returns the first port that responds to HELLO_REQ.
 func Discover() (*Port, *protocol.HelloResponse, error) {
-	ports, err := serial.GetPortsList()
+	ports, err := discoverPorts()
 	if err != nil {
 		return nil, nil, fmt.Errorf("enumerate serial ports: %w", err)
 	}
 
+	var lastPath string
+	var lastErr error
 	for _, path := range ports {
 		if !candidatePattern.MatchString(path) {
 			continue
 		}
 
-		conn, err := Open(path)
-		if err != nil {
-			continue
-		}
-
-		conn.Drain(DrainDuration)
-
-		resp, err := ProbeHello(conn)
+		conn, resp, err := openAndProbePath(path)
 		if err == nil {
-			conn.ResetInputBuffer() // flush stale boot garbage
 			return conn, resp, nil
 		}
-		conn.Close()
+		lastPath = path
+		lastErr = err
 	}
 
+	if lastErr != nil {
+		return nil, nil, &DiscoverError{
+			Path: lastPath,
+			Err:  lastErr,
+		}
+	}
 	return nil, nil, fmt.Errorf("no Froth device found")
 }
 
-// ProbeHello sends HELLO_REQ and waits for a valid HELLO_RES, retrying
-// on COBS decode errors and stale/garbage frames. This handles the
-// ESP32 boot contamination that occurs after a DTR-triggered reset
-// on macOS serial port open.
+func OpenAndProbe(path string) (*Port, *protocol.HelloResponse, error) {
+	return openAndProbePath(path)
+}
+
+func openAndProbeWithRetry(path string) (*Port, *protocol.HelloResponse, error) {
+	var lastErr error
+
+	for attempt := 0; attempt < maxOpenProbeAttempts; attempt++ {
+		conn, resp, err := openAndProbeOnce(path)
+		if err == nil {
+			return conn, resp, nil
+		}
+		lastErr = err
+
+		if attempt+1 < maxOpenProbeAttempts {
+			discoverSleep(openProbeRetryDelay)
+		}
+	}
+
+	return nil, nil, lastErr
+}
+
+func openAndProbeOnceImpl(path string) (*Port, *protocol.HelloResponse, error) {
+	conn, err := Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	conn.Drain(DrainDuration)
+
+	resp, err := ProbeHello(conn)
+	if err == nil {
+		conn.ResetInputBuffer()
+		return conn, resp, nil
+	}
+
+	_ = conn.Close()
+	return nil, nil, err
+}
+
+// ProbeHello sends HELLO_REQ and waits for a valid HELLO_RES on a serial port.
 func ProbeHello(port *Port) (*protocol.HelloResponse, error) {
+	return ProbeHelloTransport(port)
+}
+
+// ProbeHelloTransport sends HELLO_REQ and waits for a valid HELLO_RES,
+// retrying on COBS decode errors and stale/garbage frames.
+func ProbeHelloTransport(port Transport) (*protocol.HelloResponse, error) {
 	deadline := time.Now().Add(ProbeDeadline)
 
 	helloFrame, err := protocol.EncodeWireFrame(protocol.HelloReq, 0, nil)
@@ -119,7 +193,7 @@ func ProbeHello(port *Port) (*protocol.HelloResponse, error) {
 				readTimeout = 2 * time.Second
 			}
 
-			encoded, err := port.ReadFrame(readTimeout)
+			encoded, err := ReadFrameTransport(port, readTimeout, nil)
 			if err != nil {
 				// Timeout reading a frame — retry with a new HELLO_REQ.
 				break

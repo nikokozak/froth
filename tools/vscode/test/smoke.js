@@ -284,8 +284,12 @@ class MockDaemon {
 
   handleStatus(conn, req) {
     const result = {
+      pid: 4321,
+      api_version: 1,
+      daemon_version: "0.1.0-test",
       running: true,
       connected: this.deviceConnected,
+      target: "serial",
       port: "/dev/ttyUSB0",
     };
     if (this.deviceConnected) {
@@ -549,8 +553,12 @@ async function main() {
       const client = new DaemonClient();
       await client.connect(sock);
       const result = await client.status();
+      assertEq(result.pid, 4321, "pid");
+      assertEq(result.api_version, 1, "api_version");
+      assertEq(result.daemon_version, "0.1.0-test", "daemon_version");
       assertEq(result.running, true, "running");
       assertEq(result.connected, true, "connected");
+      assertEq(result.target, "serial", "target");
       assertEq(result.port, "/dev/ttyUSB0", "port");
       assert(result.device !== undefined, "device present");
       assertEq(result.device.board, "mock-board", "device.board");
@@ -569,6 +577,8 @@ async function main() {
       const client = new DaemonClient();
       await client.connect(sock);
       const result = await client.status();
+      assertEq(result.pid, 4321, "pid");
+      assertEq(result.api_version, 1, "api_version");
       assertEq(result.running, true, "running");
       assertEq(result.connected, false, "connected");
       assert(

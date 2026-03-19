@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/nikokozak/froth/tools/cli/internal/protocol"
 	"github.com/nikokozak/froth/tools/cli/internal/serial"
+	"github.com/nikokozak/froth/tools/cli/internal/session"
 )
 
 const (
@@ -31,16 +31,9 @@ const (
 )
 
 var ErrDisconnected = errors.New("device disconnected")
+var ErrAlreadyRunning = errors.New("daemon already running")
 
-type transport interface {
-	Read(buf []byte) (int, error)
-	Write(data []byte) error
-	Close() error
-	Path() string
-	SetReadTimeout(d time.Duration) error
-	ResetInputBuffer()
-	Drain(duration time.Duration)
-}
+type transport = serial.Transport
 
 type localTransport struct {
 	cmd    *exec.Cmd
@@ -69,10 +62,11 @@ type frameResponse struct {
 // Daemon owns a serial connection and multiplexes RPC access for
 // CLI and editor clients over a Unix domain socket.
 type Daemon struct {
-	portPath   string
-	socketPath string
-	pidPath    string
-	local      bool
+	portPath         string
+	socketPath       string
+	pidPath          string
+	local            bool
+	localRuntimePath string
 
 	// Active transport (guarded by portMu)
 	conn   transport
@@ -109,18 +103,19 @@ type Daemon struct {
 	wg           sync.WaitGroup
 }
 
-func New(portPath string, local bool) *Daemon {
+func New(portPath string, local bool, localRuntimePath string) *Daemon {
 	home, _ := os.UserHomeDir()
 	frothDir := filepath.Join(home, ".froth")
 
 	return &Daemon{
-		portPath:     portPath,
-		socketPath:   filepath.Join(frothDir, "daemon.sock"),
-		pidPath:      filepath.Join(frothDir, "daemon.pid"),
-		local:        local,
-		disconnectCh: make(chan struct{}),
-		clients:      make(map[*rpcConn]struct{}),
-		done:         make(chan struct{}),
+		portPath:         portPath,
+		socketPath:       filepath.Join(frothDir, "daemon.sock"),
+		pidPath:          filepath.Join(frothDir, "daemon.pid"),
+		local:            local,
+		localRuntimePath: localRuntimePath,
+		disconnectCh:     make(chan struct{}),
+		clients:          make(map[*rpcConn]struct{}),
+		done:             make(chan struct{}),
 	}
 }
 
@@ -136,8 +131,8 @@ func PIDPath() string {
 	return filepath.Join(home, ".froth", "daemon.pid")
 }
 
-func newLocalTransport() (*localTransport, error) {
-	binary, err := findLocalBinary()
+func newLocalTransport(runtimePath string) (*localTransport, error) {
+	binary, err := findLocalBinary(runtimePath)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +170,14 @@ func newLocalTransport() (*localTransport, error) {
 	return t, nil
 }
 
-func findLocalBinary() (string, error) {
+func findLocalBinary(runtimePath string) (string, error) {
+	if runtimePath != "" {
+		if st, err := os.Stat(runtimePath); err == nil && !st.IsDir() {
+			return filepath.Abs(runtimePath)
+		}
+		return "", fmt.Errorf("local Froth binary not found at %s", runtimePath)
+	}
+
 	if st, err := os.Stat(filepath.Join(".", "build64", "Froth")); err == nil && !st.IsDir() {
 		return filepath.Abs(filepath.Join(".", "build64", "Froth"))
 	}
@@ -362,15 +364,13 @@ func (t *localTransport) currentReadErr() error {
 // Start runs the daemon in the foreground until interrupted.
 func (d *Daemon) Start() error {
 	home, _ := os.UserHomeDir()
-	os.MkdirAll(filepath.Join(home, ".froth"), 0755)
-
-	if err := os.WriteFile(d.pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
-		return fmt.Errorf("write pid file: %w", err)
+	if err := os.MkdirAll(filepath.Join(home, ".froth"), 0755); err != nil {
+		return fmt.Errorf("create froth dir: %w", err)
 	}
-	defer os.Remove(d.pidPath)
 
-	// Clean stale socket
-	os.Remove(d.socketPath)
+	if err := d.prepareSocketPath(); err != nil {
+		return err
+	}
 
 	ln, err := net.Listen("unix", d.socketPath)
 	if err != nil {
@@ -380,19 +380,25 @@ func (d *Daemon) Start() error {
 	defer ln.Close()
 	defer os.Remove(d.socketPath)
 
+	if err := os.WriteFile(d.pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
+		return fmt.Errorf("write pid file: %w", err)
+	}
+	defer os.Remove(d.pidPath)
+
 	log.Printf("socket: %s", d.socketPath)
+
+	d.wg.Add(1)
+	go d.acceptLoop()
 
 	if err := d.connect(); err != nil {
 		log.Printf("device: %v (will retry)", err)
+		d.reconnecting.Store(true)
 		d.wg.Add(1)
 		go d.reconnectLoop()
 	} else {
 		d.wg.Add(1)
 		go d.transportReadLoop()
 	}
-
-	d.wg.Add(1)
-	go d.acceptLoop()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -407,29 +413,44 @@ func (d *Daemon) Start() error {
 	return nil
 }
 
+func (d *Daemon) prepareSocketPath() error {
+	if _, err := os.Stat(d.socketPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("stat socket: %w", err)
+	}
+
+	client, err := DialPath(d.socketPath)
+	if err == nil {
+		defer client.Close()
+		if _, statusErr := client.Status(); statusErr == nil {
+			return ErrAlreadyRunning
+		}
+	}
+
+	if err := os.Remove(d.socketPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove stale socket: %w", err)
+	}
+	return nil
+}
+
 func (d *Daemon) connect() error {
 	var conn transport
 	var hello *protocol.HelloResponse
 	var err error
 
 	if d.local {
-		conn, hello, err = connectLocal()
+		conn, hello, err = connectLocal(d.localRuntimePath)
 		if err != nil {
 			return err
 		}
 	} else if d.portPath != "" {
 		var port *serial.Port
-		port, err = serial.Open(d.portPath)
+		port, hello, err = serial.OpenAndProbe(d.portPath)
 		if err != nil {
-			return fmt.Errorf("open %s: %w", d.portPath, err)
+			return fmt.Errorf("connect %s: %w", d.portPath, err)
 		}
-		port.Drain(serial.DrainDuration)
-		hello, err = serial.ProbeHello(port)
-		if err != nil {
-			port.Close()
-			return fmt.Errorf("handshake: %w", err)
-		}
-		port.ResetInputBuffer()
 		conn = port
 	} else {
 		var port *serial.Port
@@ -457,13 +478,15 @@ func (d *Daemon) connect() error {
 	return nil
 }
 
-func connectLocal() (transport, *protocol.HelloResponse, error) {
-	conn, err := newLocalTransport()
+func connectLocal(runtimePath string) (transport, *protocol.HelloResponse, error) {
+	conn, err := newLocalTransport(runtimePath)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	hello, err := probeHelloTransport(conn)
+	conn.Drain(serial.DrainDuration)
+
+	hello, err := serial.ProbeHelloTransport(conn)
 	if err != nil {
 		conn.Close()
 		return nil, nil, fmt.Errorf("handshake: %w", err)
@@ -540,108 +563,6 @@ func (d *Daemon) transportReadLoop() {
 				d.broadcast(EventConsole, &ConsoleEvent{Text: string(consoleBuf)})
 				consoleBuf = consoleBuf[:0]
 			}
-		}
-	}
-}
-
-func probeHelloTransport(conn transport) (*protocol.HelloResponse, error) {
-	const maxHelloRetries = 3
-
-	deadline := time.Now().Add(serial.ProbeDeadline)
-	helloFrame, err := protocol.EncodeWireFrame(protocol.HelloReq, 0, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build HELLO_REQ: %w", err)
-	}
-
-	conn.ResetInputBuffer()
-
-	for attempt := 0; attempt < maxHelloRetries; attempt++ {
-		if time.Now().After(deadline) {
-			break
-		}
-
-		if err := conn.Write(helloFrame); err != nil {
-			return nil, fmt.Errorf("write: %w", err)
-		}
-
-		for {
-			remaining := time.Until(deadline)
-			if remaining <= 0 {
-				break
-			}
-
-			readTimeout := remaining
-			if readTimeout > 2*time.Second {
-				readTimeout = 2 * time.Second
-			}
-
-			encoded, err := readFrameTransport(conn, readTimeout)
-			if err != nil {
-				break
-			}
-
-			decoded, err := protocol.COBSDecode(encoded)
-			if err != nil {
-				log.Printf("probe: discard corrupt COBS (%v)", err)
-				continue
-			}
-
-			header, payload, err := protocol.ParseFrame(decoded)
-			if err != nil {
-				log.Printf("probe: discard bad frame (%v)", err)
-				continue
-			}
-
-			if header.MessageType != protocol.HelloRes {
-				log.Printf("probe: discard unexpected type 0x%02x", header.MessageType)
-				continue
-			}
-
-			return protocol.ParseHelloResponse(payload)
-		}
-
-		conn.ResetInputBuffer()
-	}
-
-	return nil, fmt.Errorf("no HELLO_RES after %d attempts", maxHelloRetries)
-}
-
-func readFrameTransport(conn transport, timeout time.Duration) ([]byte, error) {
-	deadline := time.Now().Add(timeout)
-	buf := make([]byte, 1)
-	var frame []byte
-	inFrame := false
-
-	for {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return nil, fmt.Errorf("frame timeout")
-		}
-
-		if err := conn.SetReadTimeout(remaining); err != nil {
-			return nil, err
-		}
-
-		n, err := conn.Read(buf)
-		if err != nil {
-			return nil, err
-		}
-		if n == 0 {
-			return nil, fmt.Errorf("frame timeout")
-		}
-
-		b := buf[0]
-		if b == 0x00 {
-			if inFrame && len(frame) > 0 {
-				return frame, nil
-			}
-			frame = frame[:0]
-			inFrame = true
-			continue
-		}
-
-		if inFrame {
-			frame = append(frame, b)
 		}
 	}
 }
@@ -806,54 +727,6 @@ func (d *Daemon) shutdown() {
 
 // --- Device operations ---
 
-// maxEvalSource is the maximum source bytes per EVAL_REQ frame.
-const maxEvalSource = protocol.MaxPayload - 3
-
-// chunkSource splits source into pieces that each fit in one EVAL_REQ.
-// Splits only at top-level boundaries (after newlines where bracket and
-// colon depth is zero), so multi-line forms are never broken across chunks.
-func chunkSource(source string) []string {
-	lines := strings.SplitAfter(source, "\n")
-	var chunks []string
-	var current strings.Builder
-	depth := 0
-
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-
-		current.WriteString(line)
-
-		for _, ch := range line {
-			switch ch {
-			case '[':
-				depth++
-			case ']', ';':
-				if depth > 0 {
-					depth--
-				}
-			case ':':
-				depth++
-			}
-		}
-
-		if depth == 0 && current.Len() > 0 {
-			if current.Len() >= maxEvalSource || !strings.HasSuffix(line, "\n") {
-				chunks = append(chunks, current.String())
-				current.Reset()
-			} else if current.Len() > maxEvalSource*3/4 {
-				chunks = append(chunks, current.String())
-				current.Reset()
-			}
-		}
-	}
-	if current.Len() > 0 {
-		chunks = append(chunks, current.String())
-	}
-	return chunks
-}
-
 // sendFrame acquires writeMu, builds and writes a COBS frame.
 func (d *Daemon) sendFrame(msgType byte, reqID uint16, payload []byte) error {
 	wire, err := protocol.EncodeWireFrame(msgType, reqID, payload)
@@ -936,7 +809,10 @@ func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 	d.reqMu.Lock()
 	defer d.reqMu.Unlock()
 
-	chunks := chunkSource(source)
+	chunks, err := session.ChunkEvalSource(source)
+	if err != nil {
+		return nil, err
+	}
 	var lastResult *EvalResult
 
 	for _, chunk := range chunks {

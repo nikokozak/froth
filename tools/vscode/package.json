@@ -104,8 +104,33 @@
         "contents": "Connect to a Froth device or start a local POSIX target.\n\n[Connect Device](command:froth.connect)\n[Try Local](command:froth.tryLocal)\n[Run Doctor](command:froth.doctor)"
       }
     ],
+    "configuration": {
+      "title": "Froth",
+      "properties": {
+        "froth.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the Froth CLI binary. Leave empty to auto-discover froth, froth-cli, or the repo-local tools/cli build."
+        },
+        "froth.localRuntimePath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the local POSIX Froth runtime used by Try Local. Leave empty to use the repo-local build or PATH fallbacks."
+        }
+      }
+    },
     "menus": {
       "view/title": [
+        {
+          "command": "froth.connect",
+          "when": "view == frothDeviceView",
+          "group": "navigation"
+        },
+        {
+          "command": "froth.tryLocal",
+          "when": "view == frothDeviceView",
+          "group": "navigation"
+        },
         {
           "command": "froth.interrupt",
           "when": "view == frothDeviceView",
@@ -153,7 +178,8 @@
   },
   "scripts": {
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node test/smoke.js && node test/supervisor-smoke.js"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",

@@ -158,7 +158,7 @@
 13. One ported library (stepper, servo, or sensor driver)
 14. Thesis demo project
 15. Getting started guide
-8. Shared host request engine unification deferred: daemon and direct CLI still share transport/chunking/probe code, but request execution is not fully collapsed into one host core yet. Defer until after manual editor validation so the refactor has a clean baseline.
+16. Shared host request engine unification deferred: daemon and direct CLI still share transport, chunking, and probe code, but request execution is not fully collapsed into one host core yet. Defer until after manual editor validation so the refactor starts from a known-good baseline.
 
 ## Open Questions
 

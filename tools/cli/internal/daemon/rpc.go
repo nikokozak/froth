@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"net"
+	"os"
 	"sync"
 )
 
@@ -94,12 +95,15 @@ type ResetResult struct {
 }
 
 type StatusResult struct {
-	Running      bool         `json:"running"`
-	Connected    bool         `json:"connected"`
-	Reconnecting bool         `json:"reconnecting"`
-	Target       string       `json:"target"`
-	Device       *HelloResult `json:"device,omitempty"`
-	Port         string       `json:"port,omitempty"`
+	PID           int          `json:"pid"`
+	APIVersion    int          `json:"api_version"`
+	DaemonVersion string       `json:"daemon_version"`
+	Running       bool         `json:"running"`
+	Connected     bool         `json:"connected"`
+	Reconnecting  bool         `json:"reconnecting"`
+	Target        string       `json:"target"`
+	Device        *HelloResult `json:"device,omitempty"`
+	Port          string       `json:"port,omitempty"`
 }
 
 type ConsoleEvent struct {
@@ -113,12 +117,16 @@ type ConnectedEvent struct {
 
 // rpcConn is a server-side per-client connection handler.
 type rpcConn struct {
-	nc       net.Conn
-	daemon   *Daemon
-	scanner  *bufio.Scanner
-	enc      *json.Encoder
-	mu       sync.Mutex
-	notifyCh chan *rpcNotification // buffered channel for async notifications
+	nc             net.Conn
+	daemon         *Daemon
+	scanner        *bufio.Scanner
+	enc            *json.Encoder
+	mu             sync.Mutex
+	notifyCh       chan *rpcNotification // buffered channel for async notifications
+	done           chan struct{}
+	closeOnce      sync.Once
+	stateMu        sync.Mutex
+	droppedConsole bool
 }
 
 func newRPCConn(nc net.Conn, d *Daemon) *rpcConn {
@@ -128,6 +136,7 @@ func newRPCConn(nc net.Conn, d *Daemon) *rpcConn {
 		scanner:  bufio.NewScanner(nc),
 		enc:      json.NewEncoder(nc),
 		notifyCh: make(chan *rpcNotification, 64),
+		done:     make(chan struct{}),
 	}
 	go c.notifyLoop()
 	return c
@@ -136,15 +145,23 @@ func newRPCConn(nc net.Conn, d *Daemon) *rpcConn {
 // notifyLoop drains the notification channel and writes to the socket.
 // Runs in its own goroutine so broadcast never blocks the serial read loop.
 func (c *rpcConn) notifyLoop() {
-	for n := range c.notifyCh {
-		c.mu.Lock()
-		c.enc.Encode(n)
-		c.mu.Unlock()
+	for {
+		select {
+		case <-c.done:
+			return
+		case n := <-c.notifyCh:
+			if n == nil {
+				continue
+			}
+			c.mu.Lock()
+			c.enc.Encode(n)
+			c.mu.Unlock()
+		}
 	}
 }
 
 func (c *rpcConn) serve() {
-	defer c.nc.Close()
+	defer c.close()
 
 	for c.scanner.Scan() {
 		line := c.scanner.Bytes()
@@ -257,11 +274,14 @@ func (c *rpcConn) handleStatus(req *rpcRequest) {
 	c.daemon.portMu.Unlock()
 
 	result := &StatusResult{
-		Running:      true,
-		Connected:    connected,
-		Reconnecting: reconnecting,
-		Target:       target,
-		Port:         portPath,
+		PID:           os.Getpid(),
+		APIVersion:    APIVersion,
+		DaemonVersion: DaemonVersion,
+		Running:       true,
+		Connected:     connected,
+		Reconnecting:  reconnecting,
+		Target:        target,
+		Port:          portPath,
 	}
 	if hello != nil {
 		hr := helloToResult(hello)
@@ -292,19 +312,60 @@ func (c *rpcConn) sendError(id interface{}, code int, msg string) {
 }
 
 func (c *rpcConn) sendNotification(method string, params interface{}) {
+	select {
+	case <-c.done:
+		return
+	default:
+	}
+
+	if method == EventConsole {
+		if params = c.decorateConsoleEvent(params); params == nil {
+			return
+		}
+	}
+
 	n := &rpcNotification{
 		JSONRPC: "2.0",
 		Method:  method,
 		Params:  params,
 	}
 	select {
+	case <-c.done:
+		return
 	case c.notifyCh <- n:
 	default:
 		// Client too slow, drop notification rather than block serial read loop
+		if method == EventConsole {
+			c.stateMu.Lock()
+			c.droppedConsole = true
+			c.stateMu.Unlock()
+		}
 	}
 }
 
 func (c *rpcConn) close() {
-	close(c.notifyCh)
-	c.nc.Close()
+	c.closeOnce.Do(func() {
+		close(c.done)
+		c.nc.Close()
+	})
+}
+
+func (c *rpcConn) decorateConsoleEvent(params interface{}) interface{} {
+	evt, ok := params.(*ConsoleEvent)
+	if !ok || evt == nil {
+		return params
+	}
+
+	c.stateMu.Lock()
+	dropped := c.droppedConsole
+	c.droppedConsole = false
+	c.stateMu.Unlock()
+
+	if !dropped {
+		return params
+	}
+
+	copyEvt := *evt
+	copyEvt.Text = "[froth] console output dropped\n" + copyEvt.Text
+	return &copyEvt
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -21,9 +20,10 @@ const CommandTimeout = 10 * time.Second
 // Session holds a live connection to a Froth device.
 // It owns the serial port and tracks the HELLO handshake result.
 type Session struct {
-	port      *serial.Port
-	hello     *protocol.HelloResponse
-	nextReqID uint32 // atomic counter for request IDs
+	transport   serial.Transport
+	hello       *protocol.HelloResponse
+	nextReqID   uint32 // atomic counter for request IDs
+	passthrough io.Writer
 }
 
 // Connect opens a session to a Froth device. If portPath is empty,
@@ -33,32 +33,24 @@ type Session struct {
 // Always performs a HELLO handshake before returning.
 func Connect(portPath string) (*Session, error) {
 	if portPath != "" {
-		port, err := serial.Open(portPath)
+		port, hello, err := serial.OpenAndProbe(portPath)
 		if err != nil {
-			return nil, fmt.Errorf("open %s: %w", portPath, err)
+			return nil, fmt.Errorf("connect %s: %w", portPath, err)
 		}
 
-		port.Drain(serial.DrainDuration)
-
-		hello, err := serial.ProbeHello(port)
-		if err != nil {
-			port.Close()
-			return nil, fmt.Errorf("handshake on %s: %w", portPath, err)
-		}
-
-		return &Session{port: port, hello: hello, nextReqID: 1}, nil
+		return &Session{transport: port, hello: hello, nextReqID: 1}, nil
 	}
 
 	port, hello, err := serial.Discover()
 	if err != nil {
 		return nil, err
 	}
-	return &Session{port: port, hello: hello, nextReqID: 1}, nil
+	return &Session{transport: port, hello: hello, nextReqID: 1}, nil
 }
 
 // Close shuts down the serial connection.
 func (s *Session) Close() error {
-	return s.port.Close()
+	return s.transport.Close()
 }
 
 // DeviceInfo returns the HELLO_RES data from the handshake.
@@ -68,7 +60,7 @@ func (s *Session) DeviceInfo() *protocol.HelloResponse {
 
 // SetPassthrough routes non-frame device output to w.
 func (s *Session) SetPassthrough(w io.Writer) {
-	s.port.PassthroughWriter = w
+	s.passthrough = w
 }
 
 // waitValidResponse reads frames from serial until one decodes
@@ -93,7 +85,7 @@ func (s *Session) waitValidResponse(reqID uint16, timeout time.Duration) (*proto
 			if remaining <= 0 {
 				break
 			}
-			encoded, err := s.port.ReadFrame(remaining)
+			encoded, err := serial.ReadFrameTransport(s.transport, remaining, s.passthrough)
 			if err != nil {
 				return nil, nil, fmt.Errorf("read response: %w", err)
 			}
@@ -102,7 +94,7 @@ func (s *Session) waitValidResponse(reqID uint16, timeout time.Duration) (*proto
 			}
 		} else {
 			// No timeout: use a long read window, retry on timeout
-			encoded, err := s.port.ReadFrame(30 * time.Second)
+			encoded, err := serial.ReadFrameTransport(s.transport, 30*time.Second, s.passthrough)
 			if err != nil {
 				if errors.Is(err, serial.ErrTimeout) {
 					continue // Keep waiting
@@ -162,7 +154,7 @@ func (s *Session) Reset() (*protocol.ResetResponse, error) {
 		return nil, fmt.Errorf("build frame: %w", err)
 	}
 
-	if err := s.port.Write(wire); err != nil {
+	if err := s.transport.Write(wire); err != nil {
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
@@ -185,58 +177,13 @@ func (s *Session) Reset() (*protocol.ResetResponse, error) {
 	}
 }
 
-// maxEvalSource is the maximum source bytes per EVAL_REQ frame.
-const maxEvalSource = protocol.MaxPayload - 3
-
-// chunkSource splits source into pieces that fit in one EVAL_REQ.
-// Splits only at top-level boundaries (depth == 0 after tracking
-// brackets and colon-semicolon nesting).
-func chunkSource(source string) []string {
-	lines := strings.SplitAfter(source, "\n")
-	var chunks []string
-	var current strings.Builder
-	depth := 0
-
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-
-		current.WriteString(line)
-
-		for _, ch := range line {
-			switch ch {
-			case '[':
-				depth++
-			case ']', ';':
-				if depth > 0 {
-					depth--
-				}
-			case ':':
-				depth++
-			}
-		}
-
-		if depth == 0 && current.Len() > 0 {
-			if current.Len() >= maxEvalSource || !strings.HasSuffix(line, "\n") {
-				chunks = append(chunks, current.String())
-				current.Reset()
-			} else if current.Len() > maxEvalSource*3/4 {
-				chunks = append(chunks, current.String())
-				current.Reset()
-			}
-		}
-	}
-	if current.Len() > 0 {
-		chunks = append(chunks, current.String())
-	}
-	return chunks
-}
-
 // Eval sends Froth source for evaluation and returns the result.
 // Source longer than 253 bytes is automatically chunked on line boundaries.
 func (s *Session) Eval(source string) (*protocol.EvalResponse, error) {
-	chunks := chunkSource(source)
+	chunks, err := ChunkEvalSource(source)
+	if err != nil {
+		return nil, err
+	}
 	var lastResp *protocol.EvalResponse
 
 	for _, chunk := range chunks {
@@ -249,7 +196,7 @@ func (s *Session) Eval(source string) (*protocol.EvalResponse, error) {
 			return nil, fmt.Errorf("build frame: %w", err)
 		}
 
-		if err := s.port.Write(wire); err != nil {
+		if err := s.transport.Write(wire); err != nil {
 			return nil, fmt.Errorf("write: %w", err)
 		}
 

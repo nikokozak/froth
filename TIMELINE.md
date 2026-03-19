@@ -357,7 +357,7 @@ Presentation prep. Fix anything that broke. Practice the demo.
 
 - Daemon PTY passthrough (Phase 2 of ADR-035)
 - Async eval model: `eval.start` returns ack, completion arrives as event
-- Shared host request engine unification (daemon + direct CLI collapse)
+- Shared host request engine unification (daemon + direct CLI collapse). Defer until after manual editor validation, so any remaining UX bugs are not mixed with the structural refactor.
 - Daemon/supervisor integration tests (API mismatch, ownership, wrong-mode restart)
 
 ### Language maturation

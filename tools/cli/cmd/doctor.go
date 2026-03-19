@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -51,6 +52,12 @@ func runDoctor() error {
 	sess, err := session.Connect(portFlag)
 	if err != nil {
 		fmt.Println("device: not reachable")
+		var discoverErr *serialpkg.DiscoverError
+		if errors.As(err, &discoverErr) && discoverErr.Err != nil {
+			fmt.Printf("probe: %s: %v\n", discoverErr.Path, discoverErr.Err)
+		} else if portFlag != "" {
+			fmt.Printf("probe: %v\n", err)
+		}
 	} else {
 		info := sess.DeviceInfo()
 		fmt.Printf("device: %s on %s (%d-bit)\n", info.Version, info.Board, info.CellBits)

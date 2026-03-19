@@ -11,6 +11,18 @@ import (
 
 var ErrTimeout = errors.New("serial read timeout")
 
+// Transport is the shared host-side byte transport used by the direct
+// session path and the daemon backends.
+type Transport interface {
+	Read(buf []byte) (int, error)
+	Write(data []byte) error
+	Close() error
+	Path() string
+	SetReadTimeout(d time.Duration) error
+	ResetInputBuffer()
+	Drain(duration time.Duration)
+}
+
 // Port wraps a serial connection with byte-level and frame-level I/O.
 type Port struct {
 	port serial.Port
@@ -55,6 +67,13 @@ func (p *Port) Write(data []byte) error {
 // between two 0x00 delimiters). Non-frame bytes are discarded.
 // Returns the raw COBS-encoded bytes (without delimiters).
 func (p *Port) ReadFrame(timeout time.Duration) ([]byte, error) {
+	return ReadFrameTransport(p, timeout, p.PassthroughWriter)
+}
+
+// ReadFrameTransport reads bytes until a complete COBS frame is captured
+// (bytes between two 0x00 delimiters). Non-frame bytes are forwarded to
+// passthrough when it is non-nil.
+func ReadFrameTransport(conn Transport, timeout time.Duration, passthrough io.Writer) ([]byte, error) {
 	deadline := time.Now().Add(timeout)
 	buf := make([]byte, 1)
 	var frame []byte
@@ -65,11 +84,13 @@ func (p *Port) ReadFrame(timeout time.Duration) ([]byte, error) {
 		if remaining <= 0 {
 			return nil, ErrTimeout
 		}
-		p.port.SetReadTimeout(remaining)
+		if err := conn.SetReadTimeout(remaining); err != nil {
+			return nil, err
+		}
 
-		n, err := p.port.Read(buf)
+		n, err := conn.Read(buf)
 		if err != nil {
-			return nil, fmt.Errorf("serial read: %w", err)
+			return nil, fmt.Errorf("transport read: %w", err)
 		}
 		if n == 0 {
 			return nil, ErrTimeout
@@ -89,8 +110,8 @@ func (p *Port) ReadFrame(timeout time.Duration) ([]byte, error) {
 
 		if inFrame {
 			frame = append(frame, b)
-		} else if p.PassthroughWriter != nil {
-			p.PassthroughWriter.Write([]byte{b})
+		} else if passthrough != nil {
+			_, _ = passthrough.Write([]byte{b})
 		}
 	}
 }
