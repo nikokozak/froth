@@ -129,6 +129,11 @@
 - Spec v0.6: Interactive Development spec updated from STX/ETX text framing to COBS binary framing. Interrupt semantics clarified for multiplexed console. Host tooling section updated. References ADR-033, ADR-034.
 - `froth reset` CLI command proven on real ESP32 hardware.
 - Host-tooling hardening tranche (Mar 19): shared `serial.Transport` helpers now back both direct CLI sessions and daemon backends; lexical chunking moved into `internal/session` with tests for comments, strings, patterns, and oversized-form rejection; daemon `status` now reports pid + daemon/api versions; extension supervision moved into a dedicated module with strict API-version enforcement, owned-PID shutdown, explicit local runtime path support, and deterministic wrong-mode restart; daemon startup now probes for stale sockets, writes the pid file only after bind, accepts `status` before device handshake completes, and background start waits for ready before printing the pid. Local POSIX mode now uses explicit runtime selection and unbuffered non-TTY stdio, which fixes the stdin/stdout transport path.
+- User programs (Mar 19): `FROTH_USER_PROGRAM` CMake variable embeds a `.froth` file at build time. Evaluated on cold boot when no snapshot exists. Snapshot restore takes priority. Safe boot skips both. `reset` returns to stdlib baseline. Proven: cold boot → user program runs, snapshot → user program skipped, wipe + reboot → user program runs again.
+- FFI metadata table limit bumped to 8 (Mar 19), error on overflow (`FROTH_ERROR_FFI_TABLE_FULL`, code 21).
+- LEDC/PWM raw FFI layer (Mar 19): 12 words mirroring ESP-IDF LEDC API. `ledc.timer-config`, `ledc.channel-config`, `ledc.set-duty`, `ledc.update-duty`, `ledc.get-duty`, `ledc.set-freq`, `ledc.get-freq`, `ledc.stop`, `ledc.fade-install`, `ledc.fade-with-time`, `ledc.fade-start`, `ledc.fade-uninstall`. Convenience layer (Froth) deferred. Needs ESP32 hardware test.
+- Transient string buffer (ADR-043, Mar 20): runtime-produced strings are transient by default, allocated in a circular scratch ring (1024 bytes) with descriptor table (32 entries). Permanent strings stay as heap offsets (ADR-023). All string consumers go through `froth_bstring_resolve`. `def` auto-promotes transient to permanent. `s.keep` escape hatch. Snapshot writer rejects transient strings. REPL display renders `<str:stale>` for expired transients. FFI API: `froth_push_bstring` / `froth_pop_bstring`. Error codes: `FROTH_ERROR_TRANSIENT_EXPIRED` (22), `FROTH_ERROR_TRANSIENT_FULL` (23).
+- ADRs: 043 (transient string buffer and string storage abstraction)
 
 ## In Progress
 
@@ -141,12 +146,13 @@
 ## Next Up
 
 ### Workshop (Mar 20–23, workshop Mar 24)
-1. User programs: `FROTH_USER_PROGRAM` CMake embed + cold-boot eval (ADR-037)
-2. LEDC/PWM bindings: `ledc.setup`, `ledc.duty`, `ledc.freq`
-3. I2C bindings: `i2c.init`, `i2c.write-byte`, `i2c.read-byte`
-4. Fix 4-table FFI metadata limit (silent truncation in `froth_ffi.c`)
-5. String bridge ADR + `froth_pop_bstring` / `froth_push_bstring` public API
-6. Flash 15 boards, test workshop flow
+1. ~~User programs: `FROTH_USER_PROGRAM` CMake embed + cold-boot eval (ADR-037)~~ done
+2. ~~LEDC/PWM raw FFI bindings~~ done (convenience layer + hardware test pending)
+3. I2C bindings: `i2c.init`, `i2c.write-byte`, `i2c.read-byte` (needs string bridge — done)
+4. ~~Fix 4-table FFI metadata limit~~ done
+5. ~~String bridge ADR + `froth_pop_bstring` / `froth_push_bstring` public API~~ done (ADR-043, full transient string system)
+6. LEDC/PWM Froth convenience layer (`ledc.init`, `ledc.setup`, `ledc.duty`, `ledc.freq`)
+7. Flash 15 boards, test workshop flow
 
 ### Post-workshop thesis push (Mar 27 — Apr 20)
 7. WiFi bindings (uses string bridge): `wifi.connect`, `wifi.status`, `wifi.ip`

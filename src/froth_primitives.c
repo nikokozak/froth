@@ -4,6 +4,7 @@
 #include "froth_heap.h"
 #include "froth_slot_table.h"
 #include "froth_stack.h"
+#include "froth_tbuf.h"
 #include "froth_types.h"
 #include "froth_vm.h"
 #include "platform.h"
@@ -27,6 +28,13 @@ froth_error_t froth_prim_def(froth_vm_t *froth_vm) {
   froth_native_word_t existing_prim;
   if (froth_slot_get_prim(slot_index, &existing_prim) == FROTH_OK) {
     return FROTH_ERROR_REDEF_PRIMITIVE;
+  }
+
+  if (FROTH_CELL_IS_BSTRING(impl_cell)) {
+    froth_cell_t payload = FROTH_CELL_STRIP_TAG(impl_cell);
+    if (FROTH_BSTRING_IS_TRANSIENT(payload)) {
+      FROTH_TRY(froth_bstring_promote(froth_vm, impl_cell, &impl_cell));
+    }
   }
 
   FROTH_TRY(froth_slot_set_impl(slot_index, impl_cell));
@@ -748,12 +756,13 @@ static froth_error_t emit_cell(froth_cell_t cell, froth_heap_t *heap) {
     return emit_pattern(payload, heap);
 
   case FROTH_BSTRING: {
-    froth_cell_t len;
-    memcpy(&len, heap->data + payload, sizeof(froth_cell_t));
-    uint8_t *bstr_data = heap->data + payload + sizeof(froth_cell_t);
+    froth_bstring_view_t view;
+    if (!froth_bstring_try_resolve(&froth_vm, cell, &view)) {
+      return emit_string("<str:stale>");
+    }
     emit_string("\"");
-    for (froth_cell_t i = 0; i < len; i++) {
-      uint8_t b = bstr_data[i];
+    for (froth_cell_t i = 0; i < view.len; i++) {
+      uint8_t b = view.data[i];
       if (b == '\n') {
         FROTH_TRY(emit_string("\\n"));
       } else if (b == '\t') {
@@ -865,28 +874,46 @@ froth_error_t froth_prim_words(froth_vm_t *froth_vm) {
 
 /* Pop a BString cell, extract length and pointer to byte data on the heap. */
 static froth_error_t pop_bstring(froth_vm_t *vm, froth_cell_t *out_len,
-                                 uint8_t **out_data) {
+                                 const uint8_t **out_data) {
   froth_cell_t cell;
   FROTH_TRY(froth_stack_pop(&vm->ds, &cell));
   if (!FROTH_CELL_IS_BSTRING(cell)) {
     return FROTH_ERROR_TYPE_MISMATCH;
   }
-  uint8_t *base = &vm->heap.data[FROTH_CELL_STRIP_TAG(cell)];
-  memcpy(out_len, base, sizeof(froth_cell_t));
-  *out_data = base + sizeof(froth_cell_t);
+  froth_bstring_view_t resolved;
+  FROTH_TRY(froth_bstring_resolve(vm, cell, &resolved));
+  *out_len = resolved.len;
+  *out_data = resolved.data;
+  return FROTH_OK;
+}
+
+froth_error_t froth_prim_bstring_keep(froth_vm_t *vm) {
+  froth_cell_t bstring;
+  FROTH_TRY(froth_stack_pop(&vm->ds, &bstring));
+  if (!FROTH_CELL_IS_BSTRING(bstring)) {
+    return FROTH_ERROR_TYPE_MISMATCH;
+  }
+
+  froth_cell_t payload = FROTH_CELL_STRIP_TAG(bstring);
+  if (FROTH_BSTRING_IS_TRANSIENT(payload)) {
+    FROTH_TRY(froth_bstring_promote(vm, bstring, &bstring));
+  }
+
+  FROTH_TRY(froth_stack_push(&vm->ds, bstring));
+
   return FROTH_OK;
 }
 
 froth_error_t froth_prim_bstring_emit(froth_vm_t *vm) {
   froth_cell_t len;
-  uint8_t *data;
+  const uint8_t *data;
   FROTH_TRY(pop_bstring(vm, &len, &data));
   return emit_string((const char *)data);
 }
 
 froth_error_t froth_prim_bstring_length(froth_vm_t *vm) {
   froth_cell_t len;
-  uint8_t *data;
+  const uint8_t *data;
   FROTH_TRY(pop_bstring(vm, &len, &data));
   froth_cell_t result;
   FROTH_TRY(froth_make_cell(len, FROTH_NUMBER, &result));
@@ -895,8 +922,8 @@ froth_error_t froth_prim_bstring_length(froth_vm_t *vm) {
 
 froth_error_t froth_prim_bstring_isequal(froth_vm_t *vm) {
   froth_cell_t len1, len2;
-  uint8_t *data1;
-  uint8_t *data2;
+  const uint8_t *data1;
+  const uint8_t *data2;
   FROTH_TRY(pop_bstring(vm, &len2, &data2));
   FROTH_TRY(pop_bstring(vm, &len1, &data1));
   int equal = (len1 == len2) && (memcmp(data1, data2, len1) == 0);
@@ -914,7 +941,7 @@ froth_error_t froth_prim_bstring_byteat(froth_vm_t *vm) {
   froth_cell_t index = FROTH_CELL_STRIP_TAG(index_cell);
 
   froth_cell_t len;
-  uint8_t *data;
+  const uint8_t *data;
   FROTH_TRY(pop_bstring(vm, &len, &data));
   if (index < 0 || index >= len) {
     return FROTH_ERROR_BOUNDS;
@@ -1122,6 +1149,8 @@ const froth_ffi_entry_t froth_primitives[] = {
     {"throw", froth_prim_throw, "( code -- )", "Throw error code"},
 
     /* String */
+    {"s.keep", froth_prim_bstring_keep, "( s -- s )",
+     "Turn transient string permanent."},
     {"s.emit", froth_prim_bstring_emit, "( s -- )", "Print string"},
     {"s.len", froth_prim_bstring_length, "( s -- n )", "String byte length"},
     {"s@", froth_prim_bstring_byteat, "( s i -- byte )", "Fetch byte at index"},

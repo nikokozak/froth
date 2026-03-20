@@ -1,15 +1,18 @@
-#include "froth_types.h"
-#include "froth_vm.h"
-#include "froth_reader.h"
-#include "froth_stack.h"
-#include "froth_slot_table.h"
 #include "froth_executor.h"
 #include "froth_primitives.h"
-#include <string.h>
+#include "froth_reader.h"
+#include "froth_slot_table.h"
+#include "froth_stack.h"
+#include "froth_tbuf.h"
+#include "froth_types.h"
+#include "froth_vm.h"
 #include <stddef.h>
+#include <string.h>
 
 /* Resolve a name to a slot index, creating the slot if it doesn't exist yet. */
-static froth_error_t resolve_or_create_slot(const char* name, froth_heap_t* heap, froth_cell_u_t* slot_index) {
+static froth_error_t resolve_or_create_slot(const char *name,
+                                            froth_heap_t *heap,
+                                            froth_cell_u_t *slot_index) {
   froth_error_t err = froth_slot_find_name(name, slot_index);
   if (err == FROTH_ERROR_UNDEFINED_WORD) {
     FROTH_TRY(froth_slot_create(name, heap, slot_index));
@@ -20,7 +23,8 @@ static froth_error_t resolve_or_create_slot(const char* name, froth_heap_t* heap
 }
 
 /* Handle a number token: tag it and push onto DS. */
-static froth_error_t froth_evaluator_handle_number(froth_token_t token, froth_vm_t* vm) {
+static froth_error_t froth_evaluator_handle_number(froth_token_t token,
+                                                   froth_vm_t *vm) {
   froth_cell_t cell;
   FROTH_TRY(froth_make_cell(token.number, FROTH_NUMBER, &cell));
   FROTH_TRY(froth_stack_push(&vm->ds, cell));
@@ -29,14 +33,17 @@ static froth_error_t froth_evaluator_handle_number(froth_token_t token, froth_vm
 
 /* Handle a bare identifier at top level: find slot, then invoke.
  * Does NOT create a slot if the name is undefined (ADR-041). */
-static froth_error_t froth_evaluator_handle_identifier(froth_token_t token, froth_vm_t* vm) {
+static froth_error_t froth_evaluator_handle_identifier(froth_token_t token,
+                                                       froth_vm_t *vm) {
   froth_cell_u_t slot_index;
   FROTH_TRY(froth_slot_find_name(token.name, &slot_index));
   FROTH_TRY(froth_execute_slot(vm, slot_index));
   return FROTH_OK;
 }
 
-static froth_error_t froth_evaluator_handle_tick_identifier(froth_token_t token, froth_vm_t* vm, froth_cell_t* output_cell) {
+static froth_error_t
+froth_evaluator_handle_tick_identifier(froth_token_t token, froth_vm_t *vm,
+                                       froth_cell_t *output_cell) {
   froth_cell_u_t slot_index;
   FROTH_TRY(resolve_or_create_slot(token.name, &vm->heap, &slot_index));
   FROTH_TRY(froth_make_cell(slot_index, FROTH_SLOT, output_cell));
@@ -46,8 +53,10 @@ static froth_error_t froth_evaluator_handle_tick_identifier(froth_token_t token,
 /* Count direct body cells in a quotation without consuming the reader.
  * Called after "[" has been consumed. Counts each nested quotation as 1.
  * Saves and restores reader position so the build pass can re-read.
- * Propagates reader errors so callers get the real error, not "unterminated". */
-static froth_error_t count_quote_body(froth_reader_t* reader, froth_cell_u_t* out_count) {
+ * Propagates reader errors so callers get the real error, not "unterminated".
+ */
+static froth_error_t count_quote_body(froth_reader_t *reader,
+                                      froth_cell_u_t *out_count) {
   froth_reader_t saved = *reader;
   froth_cell_u_t count = 0;
   froth_token_t token;
@@ -55,18 +64,34 @@ static froth_error_t count_quote_body(froth_reader_t* reader, froth_cell_u_t* ou
 
   for (;;) {
     err = froth_reader_next_token(reader, &token);
-    if (err != FROTH_OK) { *reader = saved; return err; }
-    if (token.type == FROTH_TOKEN_EOF || token.type == FROTH_TOKEN_CLOSE_BRACKET) break;
+    if (err != FROTH_OK) {
+      *reader = saved;
+      return err;
+    }
+    if (token.type == FROTH_TOKEN_EOF ||
+        token.type == FROTH_TOKEN_CLOSE_BRACKET)
+      break;
     count++;
-    if (token.type == FROTH_TOKEN_OPEN_BRACKET || token.type == FROTH_TOKEN_OPEN_PAT) {
+    if (token.type == FROTH_TOKEN_OPEN_BRACKET ||
+        token.type == FROTH_TOKEN_OPEN_PAT) {
       froth_cell_u_t depth = 1;
       while (depth > 0) {
         err = froth_reader_next_token(reader, &token);
-        if (err != FROTH_OK) { *reader = saved; return err; }
-        if (token.type == FROTH_TOKEN_EOF) break;
-        if (token.type == FROTH_TOKEN_OPEN_BRACKET)  { depth++; }
-        if (token.type == FROTH_TOKEN_OPEN_PAT)      { depth++; }
-        if (token.type == FROTH_TOKEN_CLOSE_BRACKET) { depth--; }
+        if (err != FROTH_OK) {
+          *reader = saved;
+          return err;
+        }
+        if (token.type == FROTH_TOKEN_EOF)
+          break;
+        if (token.type == FROTH_TOKEN_OPEN_BRACKET) {
+          depth++;
+        }
+        if (token.type == FROTH_TOKEN_OPEN_PAT) {
+          depth++;
+        }
+        if (token.type == FROTH_TOKEN_CLOSE_BRACKET) {
+          depth--;
+        }
       }
     }
   }
@@ -76,30 +101,37 @@ static froth_error_t count_quote_body(froth_reader_t* reader, froth_cell_u_t* ou
   return FROTH_OK;
 }
 
-static froth_error_t count_and_typecheck_pattern_body(froth_reader_t* reader, froth_cell_u_t* out_count) {
+static froth_error_t
+count_and_typecheck_pattern_body(froth_reader_t *reader,
+                                 froth_cell_u_t *out_count) {
   froth_reader_t saved = *reader;
   froth_cell_u_t count = 0;
   froth_token_t token;
 
   // First count the pattern body
-  while (froth_reader_next_token(reader, &token) == FROTH_OK && token.type != FROTH_TOKEN_EOF && token.type != FROTH_TOKEN_CLOSE_BRACKET) {
+  while (froth_reader_next_token(reader, &token) == FROTH_OK &&
+         token.type != FROTH_TOKEN_EOF &&
+         token.type != FROTH_TOKEN_CLOSE_BRACKET) {
 
     switch (token.type) {
-      case FROTH_TOKEN_IDENTIFIER:
-        if (!(token.name[1] == '\0' && token.name[0] >= 'a' && token.name[0] <= 'z')) {
-          *reader = saved;
-          return FROTH_ERROR_PATTERN_INVALID;
-        } 
-        break;
-      case FROTH_TOKEN_NUMBER:
-        if (token.number > 255 || token.number < 0) {
-          *reader = saved;
-          return FROTH_ERROR_PATTERN_INVALID; // Only allow numbers that fit in a byte
-        }
-        break; // Numbers are fine
-      default:
+    case FROTH_TOKEN_IDENTIFIER:
+      if (!(token.name[1] == '\0' && token.name[0] >= 'a' &&
+            token.name[0] <= 'z')) {
         *reader = saved;
-        return FROTH_ERROR_PATTERN_INVALID; // Other token types not allowed in pattern body
+        return FROTH_ERROR_PATTERN_INVALID;
+      }
+      break;
+    case FROTH_TOKEN_NUMBER:
+      if (token.number > 255 || token.number < 0) {
+        *reader = saved;
+        return FROTH_ERROR_PATTERN_INVALID; // Only allow numbers that fit in a
+                                            // byte
+      }
+      break; // Numbers are fine
+    default:
+      *reader = saved;
+      return FROTH_ERROR_PATTERN_INVALID; // Other token types not allowed in
+                                          // pattern body
     }
 
     count++;
@@ -115,55 +147,75 @@ static froth_error_t count_and_typecheck_pattern_body(froth_reader_t* reader, fr
   return FROTH_OK;
 }
 
-static froth_error_t froth_evaluator_handle_open_pat(froth_reader_t* reader, froth_vm_t* vm, froth_cell_t* output_cell) {
+static froth_error_t
+froth_evaluator_handle_open_pat(froth_reader_t *reader, froth_vm_t *vm,
+                                froth_cell_t *output_cell) {
   froth_token_t token;
   froth_cell_u_t heap_offset;
-  
+
   // Count pattern length
   froth_cell_u_t body_count;
   FROTH_TRY(count_and_typecheck_pattern_body(reader, &body_count));
 
-  FROTH_TRY(froth_heap_allocate_bytes(1 + body_count, &vm->heap, &heap_offset)); // Allocate 1 byte for pattern length
+  FROTH_TRY(froth_heap_allocate_bytes(
+      1 + body_count, &vm->heap,
+      &heap_offset)); // Allocate 1 byte for pattern length
   vm->heap.data[heap_offset] = (char)body_count; // Store pattern length in heap
-  
-  froth_cell_u_t heap_location = heap_offset + 1; // Start writing pattern body immediately after length cell
-  while (froth_reader_next_token(reader, &token) == FROTH_OK && token.type != FROTH_TOKEN_CLOSE_BRACKET) {
+
+  froth_cell_u_t heap_location =
+      heap_offset +
+      1; // Start writing pattern body immediately after length cell
+  while (froth_reader_next_token(reader, &token) == FROTH_OK &&
+         token.type != FROTH_TOKEN_CLOSE_BRACKET) {
     if (token.type == FROTH_TOKEN_IDENTIFIER) {
 
       char var_name = token.name[0];
-      char index = var_name - 0x61; // Convert 'a'-'z' to 0-25
+      char index = var_name - 0x61;         // Convert 'a'-'z' to 0-25
       vm->heap.data[heap_location] = index; // Store variable name in heap
-      
+
     } else if (token.type == FROTH_TOKEN_NUMBER) {
 
-      vm->heap.data[heap_location] = (char)(token.number & 0xFF); // Store least significant byte of number in heap\e
-      
+      vm->heap.data[heap_location] =
+          (char)(token.number &
+                 0xFF); // Store least significant byte of number in heap\e
     }
     heap_location++; // Increment heap location for next pattern element
   }
 
-  FROTH_TRY(froth_make_cell(heap_offset, FROTH_PATTERN, output_cell)); // Create pattern cell with heap offset as payload
+  FROTH_TRY(froth_make_cell(
+      heap_offset, FROTH_PATTERN,
+      output_cell)); // Create pattern cell with heap offset as payload
 
   return FROTH_OK;
-
 }
 
 /* Allocate a string on the heap.
  * Heap layout: [byte_count (1 cell)] [bytes...] [\0]
  * The null terminator is not part of the logical string — it exists
  * for free C interop with emit_string and friends (ADR-023). */
-static froth_error_t froth_evaluator_handle_bstring(froth_token_t token, froth_vm_t* vm, froth_cell_t* output_cell) {
+static froth_error_t froth_evaluator_handle_bstring(froth_token_t token,
+                                                    froth_vm_t *vm,
+                                                    froth_cell_t *output_cell,
+                                                    bool is_quotation_body) {
   froth_cell_u_t heap_offset;
   froth_cell_t len_cell = token.bstring_len;
-  FROTH_TRY(froth_heap_allocate_bytes(sizeof(froth_cell_t) + token.bstring_len + 1, &vm->heap, &heap_offset));
-  uint8_t* dest = &vm->heap.data[heap_offset];
 
-  memcpy(dest, &len_cell, sizeof(froth_cell_t));
-  memcpy(dest + sizeof(froth_cell_t), token.bstring_bytes, token.bstring_len);
-  dest[sizeof(froth_cell_t) + token.bstring_len] = '\0';
+  if (is_quotation_body) { // Create a permanent cell
+    FROTH_TRY(froth_heap_allocate_bytes(
+        sizeof(froth_cell_t) + token.bstring_len + 1, &vm->heap, &heap_offset));
+    uint8_t *dest = &vm->heap.data[heap_offset];
 
-  FROTH_TRY(froth_make_cell(heap_offset, FROTH_BSTRING, output_cell));
-  return FROTH_OK;
+    memcpy(dest, &len_cell, sizeof(froth_cell_t));
+    memcpy(dest + sizeof(froth_cell_t), token.bstring_bytes, token.bstring_len);
+    dest[sizeof(froth_cell_t) + token.bstring_len] = '\0';
+
+    FROTH_TRY(froth_make_cell(heap_offset, FROTH_BSTRING, output_cell));
+    return FROTH_OK;
+  } else { // Make a transient string
+    FROTH_TRY(froth_tbuf_alloc(vm, token.bstring_bytes, token.bstring_len,
+                               output_cell));
+    return FROTH_OK;
+  }
 }
 
 /* Build a quotation from the token stream. Called after "[" has been consumed.
@@ -172,7 +224,9 @@ static froth_error_t froth_evaluator_handle_bstring(froth_token_t token, froth_v
  * so the outer body is always contiguous on the heap.
  *
  * Heap layout: [length] [body_cell_0] [body_cell_1] ... [body_cell_n-1] */
-static froth_error_t froth_evaluator_handle_open_bracket(froth_reader_t* reader, froth_vm_t* vm, froth_cell_t* output_cell) {
+static froth_error_t
+froth_evaluator_handle_open_bracket(froth_reader_t *reader, froth_vm_t *vm,
+                                    froth_cell_t *output_cell) {
   froth_token_t token;
 
   // Pass 1: count direct children
@@ -180,61 +234,67 @@ static froth_error_t froth_evaluator_handle_open_bracket(froth_reader_t* reader,
   FROTH_TRY(count_quote_body(reader, &body_count));
 
   // Allocate contiguous block: 1 length cell + body_count body cells
-  froth_cell_t* block;
+  froth_cell_t *block;
   froth_cell_u_t block_offset;
-  FROTH_TRY(froth_heap_allocate_cells(1 + body_count, &vm->heap, &block, &block_offset));
+  FROTH_TRY(froth_heap_allocate_cells(1 + body_count, &vm->heap, &block,
+                                      &block_offset));
 
   block[0] = body_count;
   froth_cell_u_t body_index = 0;
 
   // Pass 2: fill in body cells
-  while (froth_reader_next_token(reader, &token) == FROTH_OK && token.type != FROTH_TOKEN_EOF && token.type != FROTH_TOKEN_CLOSE_BRACKET) {
+  while (froth_reader_next_token(reader, &token) == FROTH_OK &&
+         token.type != FROTH_TOKEN_EOF &&
+         token.type != FROTH_TOKEN_CLOSE_BRACKET) {
     switch (token.type) {
-      case FROTH_TOKEN_NUMBER:
-        FROTH_TRY(froth_make_cell(token.number, FROTH_NUMBER, &block[1 + body_index]));
-        body_index++;
-        break;
+    case FROTH_TOKEN_NUMBER:
+      FROTH_TRY(
+          froth_make_cell(token.number, FROTH_NUMBER, &block[1 + body_index]));
+      body_index++;
+      break;
 
-      case FROTH_TOKEN_IDENTIFIER: {
-        froth_cell_u_t slot_index;
-        FROTH_TRY(resolve_or_create_slot(token.name, &vm->heap, &slot_index));
-        FROTH_TRY(froth_make_cell(slot_index, FROTH_CALL, &block[1 + body_index]));
-        body_index++;
-        break;
-      }
+    case FROTH_TOKEN_IDENTIFIER: {
+      froth_cell_u_t slot_index;
+      FROTH_TRY(resolve_or_create_slot(token.name, &vm->heap, &slot_index));
+      FROTH_TRY(
+          froth_make_cell(slot_index, FROTH_CALL, &block[1 + body_index]));
+      body_index++;
+      break;
+    }
 
-      case FROTH_TOKEN_OPEN_BRACKET: {
-        froth_cell_t nested_quote;
-        FROTH_TRY(froth_evaluator_handle_open_bracket(reader, vm, &nested_quote));
-        block[1 + body_index] = nested_quote;
-        body_index++;
-        break;
-      }
+    case FROTH_TOKEN_OPEN_BRACKET: {
+      froth_cell_t nested_quote;
+      FROTH_TRY(froth_evaluator_handle_open_bracket(reader, vm, &nested_quote));
+      block[1 + body_index] = nested_quote;
+      body_index++;
+      break;
+    }
 
-      case FROTH_TOKEN_TICK_IDENTIFIER: {
-        FROTH_TRY(froth_evaluator_handle_tick_identifier(token, vm, &block[1 + body_index]));
-        body_index++;
-        break;
-      }
+    case FROTH_TOKEN_TICK_IDENTIFIER: {
+      FROTH_TRY(froth_evaluator_handle_tick_identifier(token, vm,
+                                                       &block[1 + body_index]));
+      body_index++;
+      break;
+    }
 
-      case FROTH_TOKEN_OPEN_PAT: {
-        froth_cell_t pattern_cell;
-        FROTH_TRY(froth_evaluator_handle_open_pat(reader, vm, &pattern_cell));
-        block[1 + body_index] = pattern_cell;
-        body_index++;
-        break;
-      }
+    case FROTH_TOKEN_OPEN_PAT: {
+      froth_cell_t pattern_cell;
+      FROTH_TRY(froth_evaluator_handle_open_pat(reader, vm, &pattern_cell));
+      block[1 + body_index] = pattern_cell;
+      body_index++;
+      break;
+    }
 
-      case FROTH_TOKEN_BSTRING: {
-        froth_cell_t string_cell;
-        FROTH_TRY(froth_evaluator_handle_bstring(token, vm, &string_cell));
-        block[1 + body_index] = string_cell;
-        body_index++;
-        break;
-      }
+    case FROTH_TOKEN_BSTRING: {
+      froth_cell_t string_cell;
+      FROTH_TRY(froth_evaluator_handle_bstring(token, vm, &string_cell, true));
+      block[1 + body_index] = string_cell;
+      body_index++;
+      break;
+    }
 
-      default:
-        break;
+    default:
+      break;
     }
   }
 
@@ -247,7 +307,7 @@ static froth_error_t froth_evaluator_handle_open_bracket(froth_reader_t* reader,
 }
 
 /* Top-level evaluator. Reads tokens from input and dispatches each one. */
-froth_error_t froth_evaluate_input(const char* input, froth_vm_t* vm) {
+froth_error_t froth_evaluate_input(const char *input, froth_vm_t *vm) {
   froth_reader_t reader;
   froth_token_t token;
 
@@ -255,60 +315,72 @@ froth_error_t froth_evaluate_input(const char* input, froth_vm_t* vm) {
 
   for (;;) {
     FROTH_TRY(froth_reader_next_token(&reader, &token));
-    if (token.type == FROTH_TOKEN_EOF) break;
+    if (token.type == FROTH_TOKEN_EOF)
+      break;
     switch (token.type) {
-      case FROTH_TOKEN_NUMBER:
-        FROTH_TRY(froth_evaluator_handle_number(token, vm));
-        break;
-      case FROTH_TOKEN_IDENTIFIER:
-        // Special case for slot definition: if the identifier is a single ":", treat it as a definition marker and create the next token as a slot name.
-        if (token.name[0] == ':' && token.name[1] == '\0') {
-          froth_token_t next_token;
-          froth_cell_u_t slot_index;
-          froth_cell_t slot_cell, quote_cell;
-          if (froth_reader_next_token(&reader, &next_token) != FROTH_OK || next_token.type != FROTH_TOKEN_IDENTIFIER) {
-            return FROTH_ERROR_TYPE_MISMATCH; // Expect a slot name after ":"
-          }
-          FROTH_TRY(resolve_or_create_slot(next_token.name, &vm->heap, &slot_index));
-          FROTH_TRY(froth_make_cell(slot_index, FROTH_SLOT, &slot_cell)); // Create a Slot cell with the slot index
-          FROTH_TRY(froth_stack_push(&vm->ds, slot_cell)); // Push slot name as string for definition
-
-          FROTH_TRY(froth_evaluator_handle_open_bracket(&reader, vm, &quote_cell));
-          FROTH_TRY(froth_stack_push(&vm->ds, quote_cell)); // Push quotation for definition
-
-          FROTH_TRY(froth_prim_def(vm)); // Call the 'def' primitive to bind the slot to the quotation
-          break;
+    case FROTH_TOKEN_NUMBER:
+      FROTH_TRY(froth_evaluator_handle_number(token, vm));
+      break;
+    case FROTH_TOKEN_IDENTIFIER:
+      // Special case for slot definition: if the identifier is a single ":",
+      // treat it as a definition marker and create the next token as a slot
+      // name.
+      if (token.name[0] == ':' && token.name[1] == '\0') {
+        froth_token_t next_token;
+        froth_cell_u_t slot_index;
+        froth_cell_t slot_cell, quote_cell;
+        if (froth_reader_next_token(&reader, &next_token) != FROTH_OK ||
+            next_token.type != FROTH_TOKEN_IDENTIFIER) {
+          return FROTH_ERROR_TYPE_MISMATCH; // Expect a slot name after ":"
         }
-        FROTH_TRY(froth_evaluator_handle_identifier(token, vm));
-        break;
-      case FROTH_TOKEN_OPEN_BRACKET: {
-        froth_cell_t quote_cell;
-        FROTH_TRY(froth_evaluator_handle_open_bracket(&reader, vm, &quote_cell));
-        FROTH_TRY(froth_stack_push(&vm->ds, quote_cell));
-        break;
-      }
-      case FROTH_TOKEN_TICK_IDENTIFIER: {
-        froth_cell_t slot_ref_cell;
-        FROTH_TRY(froth_evaluator_handle_tick_identifier(token, vm, &slot_ref_cell));
-        FROTH_TRY(froth_stack_push(&vm->ds, slot_ref_cell));
-        break;
-      }
-      case FROTH_TOKEN_OPEN_PAT: {
-        froth_cell_t pattern_cell;
-        FROTH_TRY(froth_evaluator_handle_open_pat(&reader, vm, &pattern_cell));
-        FROTH_TRY(froth_stack_push(&vm->ds, pattern_cell));
+        FROTH_TRY(
+            resolve_or_create_slot(next_token.name, &vm->heap, &slot_index));
+        FROTH_TRY(froth_make_cell(
+            slot_index, FROTH_SLOT,
+            &slot_cell)); // Create a Slot cell with the slot index
+        FROTH_TRY(froth_stack_push(
+            &vm->ds, slot_cell)); // Push slot name as string for definition
+
+        FROTH_TRY(
+            froth_evaluator_handle_open_bracket(&reader, vm, &quote_cell));
+        FROTH_TRY(froth_stack_push(
+            &vm->ds, quote_cell)); // Push quotation for definition
+
+        FROTH_TRY(froth_prim_def(
+            vm)); // Call the 'def' primitive to bind the slot to the quotation
         break;
       }
-      case FROTH_TOKEN_BSTRING: {
-        froth_cell_t string_cell;
-        FROTH_TRY(froth_evaluator_handle_bstring(token, vm, &string_cell));
-        FROTH_TRY(froth_stack_push(&vm->ds, string_cell));
-        break;
-      }
-      case FROTH_TOKEN_CLOSE_BRACKET:
-        return FROTH_ERROR_UNEXPECTED_BRACKET;
-      default:
-        break;
+      FROTH_TRY(froth_evaluator_handle_identifier(token, vm));
+      break;
+    case FROTH_TOKEN_OPEN_BRACKET: {
+      froth_cell_t quote_cell;
+      FROTH_TRY(froth_evaluator_handle_open_bracket(&reader, vm, &quote_cell));
+      FROTH_TRY(froth_stack_push(&vm->ds, quote_cell));
+      break;
+    }
+    case FROTH_TOKEN_TICK_IDENTIFIER: {
+      froth_cell_t slot_ref_cell;
+      FROTH_TRY(
+          froth_evaluator_handle_tick_identifier(token, vm, &slot_ref_cell));
+      FROTH_TRY(froth_stack_push(&vm->ds, slot_ref_cell));
+      break;
+    }
+    case FROTH_TOKEN_OPEN_PAT: {
+      froth_cell_t pattern_cell;
+      FROTH_TRY(froth_evaluator_handle_open_pat(&reader, vm, &pattern_cell));
+      FROTH_TRY(froth_stack_push(&vm->ds, pattern_cell));
+      break;
+    }
+    case FROTH_TOKEN_BSTRING: {
+      froth_cell_t string_cell;
+      FROTH_TRY(froth_evaluator_handle_bstring(token, vm, &string_cell, false));
+      FROTH_TRY(froth_stack_push(&vm->ds, string_cell));
+      break;
+    }
+    case FROTH_TOKEN_CLOSE_BRACKET:
+      return FROTH_ERROR_UNEXPECTED_BRACKET;
+    default:
+      break;
     }
   }
 

@@ -1,6 +1,7 @@
 #include "froth_heap.h"
 #include "froth_slot_table.h"
 #include "froth_snapshot.h"
+#include "froth_tbuf.h"
 #include "froth_types.h"
 #include "froth_vm.h"
 #include <stdint.h>
@@ -210,6 +211,14 @@ collect_snapshot_dependencies(froth_vm_t *froth_vm, name_table_t *name_table,
     }
 
     FROTH_TRY(froth_slot_get_impl(slot_index, &slot_impl));
+
+    if (FROTH_CELL_IS_BSTRING(slot_impl)) {
+      if (FROTH_BSTRING_IS_TRANSIENT(FROTH_CELL_STRIP_TAG(slot_impl))) {
+        return FROTH_ERROR_TRANSIENT_EXPIRED; // TODO: Do we need a better
+                                              // error?
+      }
+    }
+
     FROTH_TRY(name_table_add_slot(name_table, slot_index));
 
     if (FROTH_CELL_IS_QUOTE(slot_impl)) {
@@ -558,8 +567,7 @@ froth_error_t froth_snapshot_save(froth_vm_t *froth_vm,
   memset(&ws->names, 0, sizeof(ws->names));
   memset(&ws->objects, 0, sizeof(ws->objects));
 
-  FROTH_TRY(
-      collect_snapshot_dependencies(froth_vm, &ws->names, &ws->objects));
+  FROTH_TRY(collect_snapshot_dependencies(froth_vm, &ws->names, &ws->objects));
 
   snapshot->position = 0;
   FROTH_TRY(froth_snapshot_write_payload(froth_vm, snapshot, &ws->names,
@@ -567,4 +575,3 @@ froth_error_t froth_snapshot_save(froth_vm_t *froth_vm,
 
   return FROTH_OK;
 }
-

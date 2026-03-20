@@ -4,6 +4,7 @@
 #include "froth_lib_core.h"
 #include "froth_primitives.h"
 #include "froth_repl.h"
+#include "froth_tbuf.h"
 #include "froth_vm.h"
 #include "platform.h"
 #ifdef FROTH_HAS_USER_PROGRAM
@@ -64,9 +65,13 @@ void froth_boot(const froth_ffi_entry_t *board_bindings) {
     boot_fail("register snapshot prims", err);
 #endif
 
+  froth_tbuf_init(&froth_vm);
+
   err = platform_init();
   if (err)
     boot_fail("platform init", err);
+
+  froth_tbuf_init(&froth_vm); // Transient Scratch Buffer
 
   err = froth_evaluate_input(froth_lib_core, &froth_vm);
   if (err)

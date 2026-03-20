@@ -273,11 +273,12 @@
 
 ### Phase 3a: Workshop + Foundation (Mar 20–23)
 
-- [ ] User programs: CMake `FROTH_USER_PROGRAM` variable, cold-boot eval when no snapshot exists (ADR-037 boot sequence). Proof: flash board with welcome program, power cycle, verify it runs. `reset` + EVAL replaces it.
-- [ ] LEDC/PWM bindings: `ledc.setup`, `ledc.duty`, `ledc.freq`. Numeric FFI, no new API surface. Proof: LED fade, piezo tone.
+- [x] User programs: CMake `FROTH_USER_PROGRAM` variable, cold-boot eval when no snapshot exists (ADR-037 boot sequence). Proven on POSIX: cold boot, snapshot priority, wipe + reboot.
+- [x] LEDC/PWM raw FFI bindings: 12 words mirroring ESP-IDF LEDC API. Convenience Froth layer and hardware test pending.
+- [ ] LEDC/PWM Froth convenience layer (`ledc.init`, `ledc.setup`, `ledc.duty`, `ledc.freq`). Proof: LED fade, piezo tone on ESP32.
 - [ ] I2C bindings: `i2c.init`, `i2c.write-byte`, `i2c.read-byte`. Numeric handle for bus instance. Proof: read a temperature sensor or accelerometer.
-- [ ] Fix FFI metadata 4-table limit: `FROTH_FFI_MAX_TABLES` bump or dynamic, error on overflow instead of silent truncation.
-- [ ] String bridge ADR + implementation: public `froth_pop_bstring` / `froth_push_bstring` in `froth_ffi.h`. Widens FFI API (ADR-019 addendum). Gates WiFi, HTTP, and every string-returning binding.
+- [x] Fix FFI metadata 4-table limit: bumped to 8, error on overflow (`FROTH_ERROR_FFI_TABLE_FULL`, code 21).
+- [x] String bridge (ADR-043): transient string buffer with scratch ring + descriptor table. `froth_push_bstring` / `froth_pop_bstring` FFI API. `def` auto-promotes. `s.keep` escape hatch. Snapshot rejection. All string consumers through `froth_bstring_resolve`.
 - [ ] Flash 15 ESP32 boards with user program, test end-to-end workshop flow
 - [ ] **Workshop (Mar 24)**
 
