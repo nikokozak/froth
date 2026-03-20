@@ -97,6 +97,7 @@ typedef enum {
   FROTH_ERROR_SNAPSHOT_INCOMPAT = 204,    /* ABI hash mismatch */
   FROTH_ERROR_SNAPSHOT_NO_SNAPSHOT = 205, /* no valid snapshot in storage */
   FROTH_ERROR_SNAPSHOT_BAD_NAME = 206,    /* name exceeds max length */
+  FROTH_ERROR_SNAPSHOT_TRANSIENT = 207,  /* transient string in persistable data */
 
   /* Link errors (250–259) */
   FROTH_ERROR_LINK_OVERFLOW = 250,     /* frame/COBS buffer too small */

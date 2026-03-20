@@ -68,13 +68,11 @@ void froth_boot(const froth_ffi_entry_t *board_bindings) {
     boot_fail("register snapshot prims", err);
 #endif
 
-  froth_tbuf_init(&froth_vm);
-
   err = platform_init();
   if (err)
     boot_fail("platform init", err);
 
-  froth_tbuf_init(&froth_vm); // Transient Scratch Buffer
+  froth_tbuf_init(&froth_vm);
 
   err = froth_evaluate_input(froth_lib_core, &froth_vm);
   if (err)

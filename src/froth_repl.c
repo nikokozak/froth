@@ -95,6 +95,8 @@ static const char *error_name(froth_error_t err) {
     return "no saved snapshot";
   case FROTH_ERROR_SNAPSHOT_BAD_NAME:
     return "snapshot name too long";
+  case FROTH_ERROR_SNAPSHOT_TRANSIENT:
+    return "cannot save transient string";
   /* Link errors */
   case FROTH_ERROR_LINK_OVERFLOW:
     return "link buffer overflow";

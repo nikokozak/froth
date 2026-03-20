@@ -61,13 +61,13 @@ typedef struct {
 
 /* Descriptor index: low 5 bits of payload. */
 #define FROTH_BSTRING_DESC_BITS 5
-#define FROTH_BSTRING_DESC_MASK ((1u << FROTH_BSTRING_DESC_BITS) - 1)
+#define FROTH_BSTRING_DESC_MASK (((froth_cell_u_t)1 << FROTH_BSTRING_DESC_BITS) - 1)
 
 /* Truncated generation: bits between descriptor index and transient flag. */
 #define FROTH_BSTRING_GEN_SHIFT FROTH_BSTRING_DESC_BITS
 #define FROTH_BSTRING_GEN_BITS                                                 \
   (FROTH_CELL_SIZE_BITS - 4 - FROTH_BSTRING_DESC_BITS)
-#define FROTH_BSTRING_GEN_MASK ((1u << FROTH_BSTRING_GEN_BITS) - 1)
+#define FROTH_BSTRING_GEN_MASK (((froth_cell_u_t)1 << FROTH_BSTRING_GEN_BITS) - 1)
 
 /* Check whether a BSTRING payload (already stripped of tag) is transient. */
 #define FROTH_BSTRING_IS_TRANSIENT(payload)                                    \

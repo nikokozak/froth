@@ -908,7 +908,10 @@ froth_error_t froth_prim_bstring_emit(froth_vm_t *vm) {
   froth_cell_t len;
   const uint8_t *data;
   FROTH_TRY(pop_bstring(vm, &len, &data));
-  return emit_string((const char *)data);
+  for (froth_cell_t i = 0; i < len; i++) {
+    FROTH_TRY(platform_emit(data[i]));
+  }
+  return FROTH_OK;
 }
 
 froth_error_t froth_prim_bstring_length(froth_vm_t *vm) {

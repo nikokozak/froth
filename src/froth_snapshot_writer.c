@@ -136,7 +136,14 @@ static froth_error_t quote_walk_stack_pop(quote_walk_stack_t *stack,
 static froth_error_t collect_cell_dependencies(froth_cell_t cell,
                                                name_table_t *name_table,
                                                object_table_t *object_table) {
-  if (FROTH_CELL_IS_PATTERN(cell) || FROTH_CELL_IS_BSTRING(cell)) {
+  if (FROTH_CELL_IS_BSTRING(cell)) {
+    if (FROTH_BSTRING_IS_TRANSIENT(FROTH_CELL_STRIP_TAG(cell)))
+      return FROTH_ERROR_SNAPSHOT_TRANSIENT;
+    return object_table_add_if_missing(object_table, FROTH_CELL_STRIP_TAG(cell),
+                                       FROTH_CELL_GET_TAG(cell));
+  }
+
+  if (FROTH_CELL_IS_PATTERN(cell)) {
     return object_table_add_if_missing(object_table, FROTH_CELL_STRIP_TAG(cell),
                                        FROTH_CELL_GET_TAG(cell));
   }
@@ -214,8 +221,7 @@ collect_snapshot_dependencies(froth_vm_t *froth_vm, name_table_t *name_table,
 
     if (FROTH_CELL_IS_BSTRING(slot_impl)) {
       if (FROTH_BSTRING_IS_TRANSIENT(FROTH_CELL_STRIP_TAG(slot_impl))) {
-        return FROTH_ERROR_TRANSIENT_EXPIRED; // TODO: Do we need a better
-                                              // error?
+        return FROTH_ERROR_SNAPSHOT_TRANSIENT;
       }
     }
 

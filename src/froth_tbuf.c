@@ -44,14 +44,17 @@ static bool is_stale(froth_tdesc_t *desc, froth_cell_u_t cell_gen) {
 
 froth_error_t froth_tbuf_alloc(froth_vm_t *vm, const uint8_t *data,
                                froth_cell_t len, froth_cell_t *out_cell) {
+  if (len < 0 || len > FROTH_TBUF_SIZE - TBUF_OVERHEAD)
+    return FROTH_ERROR_TRANSIENT_FULL;
+
   froth_tbuf_t *tbuf = &vm->tbuf;
   uint16_t total = (uint16_t)(len + TBUF_OVERHEAD);
 
-  if (total > FROTH_TBUF_SIZE)
-    return FROTH_ERROR_TRANSIENT_FULL;
-
-  if (tbuf->write_cursor + total > FROTH_TBUF_SIZE)
+  if (tbuf->write_cursor + total > FROTH_TBUF_SIZE) {
+    /* Reclaim descriptors in the abandoned tail before wrapping. */
+    reclaim_overlapping(tbuf, tbuf->write_cursor, FROTH_TBUF_SIZE);
     tbuf->write_cursor = 0;
+  }
 
   reclaim_overlapping(tbuf, tbuf->write_cursor, tbuf->write_cursor + total);
 
