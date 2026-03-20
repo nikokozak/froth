@@ -6,7 +6,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifndef FROTH_FFI_MAX_TABLES
 #define FROTH_FFI_MAX_TABLES 8
+#endif
 static const froth_ffi_entry_t *registered_tables[FROTH_FFI_MAX_TABLES];
 static froth_cell_u_t registered_table_count = 0;
 
