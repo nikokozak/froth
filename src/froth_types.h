@@ -75,7 +75,9 @@ typedef enum {
   FROTH_ERROR_CALL_DEPTH = 18,
   FROTH_ERROR_NO_MARK = 19,
   FROTH_ERROR_RESET = 20,
-  FROTH_ERROR_FFI_TABLE_FULL = 21, /* too many FFI tables registered */
+  FROTH_ERROR_FFI_TABLE_FULL = 21,        /* too many FFI tables registered */
+  FROTH_ERROR_TRANSIENT_EXPIRED = 22,     /* transient string overwritten */
+  FROTH_ERROR_TRANSIENT_FULL = 23,        /* transient descriptor table full */
   /* Reader/evaluator errors — occur before execution.
    * Stable numbers, but programs won't typically catch these. */
   FROTH_ERROR_TOKEN_TOO_LONG = 100,

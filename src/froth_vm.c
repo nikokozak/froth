@@ -1,5 +1,6 @@
 #include "froth_vm.h"
 #include "froth_stack.h"
+#include "froth_tbuf.h"
 #include "froth_types.h"
 
 static froth_cell_t ds_memory[FROTH_DS_CAPACITY];
@@ -12,6 +13,7 @@ froth_vm_t froth_vm = {
     .rs = {.pointer = 0, .capacity = FROTH_RS_CAPACITY, .data = rs_memory},
     .cs = {.pointer = 0, .capacity = FROTH_CS_CAPACITY, .data = cs_memory},
     .heap = {.data = heap_memory, .pointer = 0},
+    .tbuf = {.generation = 1, .write_cursor = 0},
     .thrown = FROTH_OK,
     .last_error_slot = -1,
     .interrupted = 0,

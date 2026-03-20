@@ -32,6 +32,7 @@ target_sources(Froth
     src/froth_console_mux.c
     src/froth_transport.c
     src/froth_link.c
+    src/froth_tbuf.c
     ${CMAKE_BINARY_DIR}/froth_lib_core.h
     platforms/${FROTH_PLATFORM}/platform.c
     boards/${FROTH_BOARD}/ffi.c

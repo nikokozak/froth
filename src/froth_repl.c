@@ -59,6 +59,10 @@ static const char *error_name(froth_error_t err) {
     return "no mark set";
   case FROTH_ERROR_FFI_TABLE_FULL:
     return "too many FFI tables registered";
+  case FROTH_ERROR_TRANSIENT_EXPIRED:
+    return "transient string expired";
+  case FROTH_ERROR_TRANSIENT_FULL:
+    return "transient string buffer full";
   /* Reader/evaluator errors */
   case FROTH_ERROR_TOKEN_TOO_LONG:
     return "token too long";
