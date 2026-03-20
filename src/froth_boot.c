@@ -10,6 +10,9 @@
 #ifdef FROTH_HAS_USER_PROGRAM
 #include "froth_user_program.h"
 #endif
+#ifdef FROTH_HAS_BOARD_LIB
+#include "froth_board_lib.h"
+#endif
 
 #ifdef FROTH_HAS_LINK
 #include "froth_console_mux.h"
@@ -76,6 +79,12 @@ void froth_boot(const froth_ffi_entry_t *board_bindings) {
   err = froth_evaluate_input(froth_lib_core, &froth_vm);
   if (err)
     boot_fail("stdlib load", err);
+
+#ifdef FROTH_HAS_BOARD_LIB
+  err = froth_evaluate_input(froth_board_lib, &froth_vm);
+  if (err)
+    boot_fail("froth boardlib load", err);
+#endif
 
   froth_vm.boot_complete = 1;
   froth_vm.watermark_heap_offset = froth_vm.heap.pointer;

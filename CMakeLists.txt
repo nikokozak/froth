@@ -80,15 +80,19 @@ target_compile_definitions(Froth PRIVATE FROTH_BOARD_NAME="${FROTH_BOARD}")
 target_compile_definitions(Froth PRIVATE FROTH_TBUF_SIZE=${FROTH_TBUF_SIZE})
 target_compile_definitions(Froth PRIVATE FROTH_TDESC_MAX=${FROTH_TDESC_MAX})
 target_compile_definitions(Froth PRIVATE FROTH_FFI_MAX_TABLES=${FROTH_FFI_MAX_TABLES})
+
+# Froth Snapshots - allows Froth to save programs into flash
 if(FROTH_HAS_SNAPSHOTS)
   target_compile_definitions(Froth PRIVATE FROTH_HAS_SNAPSHOTS)
   target_compile_definitions(Froth PRIVATE FROTH_SNAPSHOT_BLOCK_SIZE=${FROTH_SNAPSHOT_BLOCK_SIZE})
   target_compile_definitions(Froth PRIVATE FROTH_SNAPSHOT_PATH_A="${FROTH_SNAPSHOT_PATH_A}")
   target_compile_definitions(Froth PRIVATE FROTH_SNAPSHOT_PATH_B="${FROTH_SNAPSHOT_PATH_B}")
 endif()
+# Froth "Link" protocol - allows Froth to speak to interactive editors
 if(${FROTH_HAS_LINK})
   target_compile_definitions(Froth PRIVATE FROTH_HAS_LINK)
 endif()
+# Compiles a user program into the flash package, to be executed on startup.
 if(FROTH_USER_PROGRAM)
   target_sources(Froth PRIVATE ${CMAKE_BINARY_DIR}/froth_user_program.h)
   target_compile_definitions(Froth PRIVATE FROTH_HAS_USER_PROGRAM)
@@ -101,6 +105,20 @@ if(FROTH_USER_PROGRAM)
     COMMENT "Embedding user .froth file as C data..."
   )
 endif()
+# Compiles Froth libraries specific to the given target board
+set(FROTH_BOARD_LIB_PATH "${CMAKE_SOURCE_DIR}/boards/${FROTH_BOARD}/lib/board.froth")
+if(EXISTS "${FROTH_BOARD_LIB_PATH}")
+  target_sources(Froth PRIVATE ${CMAKE_BINARY_DIR}/froth_board_lib.h)
+  target_compile_definitions(Froth PRIVATE FROTH_HAS_BOARD_LIB)
+  # Used to compile .froth board lib files so that the c process can read them as embedded data.
+  add_custom_command(
+    COMMAND ${CMAKE_COMMAND} -DINPUT=${FROTH_BOARD_LIB_PATH} -DOUTPUT=${CMAKE_BINARY_DIR}/froth_board_lib.h -DVARNAME="froth_board_lib" -P ${CMAKE_SOURCE_DIR}/cmake/embed_froth.cmake
+    OUTPUT ${CMAKE_BINARY_DIR}/froth_board_lib.h
+    DEPENDS ${FROTH_BOARD_LIB_PATH}
+    COMMENT "Embedding a froth board lib .froth file as C data..."
+  )
+endif()
+
 
 # Used to compile .froth lib files so that the c process can read them as embedded data.
 add_custom_command(
