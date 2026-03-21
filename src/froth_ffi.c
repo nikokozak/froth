@@ -42,6 +42,8 @@ froth_error_t froth_pop_bstring(froth_vm_t *vm, const uint8_t **data,
 
 froth_error_t froth_push_bstring(froth_vm_t *vm, const uint8_t *data,
                                  froth_cell_t len) {
+  if (len < 0 || len > FROTH_STRING_MAX_LEN)
+    return FROTH_ERROR_BSTRING_TOO_LONG;
   froth_cell_t cell;
   FROTH_TRY(froth_tbuf_alloc(vm, data, len, &cell));
   return froth_stack_push(&vm->ds, cell);

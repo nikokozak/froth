@@ -155,7 +155,7 @@ static froth_error_t read_string(froth_reader_t* reader, uint8_t* buf, froth_cel
     char c = reader->input[reader->position];
     if (c == '\0') { return FROTH_ERROR_UNTERMINATED_STRING; }
     if (c == '"') { reader->position++; break; }
-    if (len >= FROTH_BSTRING_LEN_MAX) { return FROTH_ERROR_BSTRING_TOO_LONG; }
+    if (len >= FROTH_STRING_MAX_LEN) { return FROTH_ERROR_BSTRING_TOO_LONG; }
 
     if (c == '\\') {
       reader->position++;

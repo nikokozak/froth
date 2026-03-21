@@ -3,7 +3,6 @@
 #include "froth_types.h"
 
 #define FROTH_TOKEN_NAME_MAX 32
-#define FROTH_BSTRING_LEN_MAX 128
 
 typedef enum {
   FROTH_TOKEN_NUMBER,           // A parsed integer value
@@ -25,7 +24,7 @@ typedef struct {
     char name[FROTH_TOKEN_NAME_MAX];  // Valid when type == IDENTIFIER or TICK_IDENTIFIER
     struct {                          // Valid when type == FROTH_TOKEN_BSTRING
       froth_cell_u_t bstring_len;
-      uint8_t bstring_bytes[FROTH_BSTRING_LEN_MAX];
+      uint8_t bstring_bytes[FROTH_STRING_MAX_LEN];
     };
   };
 } froth_token_t;

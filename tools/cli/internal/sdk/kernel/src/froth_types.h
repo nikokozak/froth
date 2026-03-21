@@ -38,6 +38,11 @@ typedef uint64_t froth_cell_u_t;
     "Invalid value for FROTH_CELL_SIZE_BITS. Please define it to 8, 16, 32, or 64."
 #endif
 
+/* Maximum string length in bytes, enforced at all creation points (ADR-047). */
+#ifndef FROTH_STRING_MAX_LEN
+#define FROTH_STRING_MAX_LEN 256
+#endif
+
 #define FROTH_FALSE ((froth_cell_t)0)
 #define FROTH_TRUE ((froth_cell_t) - 1)
 

@@ -18,3 +18,4 @@ froth_error_t froth_prim_dangerous_reset(froth_vm_t *froth_vm);
 froth_error_t froth_prim_bstring_num_to_string(froth_vm_t *vm);
 froth_error_t froth_prim_bstring_num_to_hexs(froth_vm_t *vm);
 froth_error_t froth_prim_bstring_num_to_bins(froth_vm_t *vm);
+froth_error_t froth_prim_bstring_concat(froth_vm_t *vm);

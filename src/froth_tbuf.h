@@ -34,6 +34,9 @@
 #if FROTH_TBUF_SIZE > 65535
 #error "FROTH_TBUF_SIZE exceeds uint16_t range (max 65535)"
 #endif
+#if FROTH_STRING_MAX_LEN > FROTH_TBUF_SIZE
+#error "FROTH_STRING_MAX_LEN exceeds FROTH_TBUF_SIZE (string cannot exceed ring)"
+#endif
 
 /* --- Descriptor entry --- */
 

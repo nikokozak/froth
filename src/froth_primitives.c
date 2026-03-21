@@ -969,9 +969,8 @@ froth_error_t froth_prim_bstring_byteat(froth_vm_t *vm) {
 #define N2S_BUF_SIZE FROTH_CELL_SIZE_BITS
 static const char hex_digits[] = "0123456789ABCDEF";
 
-static int number_to_string(froth_cell_t payload, int radix,
-                            const char *prefix, bool is_signed,
-                            char *buf, int buf_size) {
+static int number_to_string(froth_cell_t payload, int radix, const char *prefix,
+                            bool is_signed, char *buf, int buf_size) {
   int pos = buf_size; /* cursor moves right-to-left */
   bool negative = false;
   froth_cell_u_t val;
@@ -1040,6 +1039,30 @@ froth_error_t froth_prim_bstring_num_to_bins(froth_vm_t *vm) {
   int len = number_to_string(payload, 2, "0b", false, buf, sizeof(buf));
   return froth_push_bstring(vm, (const uint8_t *)(buf + sizeof(buf) - len),
                             (froth_cell_t)len);
+}
+
+froth_error_t froth_prim_bstring_concat(froth_vm_t *vm) {
+  froth_cell_t string_cell_a, string_cell_b;
+  FROTH_TRY(froth_stack_pop(&vm->ds, &string_cell_b));
+  if (!FROTH_CELL_IS_BSTRING(string_cell_b))
+    return FROTH_ERROR_TYPE_MISMATCH;
+  FROTH_TRY(froth_stack_pop(&vm->ds, &string_cell_a));
+  if (!FROTH_CELL_IS_BSTRING(string_cell_a))
+    return FROTH_ERROR_TYPE_MISMATCH;
+
+  froth_bstring_view_t s_a, s_b;
+  FROTH_TRY(froth_bstring_resolve(vm, string_cell_a, &s_a));
+  FROTH_TRY(froth_bstring_resolve(vm, string_cell_b, &s_b));
+
+  if (s_a.len + s_b.len > FROTH_STRING_MAX_LEN)
+    return FROTH_ERROR_BSTRING_TOO_LONG;
+
+  char buf[FROTH_STRING_MAX_LEN];
+
+  memcpy(buf, s_a.data, s_a.len);
+  memcpy(buf + s_a.len, s_b.data, s_b.len);
+
+  return froth_push_bstring(vm, (const uint8_t *)buf, s_a.len + s_b.len);
 }
 
 froth_error_t froth_prim_quote_len(froth_vm_t *vm) {
@@ -1254,6 +1277,8 @@ const froth_ffi_entry_t froth_primitives[] = {
      "Number to hex string (unsigned, 0x prefix)"},
     {"n>bins", froth_prim_bstring_num_to_bins, "( n -- s )",
      "Number to binary string (unsigned, 0b prefix)"},
+    {"s.concat", froth_prim_bstring_concat, "( s1 s2 -- s3 )",
+     "Concatenate two strings"},
 
     /* Quotation introspection */
     {"q.len", froth_prim_quote_len, "( q -- n )", "Quotation body length"},

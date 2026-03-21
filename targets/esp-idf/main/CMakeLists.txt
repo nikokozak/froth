@@ -50,6 +50,7 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
     FROTH_HAS_SNAPSHOTS=1
     FROTH_SNAPSHOT_BLOCK_SIZE=2048
     FROTH_HAS_LINK=1
+    FROTH_STRING_MAX_LEN=256
 )
 
 # Embed stdlib as C header
