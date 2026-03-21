@@ -8,11 +8,14 @@ import (
 )
 
 func runNew(args []string) error {
-	if len(args) == 0 {
+	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 		return fmt.Errorf("new requires a project name")
 	}
 	dir := args[0]
 	name := filepath.Base(dir)
+	if name == "" || name == "." || name == "/" {
+		return fmt.Errorf("invalid project name: %q", args[0])
+	}
 
 	// Reject names that would produce invalid TOML
 	if strings.ContainsAny(name, "\"'\n\r\\") {

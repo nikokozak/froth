@@ -33,12 +33,18 @@ func Resolve(manifest *Manifest, projectRoot string) (*ResolveResult, error) {
 }
 
 func doResolve(manifest *Manifest, entryPath string, projectRoot string) (*ResolveResult, error) {
+	canonRoot, err := canonicalize(projectRoot)
+	if err != nil {
+		return nil, fmt.Errorf("project root: %w", err)
+	}
+
 	r := &resolver{
-		manifest:    manifest,
-		projectRoot: projectRoot,
-		resolved:    make(map[string]bool),
-		inProgress:  make(map[string]bool),
-		entryPath:   "",
+		manifest:        manifest,
+		projectRoot:     projectRoot,
+		canonProjectRoot: canonRoot,
+		resolved:        make(map[string]bool),
+		inProgress:      make(map[string]bool),
+		entryPath:       "",
 	}
 
 	canon, err := canonicalize(entryPath)
@@ -68,13 +74,14 @@ func AppendAutorun(source string) string {
 }
 
 type resolver struct {
-	manifest    *Manifest
-	projectRoot string
-	resolved    map[string]bool
-	inProgress  map[string]bool
-	entryPath   string
-	fileOrder   []string
-	warnings    []string
+	manifest        *Manifest
+	projectRoot     string
+	canonProjectRoot string
+	resolved        map[string]bool
+	inProgress      map[string]bool
+	entryPath       string
+	fileOrder       []string
+	warnings        []string
 }
 
 func (r *resolver) resolve(filePath string, isEntry bool) (string, error) {
@@ -145,7 +152,8 @@ func (r *resolver) resolve(filePath string, isEntry bool) (string, error) {
 		}
 	}
 
-	relPath, _ := filepath.Rel(r.projectRoot, filePath)
+	// Use canonical paths for Rel to avoid macOS /var vs /private/var mismatch
+	relPath, _ := filepath.Rel(r.canonProjectRoot, canon)
 	if relPath == "" {
 		relPath = filePath
 	}

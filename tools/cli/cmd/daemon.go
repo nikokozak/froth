@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/nikokozak/froth/tools/cli/internal/daemon"
+	"github.com/nikokozak/froth/tools/cli/internal/sdk"
 )
 
 func runDaemon(args []string) error {
@@ -79,12 +80,12 @@ func startDaemonInBackground(local bool, localRuntimePath string) error {
 		return fmt.Errorf("resolve executable: %w", err)
 	}
 
-	home, err := os.UserHomeDir()
+	home, err := sdk.FrothHome()
 	if err != nil {
-		return fmt.Errorf("home dir: %w", err)
+		return err
 	}
 
-	frothDir := filepath.Join(home, ".froth")
+	frothDir := home
 	if err := os.MkdirAll(frothDir, 0755); err != nil {
 		return fmt.Errorf("create %s: %w", frothDir, err)
 	}

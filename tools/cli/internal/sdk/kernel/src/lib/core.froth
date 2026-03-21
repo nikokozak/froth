@@ -1,0 +1,119 @@
+\ ===== Stack Shuffles =====================================
+\ These reorder the top of the data stack using perm.
+\ perm takes a count and a pattern: the count says how
+\ many items to read from the stack, and the pattern says
+\ how to put them back. Letters are assigned left-to-right
+\ from deepest to shallowest.
+
+\ Duplicate the top element.
+\ ( a -- a a )
+\ Example: 5 dup => 5 5
+: dup ( a -- a a )   1 p[a a] perm ;
+
+\ Swap the top two elements.
+\ ( a b -- b a )
+\ Example: 1 2 swap => 2 1
+: swap ( a b -- b a )   2 p[a b] perm ;
+
+\ Discard the top element.
+\ ( a -- )
+\ Example: 1 2 drop => 1
+: drop ( a -- )   1 p[] perm ;
+
+\ Copy the second element to the top.
+\ ( a b -- a b a )
+\ Example: 1 2 over => 1 2 1
+: over ( a b -- a b a )   2 p[b a b] perm ;
+
+\ Rotate the third element to the top.
+\ ( a b c -- b c a )
+\ Example: 1 2 3 rot => 2 3 1
+: rot ( a b c -- b c a )   3 p[b a c] perm ;
+
+\ Reverse rotate: top element goes to third position.
+\ ( a b c -- c a b )
+\ Example: 1 2 3 -rot => 3 1 2
+: -rot ( a b c -- c a b )   3 p[a c b] perm ;
+
+\ Remove the second element, keeping the top.
+\ ( a b -- b )
+\ Example: 1 2 nip => 2
+: nip ( a b -- b )   2 p[a] perm ;
+
+\ Copy the top element under the second.
+\ ( a b -- b a b )
+\ Example: 1 2 tuck => 2 1 2
+: tuck ( a b -- b a b )   2 p[a b a] perm ;
+
+\ ===== Control Flow =======================================
+
+\ Conditional execution: choose one of two branches.
+\ If the flag is true, call the first quotation;
+\ if false, call the second.
+\ ( flag if-true if-false -- result )
+\ Example: 1 [ 10 ] [ 20 ] if => 10
+: if ( flag t f -- result )   choose call ;
+
+\ ===== Combinators ========================================
+\ These are the core tools for applying quotations to
+\ values. They replace most uses of manual dup/swap/rot
+\ in idiomatic Froth.
+
+\ Store a value, update a slot.
+\ ( value 'name -- )
+\ Example: 42 'x set
+: set ( value 'name -- )   swap def ;
+
+\ Temporarily hide a value while executing a quotation.
+\ Stashes the top value on the return stack, calls the
+\ quotation, then restores the stashed value to the top.
+\ ( a q -- result a )
+\ Example: 1 2 [ 10 + ] dip => 12 2
+: dip ( a q -- result a )   swap >r call r> ;
+
+\ Apply a quotation to a value, keeping the original.
+\ Copies the value, applies the quotation to the copy,
+\ then puts the original back on top.
+\ ( x q -- result x )
+\ Example: 5 [ 2 * ] keep => 10 5
+: keep ( x q -- result x )   over swap call swap ;
+
+\ Apply two quotations to the same value.
+\ Runs the first quotation on x (keeping x), then runs
+\ the second quotation on x.
+\ ( x f g -- f(x) g(x) )
+\ Example: 5 [ 2 * ] [ 1 + ] bi => 10 6
+: bi ( x f g -- f(x) g(x) )   -rot keep rot call ;
+
+\ Execute a quotation exactly n times.
+\ The quotation must be stack-neutral ( -- ): it should
+\ not leave extra values on the stack or consume values
+\ from it. The count is kept on the data stack; the
+\ quotation is stashed on the return stack so it doesn't
+\ interfere with the counter.
+\ ( n q -- )
+\ Example: 3 [ 42 . ] times => prints "42 42 42 "
+: times ( n q -- )
+  >r
+  [ dup 0 > ] [ 1 - r@ call ] while
+  drop r> drop
+;
+
+\ ===== Arithmetic =========================================
+
+\ Negate a number: flip its sign.
+\ ( a -- -a )
+\ Example: 5 negate => -5
+: negate ( a -- -a )   0 swap - ;
+
+\ Absolute value: if negative, negate it.
+\ ( a -- |a| )
+\ Example: -5 abs => 5
+: abs ( a -- |a| )   dup 0 < [ negate ] [ ] if ;
+
+\ ===== I/O ================================================
+
+\ Emit a newline character.
+\ ( -- )
+\ Example: 42 . cr => prints "42" then a newline
+: cr ( -- )   10 emit ;
