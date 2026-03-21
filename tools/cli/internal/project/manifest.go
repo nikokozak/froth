@@ -48,11 +48,18 @@ type FFIConfig struct {
 	Defines  map[string]string `toml:"defines"`
 }
 
-type PlatformConfig struct {
-	SdkconfigDefaults string `toml:"sdkconfig_defaults"`
-	PartitionTable    string `toml:"partition_table"`
-	IDFTarget         string `toml:"idf_target"`
-	Board             string `toml:"board"`
+// PlatformConfig uses a map to accept arbitrary platform-specific keys
+// without triggering Undecoded() warnings. Known keys are accessed
+// via helper methods; unknown keys are passed through to the build system.
+type PlatformConfig map[string]interface{}
+
+func (p PlatformConfig) String(key string) string {
+	if v, ok := p[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
 }
 
 type DependencyConfig struct {

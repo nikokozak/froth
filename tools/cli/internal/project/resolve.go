@@ -18,9 +18,21 @@ type ResolveResult struct {
 // Resolve performs include resolution starting from the entry file.
 // It reads froth.toml dependencies for named includes and resolves
 // relative includes against the containing file's directory.
-func Resolve(manifest *Manifest, projectRoot string) (*ResolveResult, error) {
-	entryPath := filepath.Join(projectRoot, manifest.Project.Entry)
+// ResolveEntry resolves a single entry file path without a manifest.
+// Used by `froth send <file>` outside a project.
+func ResolveEntry(entryPath string, projectRoot string) (*ResolveResult, error) {
+	return doResolve(nil, entryPath, projectRoot)
+}
 
+func Resolve(manifest *Manifest, projectRoot string) (*ResolveResult, error) {
+	if manifest == nil {
+		return nil, fmt.Errorf("manifest is nil (use ResolveEntry for bare mode)")
+	}
+	entryPath := filepath.Join(projectRoot, manifest.Project.Entry)
+	return doResolve(manifest, entryPath, projectRoot)
+}
+
+func doResolve(manifest *Manifest, entryPath string, projectRoot string) (*ResolveResult, error) {
 	r := &resolver{
 		manifest:    manifest,
 		projectRoot: projectRoot,
@@ -40,14 +52,19 @@ func Resolve(manifest *Manifest, projectRoot string) (*ResolveResult, error) {
 		return nil, err
 	}
 
-	// Append autorun invocation to match boot behavior (ADR-037)
-	source += "\n[ 'autorun call ] catch drop\n"
+	r.warnings = append(r.warnings, checkDuplicateDefinitions(source, r.fileOrder)...)
 
 	return &ResolveResult{
 		Source:   source,
 		Files:    r.fileOrder,
 		Warnings: r.warnings,
 	}, nil
+}
+
+// AppendAutorun adds the autorun invocation to resolved source.
+// Called by `froth send` but NOT by `froth build` (boot handles autorun).
+func AppendAutorun(source string) string {
+	return source + "\n[ 'autorun call ] catch drop\n"
 }
 
 type resolver struct {
@@ -358,12 +375,18 @@ func checkCase(path string, projectRoot string) error {
 
 // checkLibraryDiscipline warns if a non-entry file has top-level executable forms.
 func checkLibraryDiscipline(source string, filePath string) []string {
-	// Fix #7: check for opt-out as a standalone line, not a substring
-	for _, line := range strings.Split(source, "\n") {
+	// Opt-out: \ #allow-toplevel must be the first non-empty line.
+	// Strip UTF-8 BOM if present (Windows editors sometimes write it).
+	clean := strings.TrimPrefix(source, "\xEF\xBB\xBF")
+	for _, line := range strings.Split(clean, "\n") {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "\\ #allow-toplevel" || trimmed == "\\#allow-toplevel" {
+		if trimmed == "" {
+			continue
+		}
+		if trimmed == "\\ #allow-toplevel" {
 			return nil
 		}
+		break // first non-empty line is not the pragma
 	}
 
 	var warnings []string
@@ -377,19 +400,26 @@ func checkLibraryDiscipline(source string, filePath string) []string {
 			continue
 		}
 
-		// Track multi-line paren comments character by character
+		// Track multi-line paren comments character by character.
+		// If the comment closes mid-line, process the remainder.
 		if parenDepth > 0 {
+			remainder := ""
 			for i := 0; i < len(trimmed); i++ {
 				if trimmed[i] == '(' {
 					parenDepth++
 				} else if trimmed[i] == ')' {
 					parenDepth--
 					if parenDepth == 0 {
+						remainder = strings.TrimSpace(trimmed[i+1:])
 						break
 					}
 				}
 			}
-			continue
+			if parenDepth > 0 || remainder == "" {
+				continue
+			}
+			trimmed = remainder
+			// Fall through to check the remainder
 		}
 
 		// Skip line comments
@@ -400,30 +430,50 @@ func checkLibraryDiscipline(source string, filePath string) []string {
 		// Check if line opens a paren comment
 		if strings.HasPrefix(trimmed, "( ") || trimmed == "(" {
 			parenDepth = 1
-			// Count any closes on the same line
+			remainder := ""
 			for i := 1; i < len(trimmed); i++ {
 				if trimmed[i] == '(' {
 					parenDepth++
 				} else if trimmed[i] == ')' {
 					parenDepth--
 					if parenDepth == 0 {
+						remainder = strings.TrimSpace(trimmed[i+1:])
 						break
 					}
 				}
 			}
-			continue
+			if parenDepth > 0 || remainder == "" {
+				continue
+			}
+			trimmed = remainder
+			// Fall through to check the remainder
 		}
 
 		// Track : ... ; blocks
 		if strings.HasPrefix(trimmed, ": ") || trimmed == ":" {
 			if containsTopLevelSemicolon(trimmed) {
-				continue // single-line definition
+				// Single-line definition — but warn if there's content after `;`
+				afterSemi := contentAfterSemicolon(trimmed)
+				if afterSemi != "" {
+					warnings = append(warnings, fmt.Sprintf(
+						"%s:%d: top-level form after definition: %s",
+						filePath, lineIdx+1, truncate(afterSemi, 60),
+					))
+				}
+				continue
 			}
 			inDefinition = true
 			continue
 		}
 		if containsTopLevelSemicolon(trimmed) && inDefinition {
+			afterSemi := contentAfterSemicolon(trimmed)
 			inDefinition = false
+			if afterSemi != "" {
+				warnings = append(warnings, fmt.Sprintf(
+					"%s:%d: top-level form after definition: %s",
+					filePath, lineIdx+1, truncate(afterSemi, 60),
+				))
+			}
 			continue
 		}
 
@@ -485,6 +535,115 @@ func containsTopLevelSemicolon(line string) bool {
 		}
 	}
 	return false
+}
+
+// checkDuplicateDefinitions scans merged source for `: name` definitions
+// that appear in multiple library files. Duplicates within the same file
+// or between a library and the entry file (last in fileOrder) are allowed.
+// Known limitation: this is line-level heuristic parsing. A `: name` that
+// appears inside a quotation body (e.g., `: outer [ : inner 1 ; ] ;`) will
+// be incorrectly counted as a top-level definition. This is acceptable for
+// the warning it produces; a proper fix requires a real parser.
+func checkDuplicateDefinitions(source string, fileOrder []string) []string {
+	if len(fileOrder) < 2 {
+		return nil
+	}
+	entryFile := fileOrder[len(fileOrder)-1]
+
+	type defLocation struct {
+		name string
+		file string
+	}
+
+	// Map: definition name → first file it was seen in
+	seen := make(map[string]string)
+	var warnings []string
+
+	currentFile := ""
+	for _, line := range strings.Split(source, "\n") {
+		trimmed := strings.TrimSpace(line)
+
+		// Track file boundaries
+		if strings.HasPrefix(trimmed, "\\ --- ") && strings.HasSuffix(trimmed, " ---") {
+			currentFile = strings.TrimSpace(trimmed[5 : len(trimmed)-4])
+			continue
+		}
+
+		// Skip entry file definitions (allowed to override)
+		if currentFile == entryFile {
+			continue
+		}
+
+		// Look for `: name` definitions
+		if strings.HasPrefix(trimmed, ": ") && len(trimmed) > 2 {
+			// Extract the name (first word after `:`)
+			rest := trimmed[2:]
+			spaceIdx := strings.IndexAny(rest, " \t")
+			name := rest
+			if spaceIdx > 0 {
+				name = rest[:spaceIdx]
+			}
+
+			if prev, ok := seen[name]; ok && prev != currentFile {
+				warnings = append(warnings, fmt.Sprintf(
+					"duplicate definition %q in %s and %s",
+					name, prev, currentFile,
+				))
+			} else if !ok {
+				seen[name] = currentFile
+			}
+		}
+	}
+
+	return warnings
+}
+
+// contentAfterSemicolon returns any non-whitespace content after the
+// first top-level `;` on a line, ignoring comments. Returns "" if the
+// `;` is the last meaningful content.
+func contentAfterSemicolon(line string) string {
+	inStr := false
+	parenDepth := 0
+	for i := 0; i < len(line); i++ {
+		ch := line[i]
+		if inStr {
+			if ch == '\\' && i+1 < len(line) {
+				i++
+			} else if ch == '"' {
+				inStr = false
+			}
+			continue
+		}
+		if parenDepth > 0 {
+			if ch == '(' {
+				parenDepth++
+			} else if ch == ')' {
+				parenDepth--
+			}
+			continue
+		}
+		if ch == '"' {
+			inStr = true
+			continue
+		}
+		if ch == '(' {
+			atStart := i == 0 || line[i-1] == ' ' || line[i-1] == '\t'
+			atEnd := i+1 >= len(line) || line[i+1] == ' ' || line[i+1] == '\t'
+			if atStart && atEnd {
+				parenDepth++
+				continue
+			}
+		}
+		if ch == ';' {
+			rest := strings.TrimSpace(line[i+1:])
+			// Ignore trailing line comments
+			if rest == "" || strings.HasPrefix(rest, "\\") {
+				return ""
+			}
+			return rest
+		}
+	}
+	return ""
 }
 
 func truncate(s string, max int) string {
