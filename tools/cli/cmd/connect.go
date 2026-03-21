@@ -1,15 +1,20 @@
 package cmd
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/nikokozak/froth/tools/cli/internal/daemon"
 	"github.com/nikokozak/froth/tools/cli/internal/sdk"
 )
 
@@ -28,8 +33,7 @@ func runConnect(args []string) error {
 	}
 
 	if !local {
-		fmt.Println("serial connect is not yet implemented; use 'froth connect --local' for now")
-		return nil
+		return runConnectSerial()
 	}
 
 	if portFlag != "" {
@@ -37,6 +41,220 @@ func runConnect(args []string) error {
 	}
 
 	return runConnectLocal()
+}
+
+func runConnectSerial() error {
+	client, err := dialConnectDaemon()
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	var outputMu sync.Mutex
+	printLocked := func(format string, args ...interface{}) {
+		outputMu.Lock()
+		defer outputMu.Unlock()
+		fmt.Printf(format, args...)
+	}
+
+	disconnectCh := make(chan struct{})
+	var disconnectOnce sync.Once
+	signalDisconnect := func() {
+		disconnectOnce.Do(func() {
+			printLocked("Disconnected\n")
+			close(disconnectCh)
+		})
+	}
+
+	client.EventHandler = func(method string, params json.RawMessage) {
+		switch method {
+		case daemon.EventConsole:
+			var evt daemon.ConsoleEvent
+			if err := json.Unmarshal(params, &evt); err == nil {
+				printLocked("%s", evt.Text)
+			}
+		case daemon.EventDisconnected:
+			signalDisconnect()
+		}
+	}
+
+	status, err := waitForConnectedStatus(client, 5*time.Second)
+	if err != nil {
+		return fmt.Errorf("status: %w", err)
+	}
+	if !status.Connected || status.Device == nil {
+		return fmt.Errorf("device not connected")
+	}
+
+	printLocked("%s\n", formatConnectedMessage(status.Device.Board, status.Port))
+
+	sigintCh := make(chan os.Signal, 1)
+	signal.Notify(sigintCh, os.Interrupt)
+	defer signal.Stop(sigintCh)
+
+	lineCh := make(chan string)
+	scanErrCh := make(chan error, 1)
+	go scanConnectInput(lineCh, scanErrCh)
+
+	for {
+		printLocked("froth> ")
+
+		select {
+		case <-disconnectCh:
+			return nil
+		case <-sigintCh:
+			printLocked("\n")
+			if err := client.Interrupt(); err != nil {
+				if isConnectDisconnectError(err) {
+					signalDisconnect()
+					return nil
+				}
+				printLocked("interrupt: %v\n", err)
+			}
+			continue
+		case line, ok := <-lineCh:
+			if !ok {
+				printLocked("\n")
+				if err := <-scanErrCh; err != nil {
+					return fmt.Errorf("read input: %w", err)
+				}
+				return nil
+			}
+
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" {
+				continue
+			}
+			if trimmed == "\\ quit" {
+				return nil
+			}
+
+			result, err := client.Eval(line)
+			if err != nil {
+				if isConnectDisconnectError(err) {
+					signalDisconnect()
+					return nil
+				}
+				printLocked("eval: %v\n", err)
+				continue
+			}
+
+			printConnectEvalResult(result, printLocked)
+		}
+	}
+}
+
+func dialConnectDaemon() (*daemon.Client, error) {
+	client, err := daemon.Dial()
+	if err == nil {
+		return client, nil
+	}
+
+	if startErr := startConnectDaemon(); startErr != nil {
+		return nil, fmt.Errorf("connect to daemon: %w; start it with 'froth daemon start --background'", err)
+	}
+
+	client, err = daemon.Dial()
+	if err != nil {
+		return nil, fmt.Errorf("connect to daemon after start: %w", err)
+	}
+
+	return client, nil
+}
+
+func startConnectDaemon() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+
+	args := make([]string, 0, 5)
+	if portFlag != "" {
+		args = append(args, "--port", portFlag)
+	}
+	args = append(args, "daemon", "start", "--background")
+
+	cmd := exec.Command(exe, args...)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+
+	text := strings.TrimSpace(string(output))
+	if text == "" {
+		return err
+	}
+
+	return fmt.Errorf("%w\n%s", err, text)
+}
+
+func waitForConnectedStatus(client *daemon.Client, timeout time.Duration) (*daemon.StatusResult, error) {
+	deadline := time.Now().Add(timeout)
+
+	for {
+		status, err := client.Status()
+		if err != nil {
+			return nil, err
+		}
+		if status.Connected && status.Device != nil {
+			return status, nil
+		}
+		if time.Now().After(deadline) {
+			return status, nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func scanConnectInput(lineCh chan<- string, errCh chan<- error) {
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Buffer(make([]byte, 0, 1024), 1024*1024)
+
+	for scanner.Scan() {
+		lineCh <- scanner.Text()
+	}
+
+	errCh <- scanner.Err()
+	close(lineCh)
+}
+
+func printConnectEvalResult(result *daemon.EvalResult, printLocked func(string, ...interface{})) {
+	if result.Status == 0 {
+		if result.StackRepr != "" {
+			printLocked("%s\n", result.StackRepr)
+		}
+		return
+	}
+
+	msg := fmt.Sprintf("error(%d)", result.ErrorCode)
+	if result.FaultWord != "" {
+		msg += fmt.Sprintf(" in \"%s\"", result.FaultWord)
+	}
+	printLocked("%s\n", msg)
+}
+
+func formatConnectedMessage(board string, port string) string {
+	if board == "" && port == "" {
+		return "Connected"
+	}
+	if board == "" {
+		return fmt.Sprintf("Connected on %s", port)
+	}
+	if port == "" {
+		return fmt.Sprintf("Connected to %s", board)
+	}
+	return fmt.Sprintf("Connected to %s on %s", board, port)
+}
+
+func isConnectDisconnectError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	text := err.Error()
+	return strings.Contains(text, "connection closed") ||
+		strings.Contains(text, "broken pipe") ||
+		strings.Contains(text, "connection reset by peer")
 }
 
 func runConnectLocal() error {
