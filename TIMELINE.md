@@ -294,31 +294,49 @@
 - [x] `dangerous-reset` clears tbuf + interrupted flag
 - [x] Chunk scanner fix (backslash token matching)
 
-### Phase 3a-hw: Hardware Validation (before workshop, first week of April)
+### Phase 3a-kernel: Kernel Hardening (Mar 21–22, POSIX, no hardware)
 
-- [ ] LEDC/PWM proven on ESP32 hardware (LED fade, piezo tone)
-- [ ] I2C sensor read proven on ESP32 hardware
-- [ ] Flash 15 ESP32 boards with user program, test workshop flow
+- [ ] `catch` truth convention ADR + kernel fix (0=success conflicts with Froth truth)
+- [ ] `number>string` / `.>s` — first runtime string constructor, exercises transient system
+- [ ] `s.concat` — dynamic string building, needed for WiFi/HTTP demos
+- [ ] Blob pool — `FROTH_TDESC_BLOB_POOL` kind, separate byte arena for large strings (HTTP bodies, HTML templates). Configurable `FROTH_BLOB_POOL_SIZE`.
+- [ ] `froth_invoke` FFI callback API — public wrapper around `froth_execute_quote`. Enables HTTP server handlers, timer callbacks, event-driven patterns.
+
+### Phase 3a-hw: Hardware Validation + New Bindings (bench time, before workshop)
+
+Smoke tests on real ESP32 hardware, validating everything built so far:
+- [ ] LEDC/PWM: LED fade, piezo tone, convenience words
+- [ ] I2C: sensor read (temperature or accelerometer)
+- [ ] UART bindings: `uart.init`, `uart.write`, `uart.read` (new FFI words)
+- [ ] `millis` — uptime counter (ESP32: `esp_timer_get_time`, POSIX: `clock_gettime`)
+- [ ] ADC: `adc.read ( pin -- value )` (new FFI word)
+- [ ] User program cold boot on ESP32, snapshot priority, wipe cycle
+- [ ] CLI `froth send` with includes → ESP32 device (end-to-end project system validation)
+- [ ] CLI `froth build` + `froth flash` with froth.toml project
+- [ ] VS Code extension Send File → ESP32 (include resolution via CLI)
+- [ ] Flash 15 boards with user program, test workshop flow
 - [ ] **Workshop (first week of April)**
 
-### Phase 3b: Ecosystem Breadth (post-workshop — Apr 10ish)
+### Phase 3b: WiFi + HTTP (post-hardware-validation)
 
-- [ ] WiFi bindings: `wifi.connect` (SSID + password strings), `wifi.status`, `wifi.ip` (returns string). Uses string bridge.
-- [ ] HTTP client or server for phone demo
-- [ ] `catch` truth convention ADR: resolve before public release.
+- [ ] WiFi bindings: `wifi.connect` (SSID + password strings), `wifi.status`, `wifi.ip`. Uses string bridge + blob pool.
+- [ ] `http.get ( url -- status body )` — materializes response as transient/blob string. Error if too large.
+- [ ] HTTP server: `http.serve ( port handler -- )` — uses `froth_invoke` to call handler quotation per request. Serves user-defined HTML pages.
+- [ ] `http.get-stream ( url callback -- status )` — stream-oriented for large responses. Callback receives chunks.
+- [ ] Phone-controllable demo: ESP32 serves a web page with buttons, buttons trigger Froth eval.
 
-### Phase 3c: Second Target + Demo (Apr 3–9)
+### Phase 3c: Second Target + Demo (Apr 7–12ish)
 
-- [ ] RP2040 platform port: `platform.c` (USB-CDC console I/O, `platform_delay_ms`, `platform_check_interrupt`), board FFI (GPIO, PWM), Pico SDK CMake integration. No `FROTH_HAS_SNAPSHOTS` — demonstrates host-centric deployment on a persistence-less target.
-- [ ] One ported library: stepper, servo, or sensor driver. Proves the library/include system works end-to-end. Froth-native API, C FFI backend where needed.
-- [ ] Thesis demo project: design and build. Should use WiFi or I2C, persistence, the library system, and host tooling workflow. Runs on ESP32; ideally a subset runs on RP2040 to demonstrate portability.
+- [ ] RP2040 platform port: `platform.c` (USB-CDC), board FFI (GPIO, PWM), Pico SDK CMake.
+- [ ] One ported library using the include system.
+- [ ] Thesis demo project: WiFi + I2C or PWM + persistence + library system + host tooling.
 
-### Phase 3d: Polish + Thesis Prep (Apr 10–16)
+### Phase 3d: Polish + Thesis Prep (Apr 12–16)
 
 - [ ] Demo project polished and reliable under presentation conditions
 - [ ] Getting started guide: flash, connect, write first program, include a library, deploy
-- [ ] Additional HAL bindings as demo demands (SPI, UART, timers — only what's needed)
-- [ ] Thesis chapter: Froth architecture, design decisions, comparison to ESP32forth/MicroPython/Lua
+- [ ] Thesis chapter: architecture, design decisions, comparison to ESP32forth/MicroPython/Lua
+- [ ] Error location mapping in CLI (source file + line from boundary markers)
 
 ### Buffer (Apr 17–20)
 

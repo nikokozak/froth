@@ -170,19 +170,25 @@ All CLI, editor, library, and project system work is done and tested:
 - ~~Manifest-aware doctor, --clean flag~~ done
 - ~~Test battery (~90 tests across all layers)~~ done
 
-### Hardware validation (before workshop)
-1. ESP32 hardware test: LEDC/PWM on real hardware (LED fade, piezo tone)
-2. ESP32 hardware test: I2C sensor read on real hardware
-3. Flash 15 boards with user program, test workshop flow
+### Kernel hardening (POSIX, no hardware)
+1. `catch` truth convention ADR + kernel fix
+2. `number>string` — first runtime string constructor
+3. `s.concat` — dynamic string building
+4. Blob pool — large string storage for HTTP bodies/HTML
+5. `froth_invoke` FFI callback API — enables HTTP server, timer callbacks
 
-### Thesis push (through Apr 20)
-4. WiFi bindings (uses string bridge): `wifi.connect`, `wifi.status`, `wifi.ip`
-5. HTTP client or server (phone-controllable demo)
-6. `catch` truth convention ADR (resolve before public release)
-7. RP2040 platform port (proves multi-target portability)
-8. One ported library (stepper, servo, or sensor driver)
-9. Thesis demo project
-10. Getting started guide / README
+### Hardware validation + new bindings (bench time)
+6. LEDC/PWM, I2C, user programs — smoke tests on real ESP32
+7. UART bindings, `millis`, ADC — new FFI words
+8. CLI + extension end-to-end with real device
+9. Flash 15 boards, workshop flow
+
+### Post-validation thesis push (through Apr 20)
+10. WiFi bindings + `http.get` + HTTP server + `http.get-stream`
+11. RP2040 platform port
+12. One ported library
+13. Thesis demo project (WiFi + sensors + persistence + library)
+14. Getting started guide / README
 
 ## Open Questions
 
