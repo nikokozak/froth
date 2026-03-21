@@ -49,6 +49,8 @@ func Execute() error {
 		return runNew(remaining[1:])
 	case "info":
 		return runInfo()
+	case "connect":
+		return runConnect(remaining[1:])
 	case "send":
 		fileArg := ""
 		if len(remaining) >= 2 {
@@ -78,6 +80,7 @@ func printUsage() {
 	fmt.Println("  doctor          Check environment and device")
 	fmt.Println("  build           Build Froth firmware")
 	fmt.Println("  flash           Flash device (ESP-IDF targets)")
+	fmt.Println("  connect         Connect to Froth (local POSIX for now)")
 	fmt.Println("  send [file]     Send source to device (resolves includes)")
 	fmt.Println("  info            Show device info")
 	fmt.Println("  reset           Reset device to stdlib baseline")
