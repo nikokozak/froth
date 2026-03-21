@@ -63,7 +63,14 @@ func (s *chunkScanner) scanLine(line string) {
 
 		switch ch {
 		case '\\':
-			s.inLineComment = true
+			// Only treat `\` as line comment when it's a standalone token
+			// (preceded by whitespace or SOL, followed by whitespace or EOL).
+			// Matches the C reader's tokenization rules.
+			atStart := i == 0 || line[i-1] == ' ' || line[i-1] == '\t'
+			atEnd := i+1 >= len(line) || line[i+1] == ' ' || line[i+1] == '\t'
+			if atStart && atEnd {
+				s.inLineComment = true
+			}
 		case '(':
 			s.commentDepth = 1
 		case '"':

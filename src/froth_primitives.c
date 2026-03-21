@@ -1074,8 +1074,11 @@ froth_error_t froth_prim_dangerous_reset(froth_vm_t *vm) {
 
   vm->thrown = FROTH_OK;
   vm->last_error_slot = -1;
+  vm->interrupted = 0;
   vm->trampoline_depth = 0;
   vm->mark_offset = (froth_cell_u_t)-1;
+
+  froth_tbuf_init(vm);
 
   return FROTH_ERROR_RESET;
 }

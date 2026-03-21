@@ -23,6 +23,18 @@
 #define FROTH_TDESC_MAX 32
 #endif
 
+/* Validate: descriptor index must fit in FROTH_BSTRING_DESC_BITS (5 bits = max 32).
+ * Cell width must leave room for the transient flag + desc bits + at least 1 gen bit. */
+#if FROTH_TDESC_MAX > 32
+#error "FROTH_TDESC_MAX exceeds 32 (5-bit descriptor index limit)"
+#endif
+#if FROTH_CELL_SIZE_BITS < 16
+#error "Transient string buffer requires at least 16-bit cells"
+#endif
+#if FROTH_TBUF_SIZE > 65535
+#error "FROTH_TBUF_SIZE exceeds uint16_t range (max 65535)"
+#endif
+
 /* --- Descriptor entry --- */
 
 #define FROTH_TDESC_FREE 0
