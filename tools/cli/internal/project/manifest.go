@@ -69,8 +69,16 @@ func LoadManifest(path string) (*Manifest, error) {
 	}
 
 	var m Manifest
-	if err := toml.Unmarshal(data, &m); err != nil {
+	md, err := toml.Decode(string(data), &m)
+	if err != nil {
 		return nil, fmt.Errorf("parse manifest: %w", err)
+	}
+
+	// Warn on unknown keys (catches typos like [bilud] or cell_siz)
+	if undecoded := md.Undecoded(); len(undecoded) > 0 {
+		for _, key := range undecoded {
+			fmt.Fprintf(os.Stderr, "warning: unknown key in %s: %s\n", ManifestFile, key)
+		}
 	}
 
 	// Apply defaults

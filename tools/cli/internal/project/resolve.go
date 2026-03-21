@@ -222,9 +222,17 @@ func extractDirectives(lines []string) ([]directive, string) {
 		}
 
 		parenDepth = localParenDepth
-		inString = localInString
+		// Froth strings don't span lines. Reset inString at line boundaries.
+		// Paren comments DO span lines, so parenDepth carries across.
+		inString = false
 
-		if !isDirective {
+		if isDirective {
+			// Replace directive lines with empty lines to preserve line numbering
+			// for library discipline warnings.
+			if lineIdx < len(lines)-1 {
+				cleaned.WriteString("\n")
+			}
+		} else {
 			cleaned.WriteString(line)
 			if lineIdx < len(lines)-1 {
 				cleaned.WriteString("\n")
@@ -276,6 +284,8 @@ func (r *resolver) resolveDirective(d directive, containingDir string) (string, 
 	return path, nil
 }
 
+// Fix #5: only swallow os.IsNotExist from EvalSymlinks.
+// Permission errors and other failures are real problems.
 func canonicalize(path string) (string, error) {
 	abs, err := filepath.Abs(filepath.Clean(path))
 	if err != nil {
@@ -283,7 +293,10 @@ func canonicalize(path string) (string, error) {
 	}
 	resolved, err := filepath.EvalSymlinks(abs)
 	if err != nil {
-		return abs, nil
+		if os.IsNotExist(err) {
+			return abs, nil
+		}
+		return "", fmt.Errorf("canonicalize %s: %w", path, err)
 	}
 	return resolved, nil
 }
@@ -356,10 +369,26 @@ func checkLibraryDiscipline(source string, filePath string) []string {
 	var warnings []string
 	lines := strings.Split(source, "\n")
 	inDefinition := false
+	parenDepth := 0
 
 	for lineIdx, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
+			continue
+		}
+
+		// Track multi-line paren comments character by character
+		if parenDepth > 0 {
+			for i := 0; i < len(trimmed); i++ {
+				if trimmed[i] == '(' {
+					parenDepth++
+				} else if trimmed[i] == ')' {
+					parenDepth--
+					if parenDepth == 0 {
+						break
+					}
+				}
+			}
 			continue
 		}
 
@@ -368,15 +397,25 @@ func checkLibraryDiscipline(source string, filePath string) []string {
 			continue
 		}
 
-		// Skip paren comments that take up a whole line
-		if strings.HasPrefix(trimmed, "(") && strings.HasSuffix(trimmed, ")") {
+		// Check if line opens a paren comment
+		if strings.HasPrefix(trimmed, "( ") || trimmed == "(" {
+			parenDepth = 1
+			// Count any closes on the same line
+			for i := 1; i < len(trimmed); i++ {
+				if trimmed[i] == '(' {
+					parenDepth++
+				} else if trimmed[i] == ')' {
+					parenDepth--
+					if parenDepth == 0 {
+						break
+					}
+				}
+			}
 			continue
 		}
 
 		// Track : ... ; blocks
 		if strings.HasPrefix(trimmed, ": ") || trimmed == ":" {
-			// Fix #6: check if the definition closes on the same line.
-			// Find the last `;` that isn't inside a string.
 			if containsTopLevelSemicolon(trimmed) {
 				continue // single-line definition
 			}
@@ -392,8 +431,7 @@ func checkLibraryDiscipline(source string, filePath string) []string {
 			continue
 		}
 
-		// Fix #5: only skip tick-def patterns that end with `def`.
-		// `'name value def` is safe. `'name call` is not.
+		// Only skip tick-def patterns that end with `def`.
 		if strings.HasPrefix(trimmed, "'") && strings.HasSuffix(trimmed, " def") {
 			continue
 		}
@@ -408,9 +446,10 @@ func checkLibraryDiscipline(source string, filePath string) []string {
 }
 
 // containsTopLevelSemicolon checks if a line contains `;` outside of
-// string literals (not inside "...").
+// string literals and paren comments.
 func containsTopLevelSemicolon(line string) bool {
 	inStr := false
+	parenDepth := 0
 	for i := 0; i < len(line); i++ {
 		ch := line[i]
 		if inStr {
@@ -421,9 +460,25 @@ func containsTopLevelSemicolon(line string) bool {
 			}
 			continue
 		}
+		if parenDepth > 0 {
+			if ch == '(' {
+				parenDepth++
+			} else if ch == ')' {
+				parenDepth--
+			}
+			continue
+		}
 		if ch == '"' {
 			inStr = true
 			continue
+		}
+		if ch == '(' {
+			atStart := i == 0 || line[i-1] == ' ' || line[i-1] == '\t'
+			atEnd := i+1 >= len(line) || line[i+1] == ' ' || line[i+1] == '\t'
+			if atStart && atEnd {
+				parenDepth++
+				continue
+			}
 		}
 		if ch == ';' {
 			return true
