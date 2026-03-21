@@ -28,10 +28,18 @@ func runBuild() error {
 		return runBuildLegacy()
 	}
 
+	if err := cleanBuildDirIfRequested(filepath.Join(root, ".froth-build")); err != nil {
+		return err
+	}
+
 	return runBuildManifest(manifest, root)
 }
 
 func runBuildManifest(manifest *project.Manifest, root string) error {
+	if err := cleanBuildDirIfRequested(filepath.Join(root, ".froth-build")); err != nil {
+		return err
+	}
+
 	// Resolve includes
 	result, err := project.Resolve(manifest, root)
 	if err != nil {
@@ -311,6 +319,10 @@ func runBuildLegacy() error {
 		return err
 	}
 
+	if err := cleanBuildDirIfRequested(filepath.Join(root, "build64")); err != nil {
+		return err
+	}
+
 	switch targetFlag {
 	case "", "posix":
 		return buildPosix(root)
@@ -319,6 +331,26 @@ func runBuildLegacy() error {
 	default:
 		return fmt.Errorf("unknown target: %s", targetFlag)
 	}
+}
+
+func cleanBuildDirIfRequested(dir string) error {
+	if !cleanFlag {
+		return nil
+	}
+
+	if _, err := os.Stat(dir); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("check build dir: %w", err)
+	}
+
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("remove build dir: %w", err)
+	}
+
+	fmt.Println("Cleaned build directory")
+	return nil
 }
 
 func buildPosix(root string) error {

@@ -11,6 +11,7 @@ var (
 	targetFlag string
 	serialFlag bool
 	daemonFlag bool
+	cleanFlag  bool
 )
 
 // Execute parses os.Args and dispatches to the right subcommand.
@@ -34,6 +35,8 @@ func Execute() error {
 			serialFlag = true
 		case "--daemon":
 			daemonFlag = true
+		case "--clean":
+			cleanFlag = true
 		default:
 			remaining = append(remaining, args[i])
 		}
@@ -91,4 +94,5 @@ func printUsage() {
 	fmt.Println("  --target <name>  Board target (for new/build)")
 	fmt.Println("  --serial         Force direct serial (skip daemon)")
 	fmt.Println("  --daemon         Force daemon routing")
+	fmt.Println("  --clean          Delete the build directory before building")
 }
