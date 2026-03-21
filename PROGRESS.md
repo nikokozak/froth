@@ -1,10 +1,10 @@
 # Froth Implementation Progress
 
-*Last updated: 2026-03-20*
+*Last updated: 2026-03-21*
 
 ## Current Status
 
-**Phase**: Thesis push (Phase 3). Workshop Mar 24. Thesis deadline Apr 20. Immediate focus: user programs, HAL bindings (LEDC/PWM, I2C), string bridge. Then WiFi, library system, RP2040 port.
+**Phase**: Thesis push (Phase 3). Workshop first week of April. Thesis deadline Apr 20. CLI/editor/library system complete and tested (~90 tests). Immediate focus: ESP32 hardware validation, then WiFi, RP2040, thesis demo.
 **Blocking issues**: `screen` unusable on macOS (PTY error, not a Froth issue).
 **Known limitations**: Console notifications remain lossy under sustained output, but the daemon now emits an explicit dropped-output notice instead of failing silently. Async eval model deferred (eval is still blocking RPC; long-running programs work but no start/accept acknowledgment).
 
@@ -138,8 +138,17 @@
 - LEDC/PWM Froth convenience layer (Mar 20): `ledc.setup`, `ledc.duty`, `ledc.freq`, `ledc.off` in `boards/esp32-devkit-v1/lib/board.froth`. Board lib auto-embed infrastructure: CMake detects `boards/$BOARD/lib/board.froth`, embeds and evaluates at boot after stdlib.
 - VS Code syntax highlighting (Mar 20): TextMate grammar for `.froth` files plus `language-configuration.json`.
 - Project system (ADR-044, Mar 20-21): `froth.toml` manifest, host-side `\ #use` include resolution (DFS postorder, dedup, cycle detection, path canonicalization, case-sensitivity check, context-aware scanner, library discipline checker). `froth new` scaffolding. `froth build` manifest-driven with `.froth-build/resolved.froth`. `froth send` resolves includes, appends autorun. 42 tests. 4 review rounds (~30 bugs found and fixed).
+- SDK embedding in CLI binary (Mar 21): Go `embed` payload vendored under `tools/cli/internal/sdk/kernel/`, atomic extraction to versioned cache at `$FROTH_HOME/sdk/froth-<version>/`, `FROTH_VERSION` parsed from embedded `CMakeLists.txt`, manifest builds fall back to SDK when outside the kernel repo. POSIX and ESP-IDF build roots now resolve through the extracted SDK. Tests cover extraction and kernel-root fallback.
 - `dangerous-reset` fix (Mar 21): clears `vm->interrupted` (prevents stale interrupt poisoning post-reset eval).
 - Chunk scanner fix (Mar 21): backslash line-comment only when standalone token (matches C reader).
+- `froth connect --local` (Mar 21): builds POSIX target from SDK, caches at `$FROTH_HOME/local-build/`, replaces process via `syscall.Exec`. Rebuilds only when source newer than binary.
+- `froth connect` serial (Mar 21): RPC-backed interactive session. Auto-starts daemon, streams console events, line-at-a-time eval, Ctrl-C sends interrupt, Ctrl-D exits. Mutex-protected output.
+- Extension sendFile delegates to CLI (Mar 21): spawns `froth --daemon send <file>`, streams output to console panel. CLI handles include resolution, autorun, reset, chunked eval.
+- Manifest-driven `froth flash` (Mar 21): reads `froth.toml`, builds via `runBuildManifest`, flashes from staged `.froth-build/esp-idf/`. Legacy fallback preserved.
+- ESP-IDF build isolation (Mar 21): stages `targets/esp-idf/` to `.froth-build/esp-idf/` per project. SDK cache stays immutable. Caches staged scaffold between builds.
+- Manifest-aware `froth doctor` (Mar 21): checks entry file, dependencies, board directory, target SDK. Every failure has a remediation command.
+- `froth build --clean` (Mar 21): deletes `.froth-build/` or `build64/` before building.
+- Test battery (Mar 21): ~90 tests across all layers. Shell-based kernel tests (transient strings, persistence, reset, error handling, FFI). Go CLI unit tests (80 tests: new, build, send, doctor, connect, SDK). Go integration tests (new+build+run, multi-file deps, connect --local). Top-level Makefile: `make test/test-kernel/test-cli/test-integration/build`.
 - ADRs: 043 (transient string buffer), 044 (project system, include resolution, CLI architecture)
 
 ## In Progress
@@ -152,27 +161,28 @@
 
 ## Next Up
 
-### Workshop prep (workshop moved to first week of April)
-1. ~~User programs~~ done
-2. ~~LEDC/PWM raw FFI~~ done. ~~Convenience layer~~ done.
-3. ~~I2C raw FFI~~ done
-4. ~~4-table FFI limit~~ done
-5. ~~String bridge (ADR-043)~~ done
-6. ~~VS Code syntax highlighting~~ done
-7. ~~Project system (ADR-044): manifest + resolver + CLI wiring~~ done
-8. ESP32 hardware test (LEDC, I2C on real hardware)
-9. Flash 15 boards, test workshop flow
+### Tooling system — COMPLETE
+All CLI, editor, library, and project system work is done and tested:
+- ~~User programs, LEDC/PWM, I2C, FFI limit, string bridge, syntax highlighting~~ done
+- ~~Project system (ADR-044): manifest + resolver + CLI wiring~~ done
+- ~~SDK embedding, `froth connect --local`, `froth connect` serial~~ done
+- ~~Extension sendFile delegates to CLI, manifest-driven flash~~ done
+- ~~Manifest-aware doctor, --clean flag~~ done
+- ~~Test battery (~90 tests across all layers)~~ done
+
+### Hardware validation (before workshop)
+1. ESP32 hardware test: LEDC/PWM on real hardware (LED fade, piezo tone)
+2. ESP32 hardware test: I2C sensor read on real hardware
+3. Flash 15 boards with user program, test workshop flow
 
 ### Thesis push (through Apr 20)
-10. SDK embedding in CLI binary (Go `embed`, versioned cache at `$FROTH_HOME/sdk/`)
-11. `froth connect --local` (build POSIX from SDK, exec binary)
-12. WiFi bindings (uses string bridge): `wifi.connect`, `wifi.status`, `wifi.ip`
-13. HTTP client or server (phone-controllable demo)
-14. `catch` truth convention ADR (resolve before public release)
-15. RP2040 platform port (proves multi-target portability)
-16. One ported library (stepper, servo, or sensor driver)
-17. Thesis demo project
-18. Getting started guide / README
+4. WiFi bindings (uses string bridge): `wifi.connect`, `wifi.status`, `wifi.ip`
+5. HTTP client or server (phone-controllable demo)
+6. `catch` truth convention ADR (resolve before public release)
+7. RP2040 platform port (proves multi-target portability)
+8. One ported library (stepper, servo, or sensor driver)
+9. Thesis demo project
+10. Getting started guide / README
 
 ## Open Questions
 

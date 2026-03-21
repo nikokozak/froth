@@ -1,6 +1,6 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-19 (thesis roadmap restructure)*
+*Last reviewed: 2026-03-21 (CLI/editor/library system complete, test battery landed)*
 *Source: Froth Implementation Roadmap v0.5 (Feb 25 → Thesis deadline Apr 20)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
@@ -271,24 +271,41 @@
 > Phase 3 shifts from kernel correctness to ecosystem breadth and public readiness.
 > Goal: by Apr 20, Froth is a credible embedded language with multi-target support, growing HAL coverage, a library story, and polished tooling.
 
-### Phase 3a: Workshop + Foundation (Mar 20–23)
+### Phase 3a: Tooling System (Mar 19–21) — COMPLETE
 
-- [x] User programs: CMake `FROTH_USER_PROGRAM` variable, cold-boot eval when no snapshot exists (ADR-037 boot sequence). Proven on POSIX: cold boot, snapshot priority, wipe + reboot.
-- [x] LEDC/PWM raw FFI bindings: 12 words mirroring ESP-IDF LEDC API. Convenience Froth layer and hardware test pending.
-- [ ] LEDC/PWM Froth convenience layer (`ledc.init`, `ledc.setup`, `ledc.duty`, `ledc.freq`). Proof: LED fade, piezo tone on ESP32.
-- [ ] I2C bindings: `i2c.init`, `i2c.write-byte`, `i2c.read-byte`. Numeric handle for bus instance. Proof: read a temperature sensor or accelerometer.
-- [x] Fix FFI metadata 4-table limit: bumped to 8, error on overflow (`FROTH_ERROR_FFI_TABLE_FULL`, code 21).
-- [x] String bridge (ADR-043): transient string buffer with scratch ring + descriptor table. `froth_push_bstring` / `froth_pop_bstring` FFI API. `def` auto-promotes. `s.keep` escape hatch. Snapshot rejection. All string consumers through `froth_bstring_resolve`.
-- [ ] Flash 15 ESP32 boards with user program, test end-to-end workshop flow
-- [ ] **Workshop (Mar 24)**
+- [x] User programs (`FROTH_USER_PROGRAM`)
+- [x] LEDC/PWM raw FFI (12 words) + Froth convenience layer (4 words)
+- [x] I2C raw FFI (10 words with handle tables)
+- [x] FFI metadata limit bumped to 8
+- [x] Transient string buffer (ADR-043)
+- [x] Board lib auto-embed infrastructure
+- [x] SDK embedding in CLI binary
+- [x] Project system (ADR-044): manifest, resolver, CLI wiring
+- [x] `froth new`, `froth build`, `froth flash` (manifest-driven)
+- [x] `froth send` with include resolution
+- [x] `froth connect --local` (zero-setup POSIX REPL)
+- [x] `froth connect` serial (RPC-backed interactive session)
+- [x] Extension sendFile delegates to CLI
+- [x] VS Code syntax highlighting
+- [x] Manifest-aware `froth doctor`
+- [x] `froth build --clean`
+- [x] ESP-IDF build isolation (per-project staging)
+- [x] Test battery: ~90 tests (kernel shell tests, Go CLI unit tests, Go integration tests, `make test`)
+- [x] `dangerous-reset` clears tbuf + interrupted flag
+- [x] Chunk scanner fix (backslash token matching)
 
-### Phase 3b: Ecosystem Breadth (Mar 27 — Apr 2)
+### Phase 3a-hw: Hardware Validation (before workshop, first week of April)
+
+- [ ] LEDC/PWM proven on ESP32 hardware (LED fade, piezo tone)
+- [ ] I2C sensor read proven on ESP32 hardware
+- [ ] Flash 15 ESP32 boards with user program, test workshop flow
+- [ ] **Workshop (first week of April)**
+
+### Phase 3b: Ecosystem Breadth (post-workshop — Apr 10ish)
 
 - [ ] WiFi bindings: `wifi.connect` (SSID + password strings), `wifi.status`, `wifi.ip` (returns string). Uses string bridge.
-- [ ] HTTP client or server for phone demo (direction TBD — server with buttons is more visceral, client polling is simpler FFI surface)
-- [ ] Library/include system: ADR + host-side implementation. CLI/extension resolves directives in `.froth` files, concatenates dependencies, sends merged source via EVAL. No device-side changes.
-- [ ] VS Code syntax highlighting: TextMate grammar for `.froth` files. Comments, strings, numbers, `: ;` definitions, known primitives. High visibility, low effort.
-- [ ] `catch` truth convention ADR: resolve before public release. Currently C-style (0 = success), conflicts with Froth truth (-1 = true). Audit spec for consistency.
+- [ ] HTTP client or server for phone demo
+- [ ] `catch` truth convention ADR: resolve before public release.
 
 ### Phase 3c: Second Target + Demo (Apr 3–9)
 
@@ -324,17 +341,24 @@ Presentation prep. Fix anything that broke. Practice the demo.
 - [x] `"Hello" s.emit` works
 - [x] Hex literals work (`0xFF`)
 - [x] Host tooling can push code to device (CLI or VS Code via FROTH-LINK/1)
-- [ ] User program boots on cold start, `reset` + Send File replaces it
-- [ ] LEDC/PWM bindings proven on hardware (LED fade or piezo tone)
-- [ ] I2C sensor read proven on hardware
+- [x] User program boots on cold start, `reset` + Send File replaces it (proven on POSIX)
+- [x] Project system: `froth.toml`, include resolution, `froth new/build/send/flash`
+- [x] CLI complete: `connect --local`, `connect` serial, `doctor`, `--clean`, SDK embedding
+- [x] Extension delegates to CLI for include resolution
+- [x] Test battery: ~90 tests across kernel, CLI, and integration layers
+- [ ] LEDC/PWM bindings proven on ESP32 hardware (LED fade or piezo tone)
+- [ ] I2C sensor read proven on ESP32 hardware
 - [ ] 15 pre-flashed ESP32 boards ready
 
 ## Thesis "Definition of Done"
 
 - [ ] Two targets running Froth (ESP32 + RP2040)
 - [ ] WiFi or network-controllable demo (phone controls hardware)
-- [ ] Library system: at least one non-trivial library included and used
-- [ ] VS Code syntax highlighting for `.froth` files
+- [x] Library/include system working end-to-end (ADR-044, 42 resolver tests, integration tests)
+- [x] VS Code syntax highlighting for `.froth` files
+- [x] Project system (`froth new/build/send/flash/connect/doctor`)
+- [x] Test battery (~90 tests across all layers)
+- [ ] One ported library included and used in a project
 - [ ] Non-trivial demo project running on real hardware
 - [ ] Getting started guide exists
 - [ ] `catch` truth convention resolved
@@ -419,4 +443,6 @@ Presentation prep. Fix anything that broke. Practice the demo.
 | ESP32 NVS persistence | Mar 16–21 | Mar 17 | NVS backend written and compiles. Hardware test pending (Mar 18). |
 | Host-centric deployment ADR | Not scheduled | Mar 17 | ADR-037 accepted. Defines deployment model, reset primitive, editor workflow. |
 | ESP32 audio FFI | Mar 16–21 | Dropped | Pivoted to HAL breadth (LEDC/I2C/WiFi) for thesis punch. Piezo tones available via LEDC. |
-| Workshop | "week of Mar 15" | Mar 24 | Extended scope: user programs, HAL bindings, string bridge. Hardening tranche inserted Mar 19. |
+| Workshop | "week of Mar 15" | first week of Apr | NYU faculty strike. Extended scope: full tooling system landed before workshop. |
+| Tooling system | Mar 20–23 | Mar 19–21 | Landed early. ADR-043, ADR-044, SDK embedding, all CLI commands, extension wiring, test battery. Codex-implements/Claude-reviews workflow adopted. |
+| Library/include system | Phase 3b | Mar 20–21 | Pulled forward into Phase 3a. ADR-044 accepted, resolver + CLI wiring + 42 tests. |
