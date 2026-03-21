@@ -4,14 +4,25 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/nikokozak/froth/tools/cli/internal/daemon"
+	"github.com/nikokozak/froth/tools/cli/internal/project"
 	"github.com/nikokozak/froth/tools/cli/internal/session"
 )
 
-func runSend(source string) error {
+func runSend(fileArg string) error {
+	source, err := resolveSource(fileArg)
+	if err != nil {
+		return err
+	}
+
+	// Append autorun invocation for send path (ADR-044)
+	source = project.AppendAutorun(source)
+
 	if !serialFlag {
-		err := runSendDaemon(source)
+		err := sendViaDaemon(source)
 		if err == nil {
 			return nil
 		}
@@ -19,10 +30,108 @@ func runSend(source string) error {
 			return fmt.Errorf("daemon: %w", err)
 		}
 	}
-	return runSendSerial(source)
+	return sendViaSerial(source)
 }
 
-func runSendDaemon(source string) error {
+// resolveSource resolves includes and produces a merged source string.
+// If fileArg is a raw .froth source string (not a file path), it's sent directly.
+// If fileArg is a file path, the resolver runs. If no fileArg, uses froth.toml entry.
+func resolveSource(fileArg string) (string, error) {
+	if fileArg != "" {
+		info, err := os.Stat(fileArg)
+		if err == nil {
+			if info.IsDir() {
+				return "", fmt.Errorf("%s is a directory, not a file", fileArg)
+			}
+			return resolveFromFile(fileArg)
+		}
+		// If it looks like a file path but doesn't exist, error instead of
+		// silently treating it as raw source
+		if strings.HasSuffix(fileArg, ".froth") || strings.Contains(fileArg, "/") {
+			return "", fmt.Errorf("file not found: %s", fileArg)
+		}
+		// Raw source (backward compat with `froth send "1 2 +"`)
+		return fileArg, nil
+	}
+
+	// No argument — try to use froth.toml
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("working directory: %w", err)
+	}
+
+	manifest, root, err := project.Load(cwd)
+	if err != nil {
+		return "", fmt.Errorf("no file specified and %w", err)
+	}
+
+	result, err := project.Resolve(manifest, root)
+	if err != nil {
+		return "", err
+	}
+	printWarnings(result.Warnings)
+	printResolveSummary(result)
+
+	return result.Source, nil
+}
+
+func resolveFromFile(filePath string) (string, error) {
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	// Search for manifest starting from the file's directory, not CWD.
+	// This way `froth send /other/project/src/main.froth` finds that
+	// project's froth.toml, not an unrelated one in CWD.
+	fileDir := filepath.Dir(absPath)
+	manifest, root, err := project.Load(fileDir)
+	if err != nil {
+		// No manifest — resolve the single file without includes
+		return resolveBareSingleFile(absPath)
+	}
+
+	// Override entry to the specified file
+	relPath, err := filepath.Rel(root, absPath)
+	if err != nil {
+		return resolveBareSingleFile(absPath)
+	}
+	manifest.Project.Entry = relPath
+
+	result, err := project.Resolve(manifest, root)
+	if err != nil {
+		return "", err
+	}
+	printWarnings(result.Warnings)
+	printResolveSummary(result)
+
+	return result.Source, nil
+}
+
+func resolveBareSingleFile(absPath string) (string, error) {
+	dir := filepath.Dir(absPath)
+	result, err := project.ResolveEntry(absPath, dir)
+	if err != nil {
+		return "", err
+	}
+	printWarnings(result.Warnings)
+	return result.Source, nil
+}
+
+func printWarnings(warnings []string) {
+	for _, w := range warnings {
+		fmt.Fprintf(os.Stderr, "warning: %s\n", w)
+	}
+}
+
+func printResolveSummary(result *project.ResolveResult) {
+	if len(result.Files) > 1 {
+		fmt.Fprintf(os.Stderr, "Resolved %s (%d dependencies)\n",
+			result.Files[len(result.Files)-1], len(result.Files)-1)
+	}
+}
+
+func sendViaDaemon(source string) error {
 	client, err := daemon.Dial()
 	if err != nil {
 		return err
@@ -57,7 +166,7 @@ func runSendDaemon(source string) error {
 	return nil
 }
 
-func runSendSerial(source string) error {
+func sendViaSerial(source string) error {
 	sess, err := session.Connect(portFlag)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)

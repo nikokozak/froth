@@ -45,13 +45,16 @@ func Execute() error {
 	}
 
 	switch remaining[0] {
+	case "new":
+		return runNew(remaining[1:])
 	case "info":
 		return runInfo()
 	case "send":
-		if len(remaining) < 2 {
-			return fmt.Errorf("send requires a source argument")
+		fileArg := ""
+		if len(remaining) >= 2 {
+			fileArg = remaining[1]
 		}
-		return runSend(remaining[1])
+		return runSend(fileArg)
 	case "doctor":
 		return runDoctor()
 	case "build":
@@ -71,16 +74,18 @@ func printUsage() {
 	fmt.Println("Usage: froth [flags] <command>")
 	fmt.Println()
 	fmt.Println("Commands:")
+	fmt.Println("  new <name>      Create a new Froth project")
 	fmt.Println("  doctor          Check environment and device")
-	fmt.Println("  build           Build Froth for a target")
+	fmt.Println("  build           Build Froth firmware")
 	fmt.Println("  flash           Flash device (ESP-IDF targets)")
+	fmt.Println("  send [file]     Send source to device (resolves includes)")
 	fmt.Println("  info            Show device info")
-	fmt.Println("  send <src>      Evaluate Froth source on device")
+	fmt.Println("  reset           Reset device to stdlib baseline")
 	fmt.Println("  daemon <cmd>    Manage background daemon (start|stop|status)")
 	fmt.Println()
 	fmt.Println("Flags:")
 	fmt.Println("  --port <path>    Serial port (auto-detect if omitted)")
-	fmt.Println("  --target <name>  Build target: posix (default), esp-idf")
+	fmt.Println("  --target <name>  Board target (for new/build)")
 	fmt.Println("  --serial         Force direct serial (skip daemon)")
-	fmt.Println("  --daemon         Force daemon routing (fail if not running)")
+	fmt.Println("  --daemon         Force daemon routing")
 }

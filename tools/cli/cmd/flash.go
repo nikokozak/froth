@@ -11,7 +11,7 @@ import (
 )
 
 func runFlash() error {
-	root, err := findProjectRoot()
+	root, err := findKernelRoot()
 	if err != nil {
 		return err
 	}
