@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
-import { execFile } from "child_process";
+import { execFile, spawn } from "child_process";
 import { promisify } from "util";
 import { DaemonSupervisor } from "./daemon-supervisor";
 import {
@@ -255,25 +255,53 @@ class FrothController {
       return;
     }
 
-    const text = editor.document.getText();
-    if (text.trim().length === 0) {
+    const document = editor.document;
+    if (document.uri.scheme !== "file") {
+      vscode.window.showWarningMessage(
+        "Save the file to disk before sending it to Froth.",
+      );
       return;
     }
 
+    if (document.isDirty) {
+      const saved = await document.save();
+      if (!saved) {
+        vscode.window.showErrorMessage("Save failed. File was not sent.");
+        return;
+      }
+    }
+
+    const cliPath = await this.getCliPath();
+    if (!cliPath) {
+      return;
+    }
+
+    const filePath = document.uri.fsPath;
+    this.output.show(true);
+    this.output.appendLine(`[froth] send ${filePath}`);
     this.setState("running");
-    this.output.appendLine("[froth] reset");
 
+    let exitCode: number | null = null;
     try {
-      await this.client!.reset();
+      exitCode = await this.runCliSend(
+        cliPath,
+        filePath,
+        this.workspaceCwdForUri(document.uri),
+      );
     } catch (err: unknown) {
-      this.setState(this.deriveIdleState());
       const msg = err instanceof Error ? err.message : String(err);
-      vscode.window.showErrorMessage(`Reset failed: ${msg}`);
+      vscode.window.showErrorMessage(`froth send failed: ${msg}`);
       return;
+    } finally {
+      this.setState("idle");
+      await this.refreshDeviceInfo();
     }
 
-    this.output.appendLine(`[froth] evaluating ${editor.document.fileName}`);
-    this.evalAndLog(text).then(() => this.refreshDeviceInfo());
+    if (exitCode !== 0) {
+      vscode.window.showErrorMessage(
+        `froth send failed with exit code ${exitCode}. See Froth Console for details.`,
+      );
+    }
   }
 
   async interrupt(): Promise<void> {
@@ -410,6 +438,14 @@ class FrothController {
     }
 
     return process.cwd();
+  }
+
+  private workspaceCwdForUri(uri: vscode.Uri): string {
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    if (folder) {
+      return folder.uri.fsPath;
+    }
+    return this.workspaceCwd();
   }
 
   private requireIdle(): boolean {
@@ -642,11 +678,17 @@ class FrothController {
       .getConfiguration("froth")
       .get<string>("cliPath");
     if (configuredPath && configuredPath.trim().length > 0) {
-      const resolved = this.resolveCliCandidate(configuredPath.trim());
+      const candidate = configuredPath.trim();
+      const resolved = this.resolveCliCandidate(candidate);
       if (resolved) {
         this.cliPathCache = resolved;
         return resolved;
       }
+
+      vscode.window.showErrorMessage(
+        `Configured Froth CLI not found: ${candidate}. Install froth or update froth.cliPath.`,
+      );
+      return null;
     }
 
     for (const candidate of this.cliCandidates()) {
@@ -658,24 +700,13 @@ class FrothController {
     }
 
     vscode.window.showErrorMessage(
-      "Froth CLI not found. Set froth.cliPath or install/build froth-cli.",
+      "Froth CLI not found. Install `froth` and ensure it is on PATH, or set froth.cliPath.",
     );
     return null;
   }
 
   private cliCandidates(): string[] {
-    const candidates = [
-      // Workspace binaries first — during development, always use the
-      // freshly built CLI, not an older installed version on PATH.
-      path.join(this.workspaceCwd(), "tools", "cli", "froth-cli"),
-      path.join(this.workspaceCwd(), "tools", "cli", "cli"),
-      "froth",
-      "froth-cli",
-      "/opt/homebrew/bin/froth",
-      "/usr/local/bin/froth",
-    ];
-
-    return candidates;
+    return ["froth"];
   }
 
   private resolveCliCandidate(candidate: string): string | null {
@@ -707,6 +738,47 @@ class FrothController {
     return { ...status, target };
   }
 
+  private async runCliSend(
+    cliPath: string,
+    filePath: string,
+    cwd: string,
+  ): Promise<number> {
+    const cliOutput = new PrefixedOutputWriter(this.output, "[froth-cli]");
+
+    return new Promise<number>((resolve, reject) => {
+      const child = spawn(cliPath, ["--daemon", "send", filePath], { cwd });
+
+      child.stdout.on("data", (chunk: Buffer | string) => {
+        cliOutput.write(chunk.toString());
+      });
+      child.stderr.on("data", (chunk: Buffer | string) => {
+        cliOutput.write(chunk.toString());
+      });
+
+      child.on("error", (err: Error & { code?: string }) => {
+        cliOutput.flush();
+        if (err.code === "ENOENT") {
+          reject(
+            new Error(
+              "Froth CLI not found. Install `froth` and ensure it is on PATH, or set froth.cliPath.",
+            ),
+          );
+          return;
+        }
+        reject(err);
+      });
+
+      child.on("close", (code, signal) => {
+        cliOutput.flush();
+        if (signal) {
+          reject(new Error(`froth send terminated by signal ${signal}`));
+          return;
+        }
+        resolve(code ?? 1);
+      });
+    });
+  }
+
   private disposeClient(): void {
     if (this.client) {
       this.client.dispose();
@@ -718,6 +790,34 @@ class FrothController {
     for (const listener of this.stateListeners) {
       listener();
     }
+  }
+}
+
+class PrefixedOutputWriter {
+  private pending = "";
+
+  constructor(
+    private readonly output: vscode.OutputChannel,
+    private readonly prefix: string,
+  ) {}
+
+  write(text: string): void {
+    const normalized = text.replace(/\r\n?/g, "\n");
+    const parts = normalized.split("\n");
+    parts[0] = this.pending + parts[0];
+    this.pending = parts.pop() ?? "";
+
+    for (const line of parts) {
+      this.output.appendLine(`${this.prefix} ${line}`);
+    }
+  }
+
+  flush(): void {
+    if (this.pending.length === 0) {
+      return;
+    }
+    this.output.appendLine(`${this.prefix} ${this.pending}`);
+    this.pending = "";
   }
 }
 
