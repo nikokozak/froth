@@ -109,7 +109,7 @@ void froth_boot(const froth_ffi_entry_t *board_bindings) {
     }
 #endif
 
-    froth_evaluate_input("[ 'autorun call ] catch drop", &froth_vm);
+    froth_evaluate_input("[ 'autorun call ] catch drop drop", &froth_vm);
   } else {
     emit_string("boot: Safe Boot, skipped restore and autorun.");
   }

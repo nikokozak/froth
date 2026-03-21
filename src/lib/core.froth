@@ -54,6 +54,12 @@
 \ Example: 1 [ 10 ] [ 20 ] if => 10
 : if ( flag t f -- result )   choose call ;
 
+\ Execute a quotation and keep only the success flag.
+\ Drops the error code returned by catch.
+\ ( q -- ... flag )
+\ Example: [ 123 ] try => 123 -1
+: try ( q -- ... flag )   catch swap drop ;
+
 \ ===== Combinators ========================================
 \ These are the core tools for applying quotations to
 \ values. They replace most uses of manual dup/swap/rot

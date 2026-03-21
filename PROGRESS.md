@@ -149,6 +149,7 @@
 - Manifest-aware `froth doctor` (Mar 21): checks entry file, dependencies, board directory, target SDK. Every failure has a remediation command.
 - `froth build --clean` (Mar 21): deletes `.froth-build/` or `build64/` before building.
 - Test battery (Mar 21): ~90 tests across all layers. Shell-based kernel tests (transient strings, persistence, reset, error handling, FFI). Go CLI unit tests (80 tests: new, build, send, doctor, connect, SDK). Go integration tests (new+build+run, multi-file deps, connect --local). Top-level Makefile: `make test/test-kernel/test-cli/test-integration/build`.
+- ADR-045 catch truth convention (Mar 21): `catch` now returns `( q -- ... ecode flag )` with Froth truth semantics (`0 -1` on success, `e 0` on failure). Added stdlib `try`, updated boot/CLI autorun cleanup to `catch drop drop`, and mirrored the change into the vendored SDK kernel.
 - ADRs: 043 (transient string buffer), 044 (project system, include resolution, CLI architecture)
 
 ## In Progress
@@ -171,24 +172,23 @@ All CLI, editor, library, and project system work is done and tested:
 - ~~Test battery (~90 tests across all layers)~~ done
 
 ### Kernel hardening (POSIX, no hardware)
-1. `catch` truth convention ADR + kernel fix
-2. `number>string` — first runtime string constructor
-3. `s.concat` — dynamic string building
-4. Blob pool — large string storage for HTTP bodies/HTML
-5. `froth_invoke` FFI callback API — enables HTTP server, timer callbacks
+1. `number>string` — first runtime string constructor
+2. `s.concat` — dynamic string building
+3. Blob pool — large string storage for HTTP bodies/HTML
+4. `froth_invoke` FFI callback API — enables HTTP server, timer callbacks
 
 ### Hardware validation + new bindings (bench time)
-6. LEDC/PWM, I2C, user programs — smoke tests on real ESP32
-7. UART bindings, `millis`, ADC — new FFI words
-8. CLI + extension end-to-end with real device
-9. Flash 15 boards, workshop flow
+5. LEDC/PWM, I2C, user programs — smoke tests on real ESP32
+6. UART bindings, `millis`, ADC — new FFI words
+7. CLI + extension end-to-end with real device
+8. Flash 15 boards, workshop flow
 
 ### Post-validation thesis push (through Apr 20)
-10. WiFi bindings + `http.get` + HTTP server + `http.get-stream`
-11. RP2040 platform port
-12. One ported library
-13. Thesis demo project (WiFi + sensors + persistence + library)
-14. Getting started guide / README
+9. WiFi bindings + `http.get` + HTTP server + `http.get-stream`
+10. RP2040 platform port
+11. One ported library
+12. Thesis demo project (WiFi + sensors + persistence + library)
+13. Getting started guide / README
 
 ## Open Questions
 

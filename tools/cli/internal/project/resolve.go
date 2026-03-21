@@ -70,7 +70,7 @@ func doResolve(manifest *Manifest, entryPath string, projectRoot string) (*Resol
 // AppendAutorun adds the autorun invocation to resolved source.
 // Called by `froth send` but NOT by `froth build` (boot handles autorun).
 func AppendAutorun(source string) string {
-	return source + "\n[ 'autorun call ] catch drop\n"
+	return source + "\n[ 'autorun call ] catch drop drop\n"
 }
 
 type resolver struct {

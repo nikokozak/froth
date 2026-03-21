@@ -66,7 +66,7 @@ dep = { path = "lib/dep.froth" }
 	if !(depIndex < helperIndex && helperIndex < mainIndex) {
 		t.Fatalf("marker order wrong:\n%s", resolved)
 	}
-	if strings.Contains(resolved, "[ 'autorun call ] catch drop") {
+	if strings.Contains(resolved, "[ 'autorun call ] catch drop drop") {
 		t.Fatalf("resolved source unexpectedly contains autorun invocation:\n%s", resolved)
 	}
 }

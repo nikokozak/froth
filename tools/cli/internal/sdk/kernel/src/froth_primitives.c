@@ -626,7 +626,7 @@ froth_error_t froth_prim_throw(froth_vm_t *froth_vm) {
 };
 
 froth_error_t froth_prim_catch(froth_vm_t *froth_vm) {
-  froth_cell_t body_cell, thrown_cell, return_cell;
+  froth_cell_t body_cell, ecode_cell, flag_cell;
   froth_cell_u_t ds_depth, rs_depth, cs_depth;
 
   FROTH_TRY(froth_stack_pop(&froth_vm->ds, &body_cell));
@@ -648,13 +648,17 @@ froth_error_t froth_prim_catch(froth_vm_t *froth_vm) {
      * For other runtime errors, the C error code IS the user-visible code. */
     froth_cell_t error_code =
         (err == FROTH_ERROR_THROW) ? froth_vm->thrown : (froth_cell_t)err;
-    FROTH_TRY(froth_make_cell(error_code, FROTH_NUMBER, &thrown_cell));
-    FROTH_TRY(froth_stack_push(&froth_vm->ds, thrown_cell));
+    FROTH_TRY(froth_make_cell(error_code, FROTH_NUMBER, &ecode_cell));
+    FROTH_TRY(froth_make_cell(FROTH_FALSE, FROTH_NUMBER, &flag_cell));
+    FROTH_TRY(froth_stack_push(&froth_vm->ds, ecode_cell));
+    FROTH_TRY(froth_stack_push(&froth_vm->ds, flag_cell));
     return FROTH_OK;
   }
 
-  FROTH_TRY(froth_make_cell(0, FROTH_NUMBER, &return_cell));
-  FROTH_TRY(froth_stack_push(&froth_vm->ds, return_cell));
+  FROTH_TRY(froth_make_cell(FROTH_OK, FROTH_NUMBER, &ecode_cell));
+  FROTH_TRY(froth_make_cell(FROTH_TRUE, FROTH_NUMBER, &flag_cell));
+  FROTH_TRY(froth_stack_push(&froth_vm->ds, ecode_cell));
+  FROTH_TRY(froth_stack_push(&froth_vm->ds, flag_cell));
   return FROTH_OK;
 }
 /*------------- END OF CORE PRIMITIVES -------------*/
@@ -1150,7 +1154,7 @@ const froth_ffi_entry_t froth_primitives[] = {
      "Loop while cond yields true"},
 
     /* Error handling */
-    {"catch", froth_prim_catch, "( quote -- code )",
+    {"catch", froth_prim_catch, "( q -- ... ecode flag )",
      "Execute quote, catch errors"},
     {"throw", froth_prim_throw, "( code -- )", "Throw error code"},
 

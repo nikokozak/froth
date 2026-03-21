@@ -6,12 +6,12 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 FROTH_RUN_DIR=$(new_test_workspace)
 run_froth '[ 123 ] catch'
-assert_contains '[123 0]'
+assert_contains '[123 0 -1]'
 
 FROTH_RUN_DIR=$(new_test_workspace)
 run_froth 'dangerous-reset
 [ 1 drop drop ] catch'
-assert_contains '[2]'
+assert_contains '[2 0]'
 
 FROTH_RUN_DIR=$(new_test_workspace)
 run_froth '42 throw'

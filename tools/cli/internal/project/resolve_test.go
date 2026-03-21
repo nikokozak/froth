@@ -67,7 +67,7 @@ func TestResolveSimple(t *testing.T) {
 	}
 	// Autorun is the caller's job (froth send), not the resolver's
 	autorunSource := AppendAutorun(result.Source)
-	if !strings.Contains(autorunSource, "[ 'autorun call ] catch drop") {
+	if !strings.Contains(autorunSource, "[ 'autorun call ] catch drop drop") {
 		t.Error("AppendAutorun should add autorun invocation")
 	}
 }

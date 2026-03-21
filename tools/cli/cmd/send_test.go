@@ -25,7 +25,7 @@ func TestRunSendRawSourceModePassesSourceDirectly(t *testing.T) {
 	}
 
 	got := <-sourceCh
-	if got != "1 2 +\n[ 'autorun call ] catch drop\n" {
+	if got != "1 2 +\n[ 'autorun call ] catch drop drop\n" {
 		t.Fatalf("sent source = %q, want raw source plus autorun", got)
 	}
 	if strings.Contains(got, `\ --- `) {
@@ -64,7 +64,7 @@ dep = { path = "lib/dep.froth" }
 	if !strings.Contains(got, `\ --- lib/dep.froth ---`) {
 		t.Fatalf("sent source = %q, want resolved dependency", got)
 	}
-	if !strings.HasSuffix(got, "\n[ 'autorun call ] catch drop\n") {
+	if !strings.HasSuffix(got, "\n[ 'autorun call ] catch drop drop\n") {
 		t.Fatalf("sent source = %q, want autorun appended", got)
 	}
 }
