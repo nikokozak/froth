@@ -959,6 +959,89 @@ froth_error_t froth_prim_bstring_byteat(froth_vm_t *vm) {
   return froth_stack_push(&vm->ds, result);
 }
 
+/* Shared number-to-string conversion (ADR-046).
+ * Formats payload into buf (right-to-left), returns length of result.
+ * Result starts at buf + (buf_size - returned_length).
+ *
+ * Max output: binary = "0b" + (CELL_BITS-3) digits = CELL_BITS-1 chars.
+ * Decimal = "-" + ceil(log10(2^(CELL_BITS-3))) chars (always < CELL_BITS).
+ * So CELL_BITS is a safe buffer size for all radixes. */
+#define N2S_BUF_SIZE FROTH_CELL_SIZE_BITS
+static const char hex_digits[] = "0123456789ABCDEF";
+
+static int number_to_string(froth_cell_t payload, int radix,
+                            const char *prefix, bool is_signed,
+                            char *buf, int buf_size) {
+  int pos = buf_size; /* cursor moves right-to-left */
+  bool negative = false;
+  froth_cell_u_t val;
+
+  if (is_signed && payload < 0) {
+    negative = true;
+    val = (froth_cell_u_t)(-(froth_cell_u_t)payload);
+  } else {
+    /* For unsigned modes, mask to payload width to get raw bit pattern */
+    val = (froth_cell_u_t)payload &
+          (((froth_cell_u_t)1 << (FROTH_CELL_SIZE_BITS - 3)) - 1);
+  }
+
+  /* Emit digits (at least one, so zero produces "0") */
+  do {
+    buf[--pos] = hex_digits[val % radix];
+    val /= radix;
+  } while (val > 0);
+
+  /* Prepend prefix (e.g. "0x", "0b") right-to-left */
+  for (int i = (int)strlen(prefix) - 1; i >= 0; i--) {
+    buf[--pos] = prefix[i];
+  }
+
+  if (negative) {
+    buf[--pos] = '-';
+  }
+
+  return buf_size - pos;
+}
+
+froth_error_t froth_prim_bstring_num_to_string(froth_vm_t *vm) {
+  froth_cell_t cell;
+  FROTH_TRY(froth_stack_pop(&vm->ds, &cell));
+  if (!FROTH_CELL_IS_NUMBER(cell)) {
+    return FROTH_ERROR_TYPE_MISMATCH;
+  }
+  char buf[N2S_BUF_SIZE];
+  froth_cell_t payload = FROTH_CELL_STRIP_TAG(cell);
+  int len = number_to_string(payload, 10, "", true, buf, sizeof(buf));
+  return froth_push_bstring(vm, (const uint8_t *)(buf + sizeof(buf) - len),
+                            (froth_cell_t)len);
+}
+
+froth_error_t froth_prim_bstring_num_to_hexs(froth_vm_t *vm) {
+  froth_cell_t cell;
+  FROTH_TRY(froth_stack_pop(&vm->ds, &cell));
+  if (!FROTH_CELL_IS_NUMBER(cell)) {
+    return FROTH_ERROR_TYPE_MISMATCH;
+  }
+  char buf[N2S_BUF_SIZE];
+  froth_cell_t payload = FROTH_CELL_STRIP_TAG(cell);
+  int len = number_to_string(payload, 16, "0x", false, buf, sizeof(buf));
+  return froth_push_bstring(vm, (const uint8_t *)(buf + sizeof(buf) - len),
+                            (froth_cell_t)len);
+}
+
+froth_error_t froth_prim_bstring_num_to_bins(froth_vm_t *vm) {
+  froth_cell_t cell;
+  FROTH_TRY(froth_stack_pop(&vm->ds, &cell));
+  if (!FROTH_CELL_IS_NUMBER(cell)) {
+    return FROTH_ERROR_TYPE_MISMATCH;
+  }
+  char buf[N2S_BUF_SIZE];
+  froth_cell_t payload = FROTH_CELL_STRIP_TAG(cell);
+  int len = number_to_string(payload, 2, "0b", false, buf, sizeof(buf));
+  return froth_push_bstring(vm, (const uint8_t *)(buf + sizeof(buf) - len),
+                            (froth_cell_t)len);
+}
+
 froth_error_t froth_prim_quote_len(froth_vm_t *vm) {
   froth_cell_t quote_cell;
   FROTH_TRY(froth_stack_pop(&vm->ds, &quote_cell));
@@ -1165,6 +1248,12 @@ const froth_ffi_entry_t froth_primitives[] = {
     {"s.len", froth_prim_bstring_length, "( s -- n )", "String byte length"},
     {"s@", froth_prim_bstring_byteat, "( s i -- byte )", "Fetch byte at index"},
     {"s.=", froth_prim_bstring_isequal, "( s1 s2 -- flag )", "String equality"},
+    {"n>s", froth_prim_bstring_num_to_string, "( n -- s )",
+     "Number to decimal string"},
+    {"n>hexs", froth_prim_bstring_num_to_hexs, "( n -- s )",
+     "Number to hex string (unsigned, 0x prefix)"},
+    {"n>bins", froth_prim_bstring_num_to_bins, "( n -- s )",
+     "Number to binary string (unsigned, 0b prefix)"},
 
     /* Quotation introspection */
     {"q.len", froth_prim_quote_len, "( q -- n )", "Quotation body length"},
