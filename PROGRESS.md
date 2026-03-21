@@ -1,6 +1,6 @@
 # Froth Implementation Progress
 
-*Last updated: 2026-03-19*
+*Last updated: 2026-03-20*
 
 ## Current Status
 
@@ -117,6 +117,7 @@
 - ESP32 binary-safe UART: VFS line-ending conversion disabled (both RX and TX set to `ESP_LINE_ENDINGS_LF` = no conversion). CR → LF and CRLF coalescing handled at the mux/REPL level in direct mode only. Frame mode gets raw bytes. Fixes COBS frame corruption from 0x0D → 0x0A translation.
 - ESP32 `platform_key` 0x03 fix: sets interrupt flag as side effect but returns the byte normally. Mux clears the false interrupt in frame mode (0x03 is COBS data there). Direct mode and blocking REPL consume 0x03 as interrupt. `key` prim returns the byte, executor safe-point check fires interrupt. All three line endings (CR, LF, CRLF) tested and correct.
 - VS Code extension v0.0.2 (`tools/vscode/`): sidebar with device info (board, heap, slots, cell bits), action buttons (Interrupt, Reset, Save, Wipe), live heap/slot metrics via `info()` RPC (refreshed after each eval/reset). `sendFile` = reset + eval whole file (ADR-037). `Cmd+Shift+Enter` for Send File. `daemon-client.ts` exposes `reset()`, `interrupt()`, `info()`. Console output via OutputChannel.
+- VS Code syntax highlighting (`tools/vscode/syntaxes/froth.tmLanguage.json`, Mar 20): TextMate grammar for `.froth` files plus `language-configuration.json`. Covers nested paren comments, `\\ ` line comments, strings with Froth escapes, decimal/hex/binary numbers, `: ;` definition sugar, tick syntax, built-in primitives, and bracket/comment editor behavior.
 - `platform_emit_raw`: new platform API function for COBS frame output (no line-ending conversion). `platform_emit` on ESP32 prepends `\r` before `\n` for terminal output. Fixes REPL staircase caused by disabling VFS TX conversion.
 - Daemon rewrite (Mar 18): removed `frameCh` channel (dropped frames), removed `rpcTimeout` (eval can run forever). Per-request registered waiter (`registerWaiter`/`waitResponse`): serial reader delivers decoded frames directly to the waiting goroutine, no buffering, no drain, no race. `writeMu` serializes all serial writes (frames and raw interrupt). Disconnect signals blocked waiters via `disconnectCh`. Safety timeout (10s) for info/reset; no timeout for eval. Non-blocking notification channels (capacity 64) for console broadcast.
 - Chunked eval: auto-splits source >253 bytes on top-level form boundaries (depth-aware, tracks `[ ] : ;` nesting). Same logic in daemon and direct session paths.
@@ -132,8 +133,14 @@
 - User programs (Mar 19): `FROTH_USER_PROGRAM` CMake variable embeds a `.froth` file at build time. Evaluated on cold boot when no snapshot exists. Snapshot restore takes priority. Safe boot skips both. `reset` returns to stdlib baseline. Proven: cold boot → user program runs, snapshot → user program skipped, wipe + reboot → user program runs again.
 - FFI metadata table limit bumped to 8 (Mar 19), error on overflow (`FROTH_ERROR_FFI_TABLE_FULL`, code 21).
 - LEDC/PWM raw FFI layer (Mar 19): 12 words mirroring ESP-IDF LEDC API. `ledc.timer-config`, `ledc.channel-config`, `ledc.set-duty`, `ledc.update-duty`, `ledc.get-duty`, `ledc.set-freq`, `ledc.get-freq`, `ledc.stop`, `ledc.fade-install`, `ledc.fade-with-time`, `ledc.fade-start`, `ledc.fade-uninstall`. Convenience layer (Froth) deferred. Needs ESP32 hardware test.
-- Transient string buffer (ADR-043, Mar 20): runtime-produced strings are transient by default, allocated in a circular scratch ring (1024 bytes) with descriptor table (32 entries). Permanent strings stay as heap offsets (ADR-023). All string consumers go through `froth_bstring_resolve`. `def` auto-promotes transient to permanent. `s.keep` escape hatch. Snapshot writer rejects transient strings. REPL display renders `<str:stale>` for expired transients. FFI API: `froth_push_bstring` / `froth_pop_bstring`. Error codes: `FROTH_ERROR_TRANSIENT_EXPIRED` (22), `FROTH_ERROR_TRANSIENT_FULL` (23).
-- ADRs: 043 (transient string buffer and string storage abstraction)
+- Transient string buffer (ADR-043, Mar 20): runtime-produced strings are transient by default, allocated in a circular scratch ring (1024 bytes) with descriptor table (32 entries). Permanent strings stay as heap offsets (ADR-023). All string consumers go through `froth_bstring_resolve`. `def` auto-promotes transient to permanent. `s.keep` escape hatch. Snapshot writer rejects transient strings. REPL display renders `<str:stale>` for expired transients. FFI API: `froth_push_bstring` / `froth_pop_bstring`. Error codes: `FROTH_ERROR_TRANSIENT_EXPIRED` (22), `FROTH_ERROR_TRANSIENT_FULL` (23). `dangerous-reset` clears tbuf. Compile-time validation: TDESC_MAX <= 32, CELL_SIZE >= 16, TBUF_SIZE <= 65535.
+- I2C raw FFI layer (Mar 20): 10 words with bus (2) and device (8) handle tables. `i2c.init`, `i2c.add-device`, `i2c.rm-device`, `i2c.del-bus`, `i2c.probe`, `i2c.write-byte`, `i2c.read-byte`, `i2c.write-reg`, `i2c.read-reg`, `i2c.read-reg16`. Bounds checking throughout. Needs ESP32 hardware test.
+- LEDC/PWM Froth convenience layer (Mar 20): `ledc.setup`, `ledc.duty`, `ledc.freq`, `ledc.off` in `boards/esp32-devkit-v1/lib/board.froth`. Board lib auto-embed infrastructure: CMake detects `boards/$BOARD/lib/board.froth`, embeds and evaluates at boot after stdlib.
+- VS Code syntax highlighting (Mar 20): TextMate grammar for `.froth` files plus `language-configuration.json`.
+- Project system (ADR-044, Mar 20-21): `froth.toml` manifest, host-side `\ #use` include resolution (DFS postorder, dedup, cycle detection, path canonicalization, case-sensitivity check, context-aware scanner, library discipline checker). `froth new` scaffolding. `froth build` manifest-driven with `.froth-build/resolved.froth`. `froth send` resolves includes, appends autorun. 42 tests. 4 review rounds (~30 bugs found and fixed).
+- `dangerous-reset` fix (Mar 21): clears `vm->interrupted` (prevents stale interrupt poisoning post-reset eval).
+- Chunk scanner fix (Mar 21): backslash line-comment only when standalone token (matches C reader).
+- ADRs: 043 (transient string buffer), 044 (project system, include resolution, CLI architecture)
 
 ## In Progress
 
@@ -145,26 +152,27 @@
 
 ## Next Up
 
-### Workshop (Mar 20–23, workshop Mar 24)
-1. ~~User programs: `FROTH_USER_PROGRAM` CMake embed + cold-boot eval (ADR-037)~~ done
-2. ~~LEDC/PWM raw FFI bindings~~ done (convenience layer + hardware test pending)
-3. I2C bindings: `i2c.init`, `i2c.write-byte`, `i2c.read-byte` (needs string bridge — done)
-4. ~~Fix 4-table FFI metadata limit~~ done
-5. ~~String bridge ADR + `froth_pop_bstring` / `froth_push_bstring` public API~~ done (ADR-043, full transient string system)
-6. LEDC/PWM Froth convenience layer (`ledc.init`, `ledc.setup`, `ledc.duty`, `ledc.freq`)
-7. Flash 15 boards, test workshop flow
+### Workshop prep (workshop moved to first week of April)
+1. ~~User programs~~ done
+2. ~~LEDC/PWM raw FFI~~ done. ~~Convenience layer~~ done.
+3. ~~I2C raw FFI~~ done
+4. ~~4-table FFI limit~~ done
+5. ~~String bridge (ADR-043)~~ done
+6. ~~VS Code syntax highlighting~~ done
+7. ~~Project system (ADR-044): manifest + resolver + CLI wiring~~ done
+8. ESP32 hardware test (LEDC, I2C on real hardware)
+9. Flash 15 boards, test workshop flow
 
-### Post-workshop thesis push (Mar 27 — Apr 20)
-7. WiFi bindings (uses string bridge): `wifi.connect`, `wifi.status`, `wifi.ip`
-8. HTTP client or server (phone-controllable demo)
-9. Library/include system: ADR + host-side include resolution
-10. VS Code syntax highlighting (TextMate grammar for `.froth`)
-11. `catch` truth convention ADR (resolve before public release)
-12. RP2040 platform port (proves multi-target portability)
-13. One ported library (stepper, servo, or sensor driver)
-14. Thesis demo project
-15. Getting started guide
-16. Shared host request engine unification deferred: daemon and direct CLI still share transport, chunking, and probe code, but request execution is not fully collapsed into one host core yet. Defer until after manual editor validation so the refactor starts from a known-good baseline.
+### Thesis push (through Apr 20)
+10. SDK embedding in CLI binary (Go `embed`, versioned cache at `$FROTH_HOME/sdk/`)
+11. `froth connect --local` (build POSIX from SDK, exec binary)
+12. WiFi bindings (uses string bridge): `wifi.connect`, `wifi.status`, `wifi.ip`
+13. HTTP client or server (phone-controllable demo)
+14. `catch` truth convention ADR (resolve before public release)
+15. RP2040 platform port (proves multi-target portability)
+16. One ported library (stepper, servo, or sensor driver)
+17. Thesis demo project
+18. Getting started guide / README
 
 ## Open Questions
 
