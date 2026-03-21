@@ -296,11 +296,12 @@
 
 ### Phase 3a-kernel: Kernel Hardening (Mar 21–22, POSIX, no hardware)
 
-- [ ] `catch` truth convention ADR + kernel fix (0=success conflicts with Froth truth)
-- [ ] `number>string` / `.>s` — first runtime string constructor, exercises transient system
-- [ ] `s.concat` — dynamic string building, needed for WiFi/HTTP demos
-- [ ] Blob pool — `FROTH_TDESC_BLOB_POOL` kind, separate byte arena for large strings (HTTP bodies, HTML templates). Configurable `FROTH_BLOB_POOL_SIZE`.
-- [ ] `froth_invoke` FFI callback API — public wrapper around `froth_execute_quote`. Enables HTTP server handlers, timer callbacks, event-driven patterns.
+- [x] `catch` truth convention ADR + kernel fix (ADR-045, landed Mar 21)
+- [x] `n>s`, `n>hexs`, `n>bins` — number-to-string primitives (ADR-046, landed Mar 21)
+- [x] `s.concat` — dynamic string building (landed Mar 21)
+- [x] Unified `FROTH_STRING_MAX_LEN` (ADR-047, landed Mar 21) — replaces `FROTH_BSTRING_LEN_MAX`, default 256, CMake-configurable, enforced at all creation points
+- [ ] Blob pool — deferred to post-workshop (WiFi/HTTP phase)
+- [ ] `froth_invoke` FFI callback API — deferred to post-workshop (WiFi/HTTP phase)
 
 ### Phase 3a-hw: Hardware Validation + New Bindings (bench time, before workshop)
 

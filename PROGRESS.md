@@ -4,7 +4,7 @@
 
 ## Current Status
 
-**Phase**: Thesis push (Phase 3). Workshop first week of April. Thesis deadline Apr 20. CLI/editor/library system complete and tested (~90 tests). Immediate focus: ESP32 hardware validation, then WiFi, RP2040, thesis demo.
+**Phase**: Thesis push (Phase 3). Workshop first week of April. Thesis deadline Apr 20. CLI/editor/library system complete and tested (~90 tests). Kernel string hardening done (`n>s`, `s.concat`, unified string limit). Immediate focus: ESP32 hardware validation, then WiFi, RP2040, thesis demo.
 **Blocking issues**: `screen` unusable on macOS (PTY error, not a Froth issue).
 **Known limitations**: Console notifications remain lossy under sustained output, but the daemon now emits an explicit dropped-output notice instead of failing silently. Async eval model deferred (eval is still blocking RPC; long-running programs work but no start/accept acknowledgment).
 
@@ -97,7 +97,10 @@
 - `RESET_REQ`/`RESET_RES` protocol messages (ADR-037): message types 0x09/0x0A. Device-side `handle_reset` in `froth_link.c` calls `froth_prim_dangerous_reset`, maps `FROTH_ERROR_RESET` sentinel to status 0, returns INFO-shaped payload (heap, slots, version). Go CLI: `froth reset` command (serial + daemon paths), `session.Reset()`, daemon `deviceReset()` RPC. REPL buffer intentionally untouched (link and REPL own separate input streams). End-to-end proven via socat PTY pair.
 - CS trampoline executor (ADR-040): `froth_execute_quote` rewritten as iterative trampoline loop. CALL tags in quotation bodies resolved inline (push CS frame for callee, zero C stack cost). `froth_cs_frame_t` holds `{quote_offset, ip}`, purpose-built `froth_cs_t` replaces generic `froth_stack_t` for CS. Re-entrant via `cs_base` partitioning (prims like `while`, `catch`, `call` invoke it from C, each gets its own CS partition). Two depth limits: `FROTH_CS_CAPACITY` (256, total Froth nesting) and `FROTH_REENTRY_DEPTH_MAX` (64, C stack safety for prim-driven re-entries). `trampoline_depth` counter on VM tracks re-entries. `call_depth` field removed. RS balance check at trampoline exit only. `froth_evaluator_handle_identifier` uses `froth_slot_find_name` directly; undefined names error without side effects. Forward references inside quotations, tick-identifiers, and colon sugar still create slots via `resolve_or_create_slot`. Fixes ghost slot bug where typos after `reset` left dangling heap pointers that poisoned subsequent `restore`.
 - ADR-042 extension UX and local target (Mar 18): extension rewritten per ADR-042. Actions moved to native VS Code surfaces (view/title, editor/title, status bar). TreeView shows metadata only. `viewsWelcome` for first-run flow (Connect Device, Try Local, Run Doctor). Lazy daemon start via `froth daemon start --background`. Extension tracks ownership, stops daemon on deactivate if it started it. Local POSIX target: daemon `--local` flag spawns `./build64/Froth` via stdin/stdout pipes with `localTransport` (same COBS protocol). Status RPC reports `target: serial|local` and `reconnecting` state. Red interrupt status bar item during running state. Send Selection and Send File in editor title bar for `.froth` files.
-- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards), 032 (mark/release heap watermark), 033 (link transport v1: COBS binary framing), 034 (console multiplexer architecture), 035 (host daemon architecture), 036 (protocol sideband probes), 037 (host-centric deployment with overlay user program), 039 (host tooling UX and daemon lifecycle), 040 (CS trampoline executor), 041 (strict bare identifiers), 042 (extension UX, daemon lifecycle, local target)
+- `n>s`, `n>hexs`, `n>bins`: number-to-string primitives (ADR-046). Shared conversion routine, right-to-left divide loop, cell-width-safe buffer (`N2S_BUF_SIZE`). Decimal is signed, hex/binary show unsigned raw bit pattern with prefix. All output goes through transient buffer via `froth_push_bstring`.
+- `s.concat`: string concatenation primitive. Resolves both inputs into local scratch buffer (aliasing-safe), checks unified length limit, pushes result as transient.
+- Unified `FROTH_STRING_MAX_LEN` (ADR-047): single CMake-configurable max string length (default 256) enforced at all creation points (reader, `froth_push_bstring`, `s.concat`). Replaces `FROTH_BSTRING_LEN_MAX`. Static assert: `FROTH_STRING_MAX_LEN <= FROTH_TBUF_SIZE`.
+- ADRs: 001-014 (prior), 015 (catch/throw via C-return propagation), 016 (stable explicit error codes), 017 (def accepts any value), 018 (colon-semicolon sugar), 019 (FFI public C API), 020 (interrupt flag via signal handler), 021 (hex/binary literals), 022 (RS quotation balance check), 023 (String-Lite heap layout), 025 (multi-line input), 026 (snapshot persistence implementation), 027 (platform snapshot storage API), 028 (board and platform architecture), 029 (build targets and toolchain management), 030 (platform_check_interrupt + safe boot), 031 (hardening: error codes + guards), 032 (mark/release heap watermark), 033 (link transport v1: COBS binary framing), 034 (console multiplexer architecture), 035 (host daemon architecture), 036 (protocol sideband probes), 037 (host-centric deployment with overlay user program), 039 (host tooling UX and daemon lifecycle), 040 (CS trampoline executor), 041 (strict bare identifiers), 042 (extension UX, daemon lifecycle, local target), 043 (transient string buffer), 044 (project system), 045 (catch truth convention), 046 (number-to-string primitives), 047 (unified string length limit)
 - VS Code extension design: `docs/concepts/vscode-extension-design.md`. Two modes (live/project), form-level sync, subscription probes at safe points, thin TypeScript over daemon. Workshop skeleton: connect, send selection, console, status bar.
 - Host tooling roadmap: `docs/concepts/host-tooling-roadmap.md`. Phased plan with status tracking for AI agents.
 - Target tier model: 32-bit (full Froth), 16-bit (tethered), 8-bit (tethered). Documented in `docs/concepts/target-tiers-and-tethered-mode.md`.
@@ -171,11 +174,23 @@ All CLI, editor, library, and project system work is done and tested:
 - ~~Manifest-aware doctor, --clean flag~~ done
 - ~~Test battery (~90 tests across all layers)~~ done
 
-### Kernel hardening (POSIX, no hardware)
-1. `number>string` — first runtime string constructor
-2. `s.concat` — dynamic string building
-3. Blob pool — large string storage for HTTP bodies/HTML
-4. `froth_invoke` FFI callback API — enables HTTP server, timer callbacks
+### Kernel hardening (POSIX, no hardware) — PARTIAL
+- ~~`n>s`, `n>hexs`, `n>bins` — number-to-string primitives (ADR-046)~~ done
+- ~~`s.concat` — dynamic string building~~ done
+- ~~Unified `FROTH_STRING_MAX_LEN` (ADR-047) — replaces `FROTH_BSTRING_LEN_MAX`, default 256, CMake-configurable~~ done
+- Blob pool — deferred until WiFi/HTTP phase (post-workshop)
+- `froth_invoke` FFI callback API — deferred until WiFi/HTTP phase (post-workshop)
+
+### Hardware validation (next)
+Smoke tests on real ESP32 hardware, validating everything built so far:
+1. LEDC/PWM: LED fade, piezo tone, convenience words
+2. I2C: sensor read (temperature or accelerometer)
+3. UART bindings, `millis`, ADC
+4. User program cold boot on ESP32, snapshot priority, wipe cycle
+5. CLI `froth send` with includes → ESP32
+6. CLI `froth build` + `froth flash` with froth.toml project
+7. VS Code extension Send File → ESP32
+8. Flash 15 boards, test workshop flow
 
 ### Hardware validation + new bindings (bench time)
 5. LEDC/PWM, I2C, user programs — smoke tests on real ESP32
