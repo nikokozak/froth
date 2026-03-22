@@ -60,6 +60,27 @@ static bool input_fifo_ready(froth_console_t *console) {
   return console->input_count > 0;
 }
 
+static bool lease_expired(uint32_t deadline_ms) {
+  return deadline_ms != 0 &&
+         (platform_uptime_ms() - deadline_ms) < 0x80000000u;
+}
+
+static uint16_t next_seq(uint16_t seq) {
+  return (seq == 0xFFFFu) ? 1u : (uint16_t)(seq + 1u);
+}
+
+static void enter_direct_mode(froth_console_t *console) {
+  console->mode = FROTH_CONSOLE_DIRECT;
+  console->session_id = 0;
+  console->seq = 0;
+  console->active_seq = 0;
+  console->lease_deadline_ms = 0;
+  console->poll_in_frame = 0;
+  console->output_pos = 0;
+  input_fifo_reset(console);
+  froth_link_frame_reset();
+}
+
 /* Clear recognizer state. Safe to call anytime. */
 static void recognize_reset(froth_console_t *console) {
   memset(console->recognize_buf, 0, sizeof(console->recognize_buf));
@@ -212,6 +233,12 @@ froth_error_t froth_console_emit(uint8_t byte) {
   if (g_console.mode != FROTH_CONSOLE_LIVE)
     return platform_emit(byte);
 
+  if (g_console.output_pos >= FROTH_CONSOLE_OUTPUT_CAP) {
+    FROTH_TRY(froth_console_flush_output());
+    if (g_console.output_pos >= FROTH_CONSOLE_OUTPUT_CAP)
+      return FROTH_ERROR_LINK_OVERFLOW;
+  }
+
   g_console.output_buf[g_console.output_pos++] = byte;
 
   if (byte == '\n' || g_console.output_pos >= FROTH_CONSOLE_OUTPUT_CAP)
@@ -246,8 +273,7 @@ froth_error_t froth_console_key(froth_vm_t *vm, uint8_t *byte) {
       return FROTH_ERROR_PROGRAM_INTERRUPTED;
     }
 
-    if (g_console.lease_deadline_ms != 0 &&
-        (platform_uptime_ms() - g_console.lease_deadline_ms) < 0x80000000u) {
+    if (lease_expired(g_console.lease_deadline_ms)) {
       vm->interrupted = 1;
       return FROTH_ERROR_PROGRAM_INTERRUPTED;
     }
@@ -298,15 +324,25 @@ void froth_console_poll(froth_vm_t *vm) {
 
       switch (header.message_type) {
       case FROTH_LINK_KEEPALIVE:
+        if (header.seq != 0)
+          break;
         g_console.lease_deadline_ms =
             platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
         break;
 
       case FROTH_LINK_INTERRUPT_REQ:
+        if (header.seq != g_console.active_seq || g_console.active_seq == 0)
+          break;
+        g_console.lease_deadline_ms =
+            platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
         vm->interrupted = 1;
         break;
 
       case FROTH_LINK_INPUT_DATA:
+        if (header.seq != g_console.active_seq || g_console.active_seq == 0)
+          break;
+        g_console.lease_deadline_ms =
+            platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
         if (header.payload_length >= 2) {
           uint16_t count = (uint16_t)payload[0] | ((uint16_t)payload[1] << 8);
           if ((uint16_t)(2 + count) <= header.payload_length) {
@@ -330,8 +366,7 @@ void froth_console_poll(froth_vm_t *vm) {
     }
   }
 
-  if (g_console.lease_deadline_ms != 0 &&
-      (platform_uptime_ms() - g_console.lease_deadline_ms) < 0x80000000u) {
+  if (lease_expired(g_console.lease_deadline_ms)) {
     vm->interrupted = 1;
   }
 }
@@ -364,8 +399,21 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
   FROTH_TRY(emit_string(prompt_normal));
 
   while (1) {
-    if (g_console.recognize_active)
+    if (g_console.mode == FROTH_CONSOLE_DIRECT && g_console.recognize_active)
       recognize_check_timeout(&g_console);
+
+    if (g_console.mode == FROTH_CONSOLE_LIVE) {
+      if (lease_expired(g_console.lease_deadline_ms)) {
+        enter_direct_mode(&g_console);
+        in_frame = 0;
+        FROTH_TRY(emit_string(prompt_normal));
+        continue;
+      }
+      if (!platform_key_ready()) {
+        platform_delay_ms(1);
+        continue;
+      }
+    }
 
     err = platform_key(&byte);
     if (err != FROTH_OK)
@@ -373,22 +421,6 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
 
     /* Live mode: frame-only, no raw bytes. */
     if (g_console.mode == FROTH_CONSOLE_LIVE) {
-      /* Lease expired: host is gone, return to Direct. */
-      if ((platform_uptime_ms() - g_console.lease_deadline_ms) < 0x80000000u &&
-          g_console.lease_deadline_ms != 0) {
-        g_console.mode = FROTH_CONSOLE_DIRECT;
-        g_console.session_id = 0;
-        g_console.seq = 0;
-        g_console.active_seq = 0;
-        g_console.lease_deadline_ms = 0;
-        g_console.poll_in_frame = 0;
-        g_console.output_pos = 0;
-        input_fifo_reset(&g_console);
-        in_frame = 0;
-        froth_link_frame_reset();
-        emit_string(prompt_normal);
-        continue;
-      }
       if (byte == 0x00 && !in_frame) {
         froth_link_frame_reset();
         in_frame = 1;
@@ -407,32 +439,27 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
           froth_link_frame_reset();
           continue; // Drop it, should not happen.
         }
-        /* Refresh lease on any valid frame. */
-        g_console.lease_deadline_ms =
-            platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
-
         switch (header.message_type) {
         case FROTH_LINK_KEEPALIVE:
-          /* seq=0 for keepalive, don't validate against normal seq. */
+          if (header.seq != 0) {
+            froth_link_frame_reset();
+            continue;
+          }
+          g_console.lease_deadline_ms =
+              platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
           break;
         case FROTH_LINK_DETACH_REQ:
           if (header.seq != g_console.seq) {
             froth_link_frame_reset();
             continue;
           }
+          g_console.lease_deadline_ms =
+              platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
           froth_console_flush_output();
           froth_link_send_frame(header.session_id, FROTH_LINK_DETACH_RES,
                                 header.seq, NULL, 0);
           froth_link_frame_reset();
-
-          g_console.session_id = 0;
-          g_console.seq = 0;
-          g_console.active_seq = 0;
-          g_console.mode = FROTH_CONSOLE_DIRECT;
-          g_console.lease_deadline_ms = 0;
-          g_console.poll_in_frame = 0;
-          g_console.output_pos = 0;
-          input_fifo_reset(&g_console);
+          enter_direct_mode(&g_console);
           in_frame = 0;
 
           FROTH_TRY(emit_string(prompt_normal));
@@ -443,13 +470,16 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
             froth_link_frame_reset();
             continue;
           }
+          g_console.lease_deadline_ms =
+              platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
           if (header.message_type == FROTH_LINK_EVAL_REQ)
             g_console.active_seq = header.seq;
           err = froth_link_dispatch(vm, &header, payload);
           g_console.active_seq = 0;
-          /* Advance seq: 1..0xFFFF, wrapping back to 1 (0 is reserved). */
-          g_console.seq = (g_console.seq == 0xFFFF) ? 1 : g_console.seq + 1;
-          if (err != FROTH_OK) {
+          if (err == FROTH_OK) {
+            /* Advance seq: 1..0xFFFF, wrapping back to 1 (0 is reserved). */
+            g_console.seq = next_seq(g_console.seq);
+          } else {
             /* Handler failed (malformed payload, send error, etc).
              * Notify host so it doesn't hang waiting for a response. */
             uint8_t err_payload[3];
@@ -457,8 +487,10 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
             err_payload[1] = 0;
             err_payload[2] = 0; /* empty detail string (u16 len = 0) */
             froth_console_flush_output();
-            froth_link_send_frame(header.session_id, FROTH_LINK_ERROR,
-                                  header.seq, err_payload, 3);
+            err = froth_link_send_frame(header.session_id, FROTH_LINK_ERROR,
+                                        header.seq, err_payload, 3);
+            if (err == FROTH_OK)
+              g_console.seq = next_seq(g_console.seq);
           }
           break;
         }
