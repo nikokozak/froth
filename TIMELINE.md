@@ -1,6 +1,6 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-22 (ADR-048 accepted, exclusive live session transport is immediate priority)*
+*Last reviewed: 2026-03-22 (ADR-048 device + host complete, POSIX proven, ESP32 bench + extension remaining)*
 *Source: Froth Implementation Roadmap v0.5 (Feb 25 → Thesis deadline Apr 20)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
@@ -337,22 +337,26 @@
 - [x] Review pass 1: seq validation, strict frame length, error frames, flush ordering (5 fixes)
 - [x] Review pass 2: non-blocking idle, poll seq discipline, helpers extracted (no new issues)
 - [x] `froth_console_mux.c` replaced, `froth_repl_is_idle()`, `froth_link_send_hello_res()` extracted
-- [ ] **Proof**: POSIX round-trip — attach, eval, OUTPUT_DATA, interrupt, key, detach, lease expiry (needs host side)
+- [x] **Proof**: POSIX round-trip — attach, eval, OUTPUT_DATA, interrupt, key+INPUT_WAIT+INPUT_DATA, detach (5 integration tests, Mar 22). Lease expiry deferred to ESP32 bench.
 - [ ] ESP32 validation: same tests on real hardware
 
-#### Host side (daemon + CLI + extension)
-- [x] Protocol package: v2 header, new message builders/parsers
+#### Host side (daemon + CLI + extension) — DONE except extension (Mar 22)
+- [x] Protocol package: v2 header, new message builders/parsers, GenerateSessionID, ParseAttachResponse, ParseOutputData, ParseInputWait, BuildInputDataPayload
 - [x] HELLO probe updated for v2: Direct Mode discovery, no v1 fallback
-- [ ] Session lifecycle: `liveSession` struct (session_id, seq, lease ticker), attach/detach
-- [ ] Simplified transport read loop: frame-only after attach, no byte classification
-- [ ] Console events from OUTPUT_DATA (replaces raw-byte accumulation)
-- [ ] KEEPALIVE timer: fire-and-forget every 2-3s
-- [ ] INTERRUPT_REQ replaces raw 0x03
-- [ ] INPUT_DATA sending: on INPUT_WAIT, relay to extension/CLI
-- [ ] Session failure + recovery: timeout marks session failed, reconnect + reattach
-- [ ] CLI commands: send/connect use attach/detach, info uses HELLO
+- [x] Session lifecycle: daemon lazy attach, session_id, sequential seq (wraps 0xFFFF->1), attach/detach
+- [x] Simplified transport read loop: frame-only after attach, no byte classification, non-frame bytes discarded
+- [x] Console events from OUTPUT_DATA (replaces raw-byte accumulation)
+- [x] KEEPALIVE timer: fire-and-forget every 2s
+- [x] INTERRUPT_REQ replaces raw 0x03 (seq=activeSeq, 5s safety cancel)
+- [x] INPUT_DATA sending: `input` RPC, daemon `deviceSendInput`, client `SendInput`
+- [x] Session failure + recovery: disconnect clears session state, reconnect re-probes HELLO
+- [x] CLI commands: send/reset use attach/detach + OutputHandler, info uses cached HELLO
+- [x] Direct serial session migrated: same attach/detach/seq/KEEPALIVE, inline OUTPUT_DATA
+- [x] v1 mixed-stream code removed, API version 2
+- [x] Review pass: shutdown detach timeout, disconnect ordering, waiter type validation, frameBuf cap
+- [x] POSIX EOF spin fix: orphaned runtimes exit cleanly on broken stdin
+- [x] **Proof**: daemon + CLI end-to-end on POSIX (5 tests: info, eval+output, reset+eval, interrupt, key+input)
 - [ ] Extension: console from OUTPUT_DATA, INPUT_WAIT prompt
-- [ ] **Proof**: daemon + CLI end-to-end on POSIX, then ESP32
 
 ### Phase 3a-hw: Hardware Validation + New Bindings (interleave with transport, bench days)
 

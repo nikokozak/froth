@@ -4,7 +4,7 @@
 
 ## Current Status
 
-**Phase**: Thesis push (Phase 3). Workshop first week of April. Thesis deadline Apr 20. CLI/editor/library system complete and tested (~90 tests). Kernel string hardening done. **Immediate priority: ADR-048 exclusive live session transport** (replaces mixed-stream mux, fixes daemon hangs and serial corruption). Hardware validation interleaves on bench days.
+**Phase**: Thesis push (Phase 3). Workshop first week of April. Thesis deadline Apr 20. CLI/editor/library system complete and tested (~100 tests). Kernel string hardening done. ADR-048 exclusive live session transport implemented (device + host, POSIX round-trip proven). **Next priorities: ESP32 hardware validation, VS Code extension update for v2 protocol, hardware bindings smoke tests.**
 **Blocking issues**: `screen` unusable on macOS (PTY error, not a Froth issue). `minicom` is the working serial monitor.
 **Known limitations**: Async eval model deferred (eval is still blocking RPC; long-running programs work but no start/accept acknowledgment).
 
@@ -155,6 +155,9 @@
 - ADR-045 catch truth convention (Mar 21): `catch` now returns `( q -- ... ecode flag )` with Froth truth semantics (`0 -1` on success, `e 0` on failure). Added stdlib `try`, updated boot/CLI autorun cleanup to `catch drop drop`, and mirrored the change into the vendored SDK kernel.
 - ADR-048 exclusive live session transport (Mar 22): accepted. Replaces mixed-stream console mux (ADR-033/034) with two mutually exclusive modes: Direct (raw REPL) and Live (framed-only daemon/editor session). Fixes architectural root cause of daemon hangs and sporadic serial corruption.
 - Daemon host-side bugfixes (Mar 22): transport read loop returns to console mode after frame delivery (was stuck in frame mode), interrupt now cancels in-flight eval waiter (`ErrEvalInterrupted`, `interruptibleWaiter` struct), file/manifest send does reset before eval per ADR-037. Tests added. Root cause (mixed-stream architecture) addressed by ADR-048.
+- Host-side ADR-048 implementation (Mar 22): daemon and direct serial session both speak v2 protocol. Daemon: lazy attach on first request, frame-only read loop (OUTPUT_DATA -> console events, INPUT_WAIT -> RPC notifications), KEEPALIVE ticker (2s), framed INTERRUPT_REQ (replaces raw 0x03), INPUT_DATA sending via `input` RPC, sequential seq numbering, session_id validation, clean detach on shutdown/disconnect. Direct session: same attach/detach/seq/KEEPALIVE pattern, inline OUTPUT_DATA handling via `OutputHandler` callback. v1 mixed-stream code removed (recoverConsoleFrame, flushConsoleBuffer, byte classification, raw 0x03 interrupt, PassthroughWriter). API version bumped to 2. Review: shutdown detach timeout, handleDisconnect ordering safety, waiter type validation, frameBuf cap.
+- POSIX EOF spin fix (Mar 22): orphaned POSIX runtimes (broken stdin pipe) no longer busy-spin at 100% CPU. Top-level REPL and console loops exit cleanly on non-interrupt FROTH_ERROR_IO. Mirrored in vendored SDK kernel.
+- POSIX round-trip proof (Mar 22): 5 integration tests (attach, eval+OUTPUT_DATA, reset+eval, interrupt, key+INPUT_WAIT+INPUT_DATA) all pass against local POSIX binary via daemon. Lease expiry deferred to ESP32 bench.
 - ADRs: 043 (transient string buffer), 044 (project system, include resolution, CLI architecture), 045 (catch truth convention), 046 (number-to-string primitives), 047 (unified string length limit), 048 (exclusive live session transport)
 
 ## In Progress
@@ -168,14 +171,14 @@
 
 **Immediate fixes landed** (Mar 22): interrupt cancels waiter, frame mode exit after delivery, file send does reset+eval. Tests pass.
 
-**Architectural fix**: ADR-048 (exclusive live session transport) eliminates the mixed-stream model entirely. Implementation is the immediate priority.
+**Architectural fix**: ADR-048 (exclusive live session transport) eliminates the mixed-stream model entirely. Implemented Mar 22 (device + host). POSIX round-trip proven.
 
 ### Sporadic undefined word on ESP32 serial (discovered Mar 22)
 **Severity**: Low (intermittent, Direct Mode only). `gpio.write` undefined on first call after connecting minicom, works on retry. Likely caused by stray 0x00 from DTR reset noise putting the mux's frame accumulator into eat-bytes mode. ADR-048's bounded Direct Mode recognizer (64-byte cap, 50ms timeout) bounds the damage to at most one lost keystroke.
 
 ## Next Up
 
-### ADR-048: Exclusive Live Session Transport — IMMEDIATE PRIORITY
+### ADR-048: Exclusive Live Session Transport
 
 #### Shared foundation — DONE (Mar 22)
 1. ~~V2 frame header format (20 bytes) in C and Go~~ done
@@ -197,11 +200,24 @@
 - ~~Review pass 2~~: non-blocking idle loop, poll seq discipline, helpers extracted, no new issues
 14. ESP32 validation: attach, eval, OUTPUT_DATA, INTERRUPT_REQ, lease expiry, detach — needs bench
 
+#### Host side (daemon + CLI) — DONE (Mar 22)
+15. ~~Daemon session lifecycle~~: lazy attach, session_id, sequential seq, KEEPALIVE (2s), frame-only read loop
+16. ~~OUTPUT_DATA -> console events~~, ~~INPUT_WAIT -> RPC notifications~~
+17. ~~INTERRUPT_REQ replaces raw 0x03~~, ~~INPUT_DATA via `input` RPC~~
+18. ~~Direct serial session~~ migrated: attach/detach, inline OUTPUT_DATA via OutputHandler
+19. ~~CLI commands~~ updated: send/reset use OutputHandler, info uses HELLO (no attach)
+20. ~~v1 mixed-stream code removed~~ (recoverConsoleFrame, byte classification, PassthroughWriter)
+21. ~~API version 2~~, ~~daemon client SendInput~~
+- ~~Review pass~~: shutdown detach timeout, disconnect ordering, waiter type validation, frameBuf cap
+- ~~POSIX round-trip proof~~: 5 integration tests (info, eval+output, reset+eval, interrupt, key+input)
+22. Extension: console from OUTPUT_DATA, INPUT_WAIT prompt — not yet started
+
 #### Also done (not originally listed)
 - `platform_uptime_ms()` on both platforms (POSIX: `clock_gettime`, ESP32: `esp_timer_get_time`)
 - `froth_repl_is_idle()`, `froth_link_send_hello_res()` extracted
 - `froth_console_mux.c` replaced by `froth_console.c`, old mux removed from build
 - `enter_direct_mode()`, `lease_expired()`, `next_seq()` helpers for state management
+- POSIX EOF spin fix: orphaned runtimes exit cleanly on broken stdin pipe
 - `froth_console_emit` overflow guard, `froth_console_flush_output` clears only on success
 - Dispatch errors send ERROR frame to host (no silent drops)
 - Direct-only build (`FROTH_HAS_LIVE=OFF`) verified: compiles, runs REPL, no Live code linked
