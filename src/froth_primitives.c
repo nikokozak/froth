@@ -568,14 +568,14 @@ froth_error_t froth_prim_emit(froth_vm_t *froth_vm) {
 
 froth_error_t froth_prim_key(froth_vm_t *froth_vm) {
   uint8_t byte;
-  froth_error_t err = platform_key(&byte);
+  froth_error_t err = froth_console_key(froth_vm, &byte);
 
   /* If platform_key failed AND the interrupt flag is set, normalize
      to ERR.INTERRUPT. On POSIX, SIGINT during fgetc sets the flag and
      returns EOF/FROTH_ERROR_IO. On ESP32, platform_key is transparent
      and this branch is not taken (0x03 is handled below). */
   if (err != FROTH_OK) {
-    if (froth_vm->interrupted) {
+    if (err == FROTH_ERROR_PROGRAM_INTERRUPTED || froth_vm->interrupted) {
       froth_vm->interrupted = 0;
       froth_vm->thrown = FROTH_ERROR_PROGRAM_INTERRUPTED;
       return FROTH_ERROR_THROW;
@@ -600,7 +600,7 @@ froth_error_t froth_prim_key(froth_vm_t *froth_vm) {
 }
 
 froth_error_t froth_prim_key_ready(froth_vm_t *froth_vm) {
-  bool ready = platform_key_ready();
+  bool ready = froth_console_key_ready();
 
   froth_cell_t result;
   FROTH_TRY(froth_make_cell(ready ? -1 : 0, FROTH_NUMBER,

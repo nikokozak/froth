@@ -26,6 +26,40 @@ static froth_error_t send_attach_res(uint64_t session_id, uint16_t seq,
                                sizeof(payload));
 }
 
+static void input_fifo_reset(froth_console_t *console) {
+  console->input_head = 0;
+  console->input_count = 0;
+  console->input_wait_sent = 0;
+}
+
+static void input_fifo_push(froth_console_t *console, uint8_t byte) {
+  uint8_t pos;
+
+  if (console->input_count >= FROTH_CONSOLE_INPUT_CAP)
+    return;
+
+  pos = (uint8_t)((console->input_head + console->input_count) %
+                  FROTH_CONSOLE_INPUT_CAP);
+  console->input_buf[pos] = byte;
+  console->input_count++;
+  console->input_wait_sent = 0;
+}
+
+static int input_fifo_pop(froth_console_t *console, uint8_t *byte) {
+  if (console->input_count == 0)
+    return -1;
+
+  *byte = console->input_buf[console->input_head];
+  console->input_head =
+      (uint8_t)((console->input_head + 1) % FROTH_CONSOLE_INPUT_CAP);
+  console->input_count--;
+  return 0;
+}
+
+static bool input_fifo_ready(froth_console_t *console) {
+  return console->input_count > 0;
+}
+
 /* Clear recognizer state. Safe to call anytime. */
 static void recognize_reset(froth_console_t *console) {
   memset(console->recognize_buf, 0, sizeof(console->recognize_buf));
@@ -141,6 +175,7 @@ static froth_error_t handle_recognized_frame(froth_vm_t *vm,
         platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
     console->poll_in_frame = 0;
     console->output_pos = 0;
+    input_fifo_reset(console);
     froth_link_frame_reset();
     break;
 
@@ -180,6 +215,48 @@ froth_error_t froth_console_emit(uint8_t byte) {
     return froth_console_flush_output();
 
   return FROTH_OK;
+}
+
+froth_error_t froth_console_key(froth_vm_t *vm, uint8_t *byte) {
+  static const uint8_t reason = 0x01;
+
+  if (g_console.mode != FROTH_CONSOLE_LIVE)
+    return platform_key(byte);
+
+  if (input_fifo_pop(&g_console, byte) == 0)
+    return FROTH_OK;
+
+  if (!g_console.input_wait_sent) {
+    FROTH_TRY(froth_console_flush_output());
+    FROTH_TRY(froth_link_send_frame(g_console.session_id, FROTH_LINK_INPUT_WAIT,
+                                    g_console.active_seq, &reason, 1));
+    g_console.input_wait_sent = 1;
+  }
+
+  while (1) {
+    froth_console_poll(vm);
+
+    if (input_fifo_pop(&g_console, byte) == 0)
+      return FROTH_OK;
+
+    if (vm->interrupted) {
+      return FROTH_ERROR_PROGRAM_INTERRUPTED;
+    }
+
+    if (g_console.lease_deadline_ms != 0 &&
+        (platform_uptime_ms() - g_console.lease_deadline_ms) < 0x80000000u) {
+      vm->interrupted = 1;
+      return FROTH_ERROR_PROGRAM_INTERRUPTED;
+    }
+
+    platform_delay_ms(1);
+  }
+}
+
+bool froth_console_key_ready(void) {
+  if (g_console.mode != FROTH_CONSOLE_LIVE)
+    return platform_key_ready();
+  return input_fifo_ready(&g_console);
 }
 
 void froth_console_poll(froth_vm_t *vm) {
@@ -227,7 +304,13 @@ void froth_console_poll(froth_vm_t *vm) {
         break;
 
       case FROTH_LINK_INPUT_DATA:
-        /* TODO: enqueue to input FIFO (step 10). */
+        if (header.payload_length >= 2) {
+          uint16_t count = (uint16_t)payload[0] | ((uint16_t)payload[1] << 8);
+          if ((uint16_t)(2 + count) <= header.payload_length) {
+            for (uint16_t i = 0; i < count; i++)
+              input_fifo_push(&g_console, payload[2 + i]);
+          }
+        }
         break;
 
       default:
@@ -271,6 +354,8 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
   g_console.active_seq = 0;
   g_console.lease_deadline_ms = 0;
   g_console.poll_in_frame = 0;
+  g_console.output_pos = 0;
+  input_fifo_reset(&g_console);
   recognize_reset(&g_console);
 
   FROTH_TRY(emit_string(prompt_normal));
@@ -291,7 +376,11 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
         g_console.mode = FROTH_CONSOLE_DIRECT;
         g_console.session_id = 0;
         g_console.seq = 0;
+        g_console.active_seq = 0;
         g_console.lease_deadline_ms = 0;
+        g_console.poll_in_frame = 0;
+        g_console.output_pos = 0;
+        input_fifo_reset(&g_console);
         in_frame = 0;
         froth_link_frame_reset();
         emit_string(prompt_normal);
@@ -329,8 +418,12 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
 
           g_console.session_id = 0;
           g_console.seq = 0;
+          g_console.active_seq = 0;
           g_console.mode = FROTH_CONSOLE_DIRECT;
           g_console.lease_deadline_ms = 0;
+          g_console.poll_in_frame = 0;
+          g_console.output_pos = 0;
+          input_fifo_reset(&g_console);
           in_frame = 0;
 
           FROTH_TRY(emit_string(prompt_normal));

@@ -14,6 +14,10 @@
 #define FROTH_CONSOLE_OUTPUT_CAP 128u
 #endif
 
+#ifndef FROTH_CONSOLE_INPUT_CAP
+#define FROTH_CONSOLE_INPUT_CAP 64u
+#endif
+
 typedef enum {
   FROTH_CONSOLE_DIRECT = 0,
   FROTH_CONSOLE_LIVE = 1,
@@ -38,6 +42,12 @@ typedef struct {
   /* Live output buffer. Flushed on \n, full, or before terminal frames. */
   uint8_t output_buf[FROTH_CONSOLE_OUTPUT_CAP];
   uint16_t output_pos;
+
+  /* Live input FIFO. Fed by INPUT_DATA, consumed by key/key?. */
+  uint8_t input_buf[FROTH_CONSOLE_INPUT_CAP];
+  uint8_t input_head;       /* next read position */
+  uint8_t input_count;      /* number of bytes in FIFO */
+  uint8_t input_wait_sent;  /* edge trigger for INPUT_WAIT */
 } froth_console_t;
 
 /* Main loop. Boots into Direct, never returns. */
@@ -49,6 +59,11 @@ froth_error_t froth_console_emit(uint8_t byte);
 
 /* Flush any buffered Live output as an OUTPUT_DATA frame. No-op in Direct. */
 froth_error_t froth_console_flush_output(void);
+
+/* Live-aware key/key?. Direct: platform_key/platform_key_ready.
+ * Live: input FIFO + INPUT_WAIT edge trigger. */
+froth_error_t froth_console_key(froth_vm_t *vm, uint8_t *byte);
+bool froth_console_key_ready(void);
 
 /* Executor safe-point poll hook. Non-blocking. */
 void froth_console_poll(froth_vm_t *vm);
