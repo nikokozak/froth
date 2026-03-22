@@ -82,10 +82,12 @@ froth_error_t froth_link_send_frame(uint64_t session_id, uint8_t message_type,
                                     uint16_t payload_len);
 
 /* ── Inbound frame accumulation ─────────────────────────────────────
- * frame_reset clears state. frame_byte appends one byte between
- * 0x00 delimiters. frame_complete COBS-decodes in-place, parses
- * the header, and dispatches. Invalid frames are silently dropped.  */
+ * frame_reset/frame_byte accumulate bytes between 0x00 delimiters.
+ * frame_decode does COBS decode + header parse (no dispatch).
+ * frame_complete does decode + dispatch (all-in-one convenience).   */
 
 void froth_link_frame_reset(void);
 froth_error_t froth_link_frame_byte(uint8_t byte);
+froth_error_t froth_link_frame_decode(froth_link_header_t *header,
+                                      const uint8_t **payload);
 froth_error_t froth_link_frame_complete(froth_vm_t *vm);

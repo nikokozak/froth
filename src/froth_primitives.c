@@ -1,4 +1,5 @@
 #include "froth_primitives.h"
+#include "froth_console.h"
 #include "froth_executor.h"
 #include "froth_fmt.h"
 #include "froth_heap.h"
@@ -558,7 +559,7 @@ froth_error_t froth_prim_emit(froth_vm_t *froth_vm) {
     return FROTH_ERROR_TYPE_MISMATCH;
   }
 
-  FROTH_TRY(platform_emit(
+  FROTH_TRY(froth_console_emit(
       FROTH_CELL_STRIP_TAG(cell) &
       0xFF)); // Emit the least significant byte of the number as ASCII
 
@@ -701,9 +702,9 @@ static froth_error_t emit_pattern(froth_cell_t payload, froth_heap_t *heap) {
   emit_string("p[");
   for (uint8_t i = 0; i < len; i++) {
     if (i > 0)
-      platform_emit((uint8_t)' ');
+      froth_console_emit((uint8_t)' ');
     char letter = 'a' + heap->data[payload + 1 + i];
-    platform_emit((uint8_t)letter);
+    froth_console_emit((uint8_t)letter);
   }
   return emit_string("]");
 }
@@ -726,7 +727,7 @@ static froth_error_t emit_cell(froth_cell_t cell, froth_heap_t *heap) {
     emit_string("[");
     for (froth_cell_t i = 0; i < len; i++) {
       if (i > 0)
-        platform_emit((uint8_t)' ');
+        froth_console_emit((uint8_t)' ');
       FROTH_TRY(emit_quote_token(body[1 + i], heap));
     }
     return emit_string("]");
@@ -782,7 +783,7 @@ static froth_error_t emit_cell(froth_cell_t cell, froth_heap_t *heap) {
         snprintf(hex, sizeof(hex), "\\x%02X", b);
         FROTH_TRY(emit_string(hex));
       } else {
-        FROTH_TRY(platform_emit(b));
+        FROTH_TRY(froth_console_emit(b));
       }
     }
     return emit_string("\"");
@@ -803,7 +804,7 @@ static froth_error_t print_stack(froth_stack_t *stack, froth_heap_t *heap) {
 
   for (froth_cell_u_t i = 0; i < depth; i++) {
     if (i > 0) {
-      FROTH_TRY(platform_emit((uint8_t)' '));
+      FROTH_TRY(froth_console_emit((uint8_t)' '));
     }
     FROTH_TRY(emit_cell(stack->data[i], heap));
   }
@@ -913,7 +914,7 @@ froth_error_t froth_prim_bstring_emit(froth_vm_t *vm) {
   const uint8_t *data;
   FROTH_TRY(pop_bstring(vm, &len, &data));
   for (froth_cell_t i = 0; i < len; i++) {
-    FROTH_TRY(platform_emit(data[i]));
+    FROTH_TRY(froth_console_emit(data[i]));
   }
   return FROTH_OK;
 }

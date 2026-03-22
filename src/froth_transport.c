@@ -255,31 +255,41 @@ froth_error_t froth_link_frame_byte(uint8_t byte) {
   return FROTH_OK;
 }
 
-froth_error_t froth_link_frame_complete(froth_vm_t *vm) {
+/* Decode + parse the accumulated frame. Returns FROTH_OK on success,
+ * in which case header and payload are valid. Resets and returns
+ * an error code (silently) on junk frames. */
+froth_error_t froth_link_frame_decode(froth_link_header_t *header,
+                                      const uint8_t **payload) {
   if (rx_overflow || rx_pos == 0) {
     froth_link_frame_reset();
-    return FROTH_OK;
+    return FROTH_ERROR_LINK_COBS_DECODE;
   }
 
-  /* COBS decode in-place */
   uint16_t decoded_len;
   froth_error_t err = froth_cobs_decode(rx_buf, rx_pos, rx_buf,
                                         FROTH_LINK_COBS_MAX, &decoded_len);
   if (err != FROTH_OK) {
     froth_link_frame_reset();
-    return FROTH_OK;
+    return err;
   }
 
-  /* Parse header */
-  froth_link_header_t header;
-  const uint8_t *payload;
-  err = froth_link_header_parse(rx_buf, decoded_len, &header, &payload);
+  err = froth_link_header_parse(rx_buf, decoded_len, header, payload);
   if (err != FROTH_OK) {
     froth_link_frame_reset();
-    return FROTH_OK;
+    return err;
   }
 
-  /* Dispatch */
+  return FROTH_OK;
+}
+
+/* Decode, parse, and dispatch in one shot. Old all-in-one path. */
+froth_error_t froth_link_frame_complete(froth_vm_t *vm) {
+  froth_link_header_t header;
+  const uint8_t *payload;
+  froth_error_t err = froth_link_frame_decode(&header, &payload);
+  if (err != FROTH_OK)
+    return FROTH_OK; /* junk frame, silently dropped */
+
   err = froth_link_dispatch(vm, &header, payload);
   froth_link_frame_reset();
   return err;
