@@ -169,7 +169,7 @@ froth_error_t froth_link_header_parse(const uint8_t *frame, uint16_t frame_len,
   if (header->payload_length > FROTH_LINK_MAX_PAYLOAD)
     return FROTH_ERROR_LINK_TOO_LARGE;
 
-  if ((uint16_t)(FROTH_LINK_HEADER_SIZE + header->payload_length) > frame_len)
+  if ((uint16_t)(FROTH_LINK_HEADER_SIZE + header->payload_length) != frame_len)
     return FROTH_ERROR_LINK_COBS_DECODE;
 
   const uint8_t *pl = frame + FROTH_LINK_HEADER_SIZE;

@@ -200,9 +200,12 @@ froth_error_t froth_console_flush_output(void) {
   payload[1] = (n >> 8) & 0xFF;
   memcpy(payload + 2, g_console.output_buf, n);
 
-  g_console.output_pos = 0;
-  return froth_link_send_frame(g_console.session_id, FROTH_LINK_OUTPUT_DATA,
-                               g_console.active_seq, payload, 2 + n);
+  froth_error_t err = froth_link_send_frame(
+      g_console.session_id, FROTH_LINK_OUTPUT_DATA, g_console.active_seq,
+      payload, 2 + n);
+  if (err == FROTH_OK)
+    g_console.output_pos = 0;
+  return err;
 }
 
 froth_error_t froth_console_emit(uint8_t byte) {
@@ -404,14 +407,20 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
           froth_link_frame_reset();
           continue; // Drop it, should not happen.
         }
-        // Refresh lease on valid frame
+        /* Refresh lease on any valid frame. */
         g_console.lease_deadline_ms =
             platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
 
         switch (header.message_type) {
         case FROTH_LINK_KEEPALIVE:
-          break; // No response, lease already refreshed.
+          /* seq=0 for keepalive, don't validate against normal seq. */
+          break;
         case FROTH_LINK_DETACH_REQ:
+          if (header.seq != g_console.seq) {
+            froth_link_frame_reset();
+            continue;
+          }
+          froth_console_flush_output();
           froth_link_send_frame(header.session_id, FROTH_LINK_DETACH_RES,
                                 header.seq, NULL, 0);
           froth_link_frame_reset();
@@ -428,12 +437,31 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
 
           FROTH_TRY(emit_string(prompt_normal));
           break;
-        default:
+        default: {
+          /* Normal requests must carry the expected seq. */
+          if (header.seq != g_console.seq) {
+            froth_link_frame_reset();
+            continue;
+          }
           if (header.message_type == FROTH_LINK_EVAL_REQ)
             g_console.active_seq = header.seq;
-          froth_link_dispatch(vm, &header, payload);
+          err = froth_link_dispatch(vm, &header, payload);
           g_console.active_seq = 0;
+          /* Advance seq: 1..0xFFFF, wrapping back to 1 (0 is reserved). */
+          g_console.seq = (g_console.seq == 0xFFFF) ? 1 : g_console.seq + 1;
+          if (err != FROTH_OK) {
+            /* Handler failed (malformed payload, send error, etc).
+             * Notify host so it doesn't hang waiting for a response. */
+            uint8_t err_payload[3];
+            err_payload[0] = 0; /* category: generic */
+            err_payload[1] = 0;
+            err_payload[2] = 0; /* empty detail string (u16 len = 0) */
+            froth_console_flush_output();
+            froth_link_send_frame(header.session_id, FROTH_LINK_ERROR,
+                                  header.seq, err_payload, 3);
+          }
           break;
+        }
         }
         froth_link_frame_reset();
         continue;
