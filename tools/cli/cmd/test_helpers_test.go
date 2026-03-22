@@ -14,6 +14,11 @@ import (
 	daemonpkg "github.com/nikokozak/froth/tools/cli/internal/daemon"
 )
 
+type fakeDaemonRequest struct {
+	Method string
+	Source string
+}
+
 func resetCommandGlobals(t *testing.T) {
 	t.Helper()
 
@@ -125,7 +130,7 @@ func prependPath(t *testing.T, dir string) {
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+oldPath)
 }
 
-func startFakeDaemon(t *testing.T) (<-chan string, func()) {
+func startFakeDaemon(t *testing.T) (<-chan fakeDaemonRequest, func()) {
 	t.Helper()
 
 	home, err := os.MkdirTemp("/tmp", "froth-home-")
@@ -147,7 +152,7 @@ func startFakeDaemon(t *testing.T) (<-chan string, func()) {
 		t.Fatalf("listen %s: %v", socketPath, err)
 	}
 
-	sourceCh := make(chan string, 4)
+	reqCh := make(chan fakeDaemonRequest, 8)
 	done := make(chan struct{})
 
 	go func() {
@@ -157,7 +162,7 @@ func startFakeDaemon(t *testing.T) (<-chan string, func()) {
 			if err != nil {
 				return
 			}
-			go handleFakeDaemonConn(conn, sourceCh)
+			go handleFakeDaemonConn(conn, reqCh)
 		}
 	}()
 
@@ -167,10 +172,10 @@ func startFakeDaemon(t *testing.T) (<-chan string, func()) {
 		_ = os.RemoveAll(home)
 		<-done
 	}
-	return sourceCh, cleanup
+	return reqCh, cleanup
 }
 
-func handleFakeDaemonConn(conn net.Conn, sourceCh chan<- string) {
+func handleFakeDaemonConn(conn net.Conn, reqCh chan<- fakeDaemonRequest) {
 	defer conn.Close()
 
 	scanner := bufio.NewScanner(conn)
@@ -196,6 +201,21 @@ func handleFakeDaemonConn(conn net.Conn, sourceCh chan<- string) {
 		}
 
 		switch req.Method {
+		case "reset":
+			reqCh <- fakeDaemonRequest{Method: req.Method}
+			_ = enc.Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"result": map[string]interface{}{
+					"status":             0,
+					"heap_size":          4096,
+					"heap_used":          0,
+					"heap_overlay_used":  0,
+					"slot_count":         0,
+					"slot_overlay_count": 0,
+					"version":            "0.1.0",
+				},
+				"id": req.ID,
+			})
 		case "eval":
 			var params struct {
 				Source string `json:"source"`
@@ -211,7 +231,7 @@ func handleFakeDaemonConn(conn net.Conn, sourceCh chan<- string) {
 				})
 				continue
 			}
-			sourceCh <- params.Source
+			reqCh <- fakeDaemonRequest{Method: req.Method, Source: params.Source}
 			_ = enc.Encode(map[string]interface{}{
 				"jsonrpc": "2.0",
 				"result": map[string]interface{}{

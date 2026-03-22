@@ -1,6 +1,6 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-21 (CLI/editor/library system complete, test battery landed)*
+*Last reviewed: 2026-03-22 (ADR-048 accepted, exclusive live session transport is immediate priority)*
 *Source: Froth Implementation Roadmap v0.5 (Feb 25 → Thesis deadline Apr 20)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
@@ -294,7 +294,7 @@
 - [x] `dangerous-reset` clears tbuf + interrupted flag
 - [x] Chunk scanner fix (backslash token matching)
 
-### Phase 3a-kernel: Kernel Hardening (Mar 21–22, POSIX, no hardware)
+### Phase 3a-kernel: Kernel Hardening (Mar 21–22, POSIX, no hardware) — COMPLETE
 
 - [x] `catch` truth convention ADR + kernel fix (ADR-045, landed Mar 21)
 - [x] `n>s`, `n>hexs`, `n>bins` — number-to-string primitives (ADR-046, landed Mar 21)
@@ -303,18 +303,65 @@
 - [ ] Blob pool — deferred to post-workshop (WiFi/HTTP phase)
 - [ ] `froth_invoke` FFI callback API — deferred to post-workshop (WiFi/HTTP phase)
 
-### Phase 3a-hw: Hardware Validation + New Bindings (bench time, before workshop)
+### Phase 3a-bugfix: Host Tooling Bugfixes (Mar 22)
 
-Smoke tests on real ESP32 hardware, validating everything built so far:
+- [x] Daemon transport read loop: returns to console mode after frame delivery (was stuck in frame mode)
+- [x] Interrupt cancels in-flight eval waiter (`ErrEvalInterrupted`, `interruptibleWaiter` struct)
+- [x] File/manifest send does reset before eval per ADR-037 (raw source stays eval-only)
+- [x] Tests: frame-mode-exit regression, interrupt-cancel focused test, send_test coverage updated
+- [x] **Proof**: `cd tools/cli && go test ./...` passes
+
+### Phase 3a-transport: Exclusive Live Session Transport (ADR-048, Mar 22–26)
+
+> IMMEDIATE PRIORITY. Replaces mixed-stream mux (ADR-033/034) with exclusive
+> Direct/Live two-mode model. Fixes architectural root cause of daemon hangs
+> and serial corruption. Device and host work proceed in parallel after step 2.
+
+#### Shared foundation (gate for all other steps)
+- [ ] V2 frame header (20 bytes: magic, version, type, session_id u64, seq u16, payload_len u16, crc32) — C and Go
+- [ ] New message type constants (HELLO, ATTACH, DETACH, KEEPALIVE, INPUT_DATA, INPUT_WAIT, INTERRUPT_REQ, OUTPUT_DATA) — C and Go
+
+#### Device side (kernel, POSIX first, then ESP32)
+- [ ] Bounded Direct Mode recognizer: 0x00-delimited accumulation, 64-byte cap, 50ms timeout, acts only on HELLO_REQ + ATTACH_REQ. Gated `FROTH_HAS_LIVE`.
+- [ ] HELLO_REQ/RES in Direct Mode: stateless discovery, no state transition
+- [ ] ATTACH/DETACH: session state struct, precondition checks, mode transitions
+- [ ] Live frame dispatch loop: frame-only I/O in LIVE_IDLE/LIVE_EVAL, session_id validation
+- [ ] Output buffering: `platform_emit` to static buffer in Live Mode, flush on `\n` / buffer full / before terminal frames
+- [ ] EVAL/INFO/RESET handlers ported to v2 framing
+- [ ] Live poll hook (`froth_live_poll_control`): executor safe points, KEEPALIVE + INPUT_DATA + INTERRUPT_REQ
+- [ ] Input FIFO + key/key? in Live Mode: FIFO, INPUT_WAIT (edge-triggered), blocking wait with poll
+- [ ] Lease timer: any valid frame refreshes, expiry returns to DIRECT_IDLE (interrupts eval)
+- [ ] INTERRUPT_REQ: sets `vm->interrupted` at safe points
+- [ ] Feature gating: `FROTH_HAS_LIVE` CMake define, old `FROTH_HAS_LINK` stays until validated
+- [ ] **Proof**: POSIX round-trip — attach, eval, OUTPUT_DATA, interrupt, key, detach, lease expiry
+- [ ] ESP32 validation: same tests on real hardware
+
+#### Host side (daemon + CLI + extension)
+- [ ] Protocol package: v2 header, new message builders/parsers
+- [ ] Session lifecycle: `liveSession` struct (session_id, seq, lease ticker), attach/detach
+- [ ] Simplified transport read loop: frame-only after attach, no byte classification
+- [ ] HELLO probe updated for v2: Direct Mode discovery, v1 fallback
+- [ ] Console events from OUTPUT_DATA (replaces raw-byte accumulation)
+- [ ] KEEPALIVE timer: fire-and-forget every 2-3s
+- [ ] INTERRUPT_REQ replaces raw 0x03
+- [ ] INPUT_DATA sending: on INPUT_WAIT, relay to extension/CLI
+- [ ] Session failure + recovery: timeout marks session failed, reconnect + reattach
+- [ ] CLI commands: send/connect use attach/detach, info uses HELLO
+- [ ] Extension: console from OUTPUT_DATA, INPUT_WAIT prompt
+- [ ] **Proof**: daemon + CLI end-to-end on POSIX, then ESP32
+
+### Phase 3a-hw: Hardware Validation + New Bindings (interleave with transport, bench days)
+
+Smoke tests on real ESP32 hardware:
 - [ ] LEDC/PWM: LED fade, piezo tone, convenience words
 - [ ] I2C: sensor read (temperature or accelerometer)
 - [ ] UART bindings: `uart.init`, `uart.write`, `uart.read` (new FFI words)
 - [ ] `millis` — uptime counter (ESP32: `esp_timer_get_time`, POSIX: `clock_gettime`)
 - [ ] ADC: `adc.read ( pin -- value )` (new FFI word)
 - [ ] User program cold boot on ESP32, snapshot priority, wipe cycle
-- [ ] CLI `froth send` with includes → ESP32 device (end-to-end project system validation)
+- [ ] CLI `froth send` with includes → ESP32 device (end-to-end, using Live transport)
 - [ ] CLI `froth build` + `froth flash` with froth.toml project
-- [ ] VS Code extension Send File → ESP32 (include resolution via CLI)
+- [ ] VS Code extension Send File → ESP32 (via Live session)
 - [ ] Flash 15 boards with user program, test workshop flow
 - [ ] **Workshop (first week of April)**
 
@@ -359,7 +406,7 @@ Presentation prep. Fix anything that broke. Practice the demo.
 - [x] `wipe` returns to base-only state
 - [x] `"Hello" s.emit` works
 - [x] Hex literals work (`0xFF`)
-- [x] Host tooling can push code to device (CLI or VS Code via FROTH-LINK/1)
+- [x] Host tooling can push code to device (CLI or VS Code via FROTH-LINK/1, migrating to Live session ADR-048)
 - [x] User program boots on cold start, `reset` + Send File replaces it (proven on POSIX)
 - [x] Project system: `froth.toml`, include resolution, `froth new/build/send/flash`
 - [x] CLI complete: `connect --local`, `connect` serial, `doctor`, `--clean`, SDK embedding

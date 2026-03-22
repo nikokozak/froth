@@ -14,8 +14,10 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nikokozak/froth/tools/cli/internal/protocol"
+	"github.com/nikokozak/froth/tools/cli/internal/sdk"
 	"github.com/nikokozak/froth/tools/cli/internal/serial"
 	"github.com/nikokozak/froth/tools/cli/internal/session"
 )
@@ -32,6 +34,7 @@ const (
 
 var ErrDisconnected = errors.New("device disconnected")
 var ErrAlreadyRunning = errors.New("daemon already running")
+var ErrEvalInterrupted = errors.New("device eval interrupted")
 
 type transport = serial.Transport
 
@@ -85,7 +88,7 @@ type Daemon struct {
 	// a waiter with the expected request ID. The serial reader delivers
 	// matching frames directly. No buffering, no drain, no race.
 	waiterMu sync.Mutex
-	waiterID uint16             // expected request ID, 0 = no waiter
+	waiterID interruptibleWaiter
 	waiterCh chan frameResponse // delivery channel, nil = no waiter
 
 	// Closed by handleDisconnect to unblock any waiting request.
@@ -103,9 +106,14 @@ type Daemon struct {
 	wg           sync.WaitGroup
 }
 
+type interruptibleWaiter struct {
+	messageType   byte
+	requestID     uint16
+	interruptible bool
+}
+
 func New(portPath string, local bool, localRuntimePath string) *Daemon {
-	home, _ := os.UserHomeDir()
-	frothDir := filepath.Join(home, ".froth")
+	frothDir := frothStateDir()
 
 	return &Daemon{
 		portPath:         portPath,
@@ -121,14 +129,12 @@ func New(portPath string, local bool, localRuntimePath string) *Daemon {
 
 // SocketPath returns the Unix socket path for client connections.
 func SocketPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".froth", "daemon.sock")
+	return filepath.Join(frothStateDir(), "daemon.sock")
 }
 
 // PIDPath returns the path to the daemon's PID file.
 func PIDPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".froth", "daemon.pid")
+	return filepath.Join(frothStateDir(), "daemon.pid")
 }
 
 func newLocalTransport(runtimePath string) (*localTransport, error) {
@@ -361,10 +367,17 @@ func (t *localTransport) currentReadErr() error {
 	return io.EOF
 }
 
+func frothStateDir() string {
+	dir, err := sdk.FrothHome()
+	if err != nil || dir == "" {
+		return ".froth"
+	}
+	return dir
+}
+
 // Start runs the daemon in the foreground until interrupted.
 func (d *Daemon) Start() error {
-	home, _ := os.UserHomeDir()
-	if err := os.MkdirAll(filepath.Join(home, ".froth"), 0755); err != nil {
+	if err := os.MkdirAll(frothStateDir(), 0755); err != nil {
 		return fmt.Errorf("create froth dir: %w", err)
 	}
 
@@ -531,24 +544,25 @@ func (d *Daemon) transportReadLoop() {
 			return
 		}
 		if n == 0 {
-			// Flush console buffer on idle
-			if len(consoleBuf) > 0 {
-				d.broadcast(EventConsole, &ConsoleEvent{Text: string(consoleBuf)})
-				consoleBuf = consoleBuf[:0]
-			}
+			// Flush console buffer on idle.
+			d.flushConsoleBuffer(consoleBuf)
+			consoleBuf = consoleBuf[:0]
 			continue
 		}
 
 		b := buf[0]
 		if b == 0x00 {
 			// Flush console buffer before frame processing
-			if len(consoleBuf) > 0 {
-				d.broadcast(EventConsole, &ConsoleEvent{Text: string(consoleBuf)})
-				consoleBuf = consoleBuf[:0]
-			}
-			if inFrame && len(frame) > 0 {
-				// Decode and deliver directly to the pending waiter
-				d.deliverFrame(frame)
+			d.flushConsoleBuffer(consoleBuf)
+			consoleBuf = consoleBuf[:0]
+			if inFrame {
+				if len(frame) > 0 {
+					// Decode and deliver directly to the pending waiter.
+					d.deliverFrame(frame)
+				}
+				frame = frame[:0]
+				inFrame = false
+				continue
 			}
 			frame = frame[:0]
 			inFrame = true
@@ -565,6 +579,122 @@ func (d *Daemon) transportReadLoop() {
 			}
 		}
 	}
+}
+
+func (d *Daemon) flushConsoleBuffer(consoleBuf []byte) {
+	if len(consoleBuf) == 0 {
+		return
+	}
+
+	if d.recoverConsoleFrame(consoleBuf) {
+		return
+	}
+
+	if summary, ok := suspiciousConsoleSummary(consoleBuf, d.currentWaiter()); ok {
+		log.Print(summary)
+	}
+
+	d.broadcast(EventConsole, &ConsoleEvent{Text: string(consoleBuf)})
+}
+
+func (d *Daemon) recoverConsoleFrame(consoleBuf []byte) bool {
+	waiter := d.currentWaiter()
+	if waiter.requestID == 0 {
+		return false
+	}
+
+	decoded, err := protocol.COBSDecode(consoleBuf)
+	if err != nil {
+		return false
+	}
+
+	header, payload, err := protocol.ParseFrame(decoded)
+	if err != nil {
+		return false
+	}
+
+	if header.RequestID != waiter.requestID {
+		return false
+	}
+
+	log.Printf(
+		"console: recovered leaked %s from console stream (id=%d)",
+		msgTypeName(header.MessageType),
+		header.RequestID,
+	)
+
+	d.waiterMu.Lock()
+	ch := d.waiterCh
+	d.waiterMu.Unlock()
+	if ch == nil {
+		return false
+	}
+
+	select {
+	case ch <- frameResponse{header: header, payload: payload}:
+		return true
+	default:
+		log.Printf(
+			"console: recovered %s but waiter channel was full (id=%d)",
+			msgTypeName(header.MessageType),
+			header.RequestID,
+		)
+		return false
+	}
+}
+
+func (d *Daemon) currentWaiter() interruptibleWaiter {
+	d.waiterMu.Lock()
+	defer d.waiterMu.Unlock()
+	return d.waiterID
+}
+
+func suspiciousConsoleSummary(consoleBuf []byte, waiter interruptibleWaiter) (string, bool) {
+	if looksLikeConsoleText(consoleBuf) {
+		return "", false
+	}
+
+	preview := consoleBuf
+	suffix := ""
+	if len(preview) > 24 {
+		preview = preview[:24]
+		suffix = " ..."
+	}
+
+	waiterSummary := "none"
+	if waiter.requestID != 0 {
+		waiterSummary = fmt.Sprintf("%s id=%d", msgTypeName(waiter.messageType), waiter.requestID)
+	}
+
+	return fmt.Sprintf(
+		"console: suspicious binary burst (%d bytes, waiter=%s): % x%s",
+		len(consoleBuf),
+		waiterSummary,
+		preview,
+		suffix,
+	), true
+}
+
+func looksLikeConsoleText(buf []byte) bool {
+	if len(buf) == 0 {
+		return true
+	}
+	if !utf8.Valid(buf) {
+		return false
+	}
+
+	printable := 0
+	for _, b := range buf {
+		switch {
+		case b == '\n', b == '\r', b == '\t':
+			printable++
+		case b >= 0x20 && b <= 0x7e:
+			printable++
+		}
+	}
+
+	// Human REPL/console output should be overwhelmingly printable.
+	return printable*100 >= len(buf)*90
 }
 
 // deliverFrame decodes a raw COBS frame and delivers it to the
@@ -585,7 +715,7 @@ func (d *Daemon) deliverFrame(raw []byte) {
 
 	d.waiterMu.Lock()
 	ch := d.waiterCh
-	wantID := d.waiterID
+	waiter := d.waiterID
 	d.waiterMu.Unlock()
 
 	if ch == nil {
@@ -593,8 +723,8 @@ func (d *Daemon) deliverFrame(raw []byte) {
 		return
 	}
 
-	if header.RequestID != wantID {
-		log.Printf("frame: stale (got id=%d, want %d), dropping", header.RequestID, wantID)
+	if header.RequestID != waiter.requestID {
+		log.Printf("frame: stale (got id=%d, want %d), dropping", header.RequestID, waiter.requestID)
 		return
 	}
 
@@ -751,10 +881,14 @@ func (d *Daemon) sendFrame(msgType byte, reqID uint16, payload []byte) error {
 // registerWaiter sets up a per-request delivery channel. The serial
 // reader will deliver matching frames here. Must be called before
 // sending the frame. The caller holds reqMu so only one waiter exists.
-func (d *Daemon) registerWaiter(reqID uint16) chan frameResponse {
+func (d *Daemon) registerWaiter(reqID uint16, messageType byte, interruptible bool) chan frameResponse {
 	ch := make(chan frameResponse, 1)
 	d.waiterMu.Lock()
-	d.waiterID = reqID
+	d.waiterID = interruptibleWaiter{
+		messageType:   messageType,
+		requestID:     reqID,
+		interruptible: interruptible,
+	}
 	d.waiterCh = ch
 	d.waiterMu.Unlock()
 	return ch
@@ -764,9 +898,27 @@ func (d *Daemon) registerWaiter(reqID uint16) chan frameResponse {
 // returns, whether success or error.
 func (d *Daemon) clearWaiter() {
 	d.waiterMu.Lock()
-	d.waiterID = 0
+	d.waiterID = interruptibleWaiter{}
 	d.waiterCh = nil
 	d.waiterMu.Unlock()
+}
+
+func (d *Daemon) cancelInterruptibleWaiter(err error) bool {
+	d.waiterMu.Lock()
+	ch := d.waiterCh
+	waiter := d.waiterID
+	d.waiterMu.Unlock()
+
+	if ch == nil || !waiter.interruptible {
+		return false
+	}
+
+	select {
+	case ch <- frameResponse{err: err}:
+		return true
+	default:
+		return false
+	}
 }
 
 // waitResponse blocks until the serial reader delivers a matching frame,
@@ -819,7 +971,7 @@ func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 		reqID := d.allocReqID()
 		payload := protocol.BuildEvalPayload(chunk)
 
-		ch := d.registerWaiter(reqID)
+		ch := d.registerWaiter(reqID, protocol.EvalReq, true)
 		if err := d.sendFrame(protocol.EvalReq, reqID, payload); err != nil {
 			d.clearWaiter()
 			return nil, fmt.Errorf("write: %w", err)
@@ -875,7 +1027,7 @@ func (d *Daemon) deviceInfo() (*InfoResult, error) {
 	defer d.reqMu.Unlock()
 
 	reqID := d.allocReqID()
-	ch := d.registerWaiter(reqID)
+	ch := d.registerWaiter(reqID, protocol.InfoReq, false)
 	if err := d.sendFrame(protocol.InfoReq, reqID, nil); err != nil {
 		d.clearWaiter()
 		return nil, fmt.Errorf("write: %w", err)
@@ -918,7 +1070,7 @@ func (d *Daemon) deviceReset() (*ResetResult, error) {
 	defer d.reqMu.Unlock()
 
 	reqID := d.allocReqID()
-	ch := d.registerWaiter(reqID)
+	ch := d.registerWaiter(reqID, protocol.ResetReq, false)
 	if err := d.sendFrame(protocol.ResetReq, reqID, nil); err != nil {
 		d.clearWaiter()
 		return nil, fmt.Errorf("write: %w", err)
@@ -972,7 +1124,12 @@ func (d *Daemon) deviceInterrupt() error {
 		return ErrDisconnected
 	}
 
-	return conn.Write([]byte{0x03})
+	if err := conn.Write([]byte{0x03}); err != nil {
+		return err
+	}
+
+	d.cancelInterruptibleWaiter(ErrEvalInterrupted)
+	return nil
 }
 
 // allocReqID returns a unique request ID in the range [1, 0xFFFE].
@@ -995,12 +1152,24 @@ func helloToResult(h *protocol.HelloResponse) HelloResult {
 
 func msgTypeName(t byte) string {
 	switch t {
+	case protocol.HelloReq:
+		return "HELLO_REQ"
 	case protocol.HelloRes:
 		return "HELLO_RES"
+	case protocol.EvalReq:
+		return "EVAL_REQ"
 	case protocol.EvalRes:
 		return "EVAL_RES"
+	case protocol.InspectReq:
+		return "INSPECT_REQ"
+	case protocol.InspectRes:
+		return "INSPECT_RES"
+	case protocol.InfoReq:
+		return "INFO_REQ"
 	case protocol.InfoRes:
 		return "INFO_RES"
+	case protocol.ResetReq:
+		return "RESET_REQ"
 	case protocol.ResetRes:
 		return "RESET_RES"
 	case protocol.Error:

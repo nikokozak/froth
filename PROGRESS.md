@@ -1,12 +1,12 @@
 # Froth Implementation Progress
 
-*Last updated: 2026-03-21*
+*Last updated: 2026-03-22*
 
 ## Current Status
 
-**Phase**: Thesis push (Phase 3). Workshop first week of April. Thesis deadline Apr 20. CLI/editor/library system complete and tested (~90 tests). Kernel string hardening done (`n>s`, `s.concat`, unified string limit). Immediate focus: ESP32 hardware validation, then WiFi, RP2040, thesis demo.
-**Blocking issues**: `screen` unusable on macOS (PTY error, not a Froth issue).
-**Known limitations**: Console notifications remain lossy under sustained output, but the daemon now emits an explicit dropped-output notice instead of failing silently. Async eval model deferred (eval is still blocking RPC; long-running programs work but no start/accept acknowledgment).
+**Phase**: Thesis push (Phase 3). Workshop first week of April. Thesis deadline Apr 20. CLI/editor/library system complete and tested (~90 tests). Kernel string hardening done. **Immediate priority: ADR-048 exclusive live session transport** (replaces mixed-stream mux, fixes daemon hangs and serial corruption). Hardware validation interleaves on bench days.
+**Blocking issues**: `screen` unusable on macOS (PTY error, not a Froth issue). `minicom` is the working serial monitor.
+**Known limitations**: Async eval model deferred (eval is still blocking RPC; long-running programs work but no start/accept acknowledgment).
 
 ## What's Done
 
@@ -153,50 +153,75 @@
 - `froth build --clean` (Mar 21): deletes `.froth-build/` or `build64/` before building.
 - Test battery (Mar 21): ~90 tests across all layers. Shell-based kernel tests (transient strings, persistence, reset, error handling, FFI). Go CLI unit tests (80 tests: new, build, send, doctor, connect, SDK). Go integration tests (new+build+run, multi-file deps, connect --local). Top-level Makefile: `make test/test-kernel/test-cli/test-integration/build`.
 - ADR-045 catch truth convention (Mar 21): `catch` now returns `( q -- ... ecode flag )` with Froth truth semantics (`0 -1` on success, `e 0` on failure). Added stdlib `try`, updated boot/CLI autorun cleanup to `catch drop drop`, and mirrored the change into the vendored SDK kernel.
-- ADRs: 043 (transient string buffer), 044 (project system, include resolution, CLI architecture)
+- ADR-048 exclusive live session transport (Mar 22): accepted. Replaces mixed-stream console mux (ADR-033/034) with two mutually exclusive modes: Direct (raw REPL) and Live (framed-only daemon/editor session). Fixes architectural root cause of daemon hangs and sporadic serial corruption.
+- Daemon host-side bugfixes (Mar 22): transport read loop returns to console mode after frame delivery (was stuck in frame mode), interrupt now cancels in-flight eval waiter (`ErrEvalInterrupted`, `interruptibleWaiter` struct), file/manifest send does reset before eval per ADR-037. Tests added. Root cause (mixed-stream architecture) addressed by ADR-048.
+- ADRs: 043 (transient string buffer), 044 (project system, include resolution, CLI architecture), 045 (catch truth convention), 046 (number-to-string primitives), 047 (unified string length limit), 048 (exclusive live session transport)
 
 ## In Progress
 
-- ADR-038 streaming snapshot serializer: accepted. Current static BSS workspace is a band-aid (~2.8KB + 2KB NVS staging). Streaming v2 format targets ~344B writer, ~280B reader.
+- ADR-038 streaming snapshot serializer: accepted, deferred. Current static BSS workspace is a band-aid (~2.8KB + 2KB NVS staging). Streaming v2 format targets ~344B writer, ~280B reader. Not on critical path for workshop.
 
-## Blocked / Waiting
+## Known Bugs
 
-- `screen` unusable on macOS: "Sorry Could not find a PTY" error. Not a Froth issue, but limits serial monitor options.
+### ~~Daemon eval can hang permanently~~ (fixed Mar 22)
+**Root cause**: mixed-stream architecture (ADR-033/034) permits ambiguous byte classification. A dropped frame delimiter turns a valid response into console garbage. Three host-side bugs compounded: no eval timeout, interrupt doesn't cancel waiter, no recovery path.
+
+**Immediate fixes landed** (Mar 22): interrupt cancels waiter, frame mode exit after delivery, file send does reset+eval. Tests pass.
+
+**Architectural fix**: ADR-048 (exclusive live session transport) eliminates the mixed-stream model entirely. Implementation is the immediate priority.
+
+### Sporadic undefined word on ESP32 serial (discovered Mar 22)
+**Severity**: Low (intermittent, Direct Mode only). `gpio.write` undefined on first call after connecting minicom, works on retry. Likely caused by stray 0x00 from DTR reset noise putting the mux's frame accumulator into eat-bytes mode. ADR-048's bounded Direct Mode recognizer (64-byte cap, 50ms timeout) bounds the damage to at most one lost keystroke.
 
 ## Next Up
 
-### Tooling system — COMPLETE
-All CLI, editor, library, and project system work is done and tested:
-- ~~User programs, LEDC/PWM, I2C, FFI limit, string bridge, syntax highlighting~~ done
-- ~~Project system (ADR-044): manifest + resolver + CLI wiring~~ done
-- ~~SDK embedding, `froth connect --local`, `froth connect` serial~~ done
-- ~~Extension sendFile delegates to CLI, manifest-driven flash~~ done
-- ~~Manifest-aware doctor, --clean flag~~ done
-- ~~Test battery (~90 tests across all layers)~~ done
+### ADR-048: Exclusive Live Session Transport — IMMEDIATE PRIORITY
 
-### Kernel hardening (POSIX, no hardware) — PARTIAL
-- ~~`n>s`, `n>hexs`, `n>bins` — number-to-string primitives (ADR-046)~~ done
-- ~~`s.concat` — dynamic string building~~ done
-- ~~Unified `FROTH_STRING_MAX_LEN` (ADR-047) — replaces `FROTH_BSTRING_LEN_MAX`, default 256, CMake-configurable~~ done
-- Blob pool — deferred until WiFi/HTTP phase (post-workshop)
-- `froth_invoke` FFI callback API — deferred until WiFi/HTTP phase (post-workshop)
+#### Shared foundation
+1. V2 frame header format (20 bytes: magic, version, type, session_id, seq, payload_len, crc32) in C and Go
+2. New message type constants (HELLO, ATTACH, DETACH, KEEPALIVE, INPUT_DATA, INPUT_WAIT, INTERRUPT_REQ, OUTPUT_DATA) in C and Go
 
-### Hardware validation (next)
-Smoke tests on real ESP32 hardware, validating everything built so far:
-1. LEDC/PWM: LED fade, piezo tone, convenience words
-2. I2C: sensor read (temperature or accelerometer)
-3. UART bindings, `millis`, ADC
-4. User program cold boot on ESP32, snapshot priority, wipe cycle
-5. CLI `froth send` with includes → ESP32
-6. CLI `froth build` + `froth flash` with froth.toml project
-7. VS Code extension Send File → ESP32
-8. Flash 15 boards, test workshop flow
+#### Device side (kernel, POSIX first, then ESP32)
+3. Bounded Direct Mode recognizer: accumulates between 0x00 delimiters, 64-byte cap, 50ms timeout, acts only on HELLO_REQ and ATTACH_REQ, everything else discarded. Gated behind `FROTH_HAS_LIVE`.
+4. HELLO_REQ/RES in Direct Mode: stateless discovery probe, no state transition
+5. ATTACH/DETACH state transitions: session state struct, precondition checks, mode switch
+6. Live frame dispatch loop: frame-only I/O when in LIVE_IDLE or LIVE_EVAL, validates session_id
+7. Output buffering: `platform_emit` redirects to static buffer in Live Mode, flushes on `\n`, buffer full, or before terminal frames (OUTPUT_DATA)
+8. EVAL/INFO/RESET handlers: port from `froth_link.c` to v2 framing, existing payload formats
+9. Live poll hook: `froth_live_poll_control()` at executor safe points, processes KEEPALIVE, INPUT_DATA, INTERRUPT_REQ
+10. Input FIFO + key/key? in Live Mode: fixed-size FIFO (`FROTH_LIVE_INPUT_CAP`), INPUT_WAIT emission (edge-triggered), blocking wait with poll
+11. Lease timer: refreshed by any valid host frame, expiry returns to DIRECT_IDLE (interrupts eval if active)
+12. INTERRUPT_REQ handling: sets `vm->interrupted`, checked at safe points
+13. Feature gating: `FROTH_HAS_LIVE` CMake define, old `FROTH_HAS_LINK` stays until validated
+14. ESP32 validation: attach, eval, OUTPUT_DATA, INTERRUPT_REQ, lease expiry, detach
 
-### Hardware validation + new bindings (bench time)
-5. LEDC/PWM, I2C, user programs — smoke tests on real ESP32
-6. UART bindings, `millis`, ADC — new FFI words
-7. CLI + extension end-to-end with real device
-8. Flash 15 boards, workshop flow
+#### Host side (daemon + CLI + extension)
+15. Protocol package: v2 header encode/decode, new message builders/parsers in Go
+16. Session lifecycle in daemon: `liveSession` struct (session_id, seq, lease ticker), attach/detach
+17. Simplified transport read loop: frame-only after attach, no console/frame classification
+18. HELLO probe updated for v2: Direct Mode discovery, v1 fallback during migration
+19. Console events from OUTPUT_DATA: replaces raw-byte console accumulation
+20. KEEPALIVE timer: fire-and-forget every 2-3s while attached
+21. INTERRUPT_REQ replaces raw 0x03: framed interrupt with eval seq, still cancels waiter
+22. INPUT_DATA sending: on INPUT_WAIT, signal extension/CLI for input, send as framed message
+23. Session failure and recovery: timeout marks session failed, reconnect + reattach
+24. CLI commands updated: send/connect use attach/detach, info uses HELLO (no attach)
+25. Extension updates: console from OUTPUT_DATA events, INPUT_WAIT prompt
+
+#### Critical path
+Steps 1-2 (shared gate) → device 3-8 parallel with host 15-18 → device 9-12 parallel with host 19-23 → device 13-14 and host 24-25 → integration testing
+
+### Hardware validation (interleave with ADR-048 on bench days)
+- LEDC/PWM: LED fade, piezo tone, convenience words
+- I2C: sensor read (temperature or accelerometer)
+- User program cold boot on ESP32, snapshot priority, wipe cycle
+- Flash 15 boards, test workshop flow
+
+### CLI UX improvements (post-workshop polish)
+- `flash` should default to `esp-idf` or require `--target` with a clear error (not "no flash step for POSIX target")
+- `--help` and `-h` flags (global and per-command)
+- Per-command help (`froth flash --help`) with valid `--target` values, defaults, examples
+- Fully interactive CLI (tab completion, history, command discovery)
 
 ### Post-validation thesis push (through Apr 20)
 9. WiFi bindings + `http.get` + HTTP server + `http.get-stream`

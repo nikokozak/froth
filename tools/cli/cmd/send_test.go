@@ -9,7 +9,7 @@ import (
 func TestRunSendRawSourceModePassesSourceDirectly(t *testing.T) {
 	resetCommandGlobals(t)
 
-	sourceCh, cleanup := startFakeDaemon(t)
+	reqCh, cleanup := startFakeDaemon(t)
 	defer cleanup()
 
 	stdout, stderr := captureOutput(t, func() {
@@ -24,19 +24,22 @@ func TestRunSendRawSourceModePassesSourceDirectly(t *testing.T) {
 		t.Fatalf("stdout = %q, want eval result", stdout)
 	}
 
-	got := <-sourceCh
-	if got != "1 2 +\n[ 'autorun call ] catch drop drop\n" {
-		t.Fatalf("sent source = %q, want raw source plus autorun", got)
+	req := <-reqCh
+	if req.Method != "eval" {
+		t.Fatalf("first request = %#v, want eval", req)
 	}
-	if strings.Contains(got, `\ --- `) {
-		t.Fatalf("sent source unexpectedly contains boundary markers: %q", got)
+	if req.Source != "1 2 +\n[ 'autorun call ] catch drop drop\n" {
+		t.Fatalf("sent source = %q, want raw source plus autorun", req.Source)
+	}
+	if strings.Contains(req.Source, `\ --- `) {
+		t.Fatalf("sent source unexpectedly contains boundary markers: %q", req.Source)
 	}
 }
 
 func TestRunSendFileModeResolvesIncludesAndAppendsAutorun(t *testing.T) {
 	resetCommandGlobals(t)
 
-	sourceCh, cleanup := startFakeDaemon(t)
+	reqCh, cleanup := startFakeDaemon(t)
 	defer cleanup()
 
 	projectRoot := t.TempDir()
@@ -60,12 +63,19 @@ dep = { path = "lib/dep.froth" }
 		t.Fatalf("runSend: %v", err)
 	}
 
-	got := <-sourceCh
-	if !strings.Contains(got, `\ --- lib/dep.froth ---`) {
-		t.Fatalf("sent source = %q, want resolved dependency", got)
+	resetReq := <-reqCh
+	if resetReq.Method != "reset" {
+		t.Fatalf("first request = %#v, want reset", resetReq)
 	}
-	if !strings.HasSuffix(got, "\n[ 'autorun call ] catch drop drop\n") {
-		t.Fatalf("sent source = %q, want autorun appended", got)
+	evalReq := <-reqCh
+	if evalReq.Method != "eval" {
+		t.Fatalf("second request = %#v, want eval", evalReq)
+	}
+	if !strings.Contains(evalReq.Source, `\ --- lib/dep.froth ---`) {
+		t.Fatalf("sent source = %q, want resolved dependency", evalReq.Source)
+	}
+	if !strings.HasSuffix(evalReq.Source, "\n[ 'autorun call ] catch drop drop\n") {
+		t.Fatalf("sent source = %q, want autorun appended", evalReq.Source)
 	}
 }
 
@@ -97,7 +107,7 @@ func TestResolveSourceDirectoryArgumentErrors(t *testing.T) {
 func TestRunSendNoArgumentUsesManifestEntry(t *testing.T) {
 	resetCommandGlobals(t)
 
-	sourceCh, cleanup := startFakeDaemon(t)
+	reqCh, cleanup := startFakeDaemon(t)
 	defer cleanup()
 
 	projectRoot := t.TempDir()
@@ -118,12 +128,19 @@ helper = { path = "lib/helper.froth" }
 		t.Fatalf("runSend: %v", err)
 	}
 
-	got := <-sourceCh
-	if !strings.Contains(got, `\ --- src/main.froth ---`) {
-		t.Fatalf("sent source = %q, want manifest entry content", got)
+	resetReq := <-reqCh
+	if resetReq.Method != "reset" {
+		t.Fatalf("first request = %#v, want reset", resetReq)
 	}
-	if !strings.Contains(got, `\ --- lib/helper.froth ---`) {
-		t.Fatalf("sent source = %q, want dependency content", got)
+	evalReq := <-reqCh
+	if evalReq.Method != "eval" {
+		t.Fatalf("second request = %#v, want eval", evalReq)
+	}
+	if !strings.Contains(evalReq.Source, `\ --- src/main.froth ---`) {
+		t.Fatalf("sent source = %q, want manifest entry content", evalReq.Source)
+	}
+	if !strings.Contains(evalReq.Source, `\ --- lib/helper.froth ---`) {
+		t.Fatalf("sent source = %q, want dependency content", evalReq.Source)
 	}
 }
 
@@ -157,14 +174,17 @@ libdep = { path = "lib/right.froth" }
 `)
 
 	withChdir(t, projectA)
-	got, err := resolveFromFile(filepath.Join(projectB, "src", "main.froth"))
+	payload, err := resolveFromFile(filepath.Join(projectB, "src", "main.froth"))
 	if err != nil {
 		t.Fatalf("resolveFromFile: %v", err)
 	}
-	if !strings.Contains(got, `\ --- lib/right.froth ---`) {
-		t.Fatalf("resolved source = %q, want project-b dependency", got)
+	if !payload.resetBeforeEval {
+		t.Fatal("resolveFromFile resetBeforeEval = false, want true")
 	}
-	if strings.Contains(got, "wrong 111") {
-		t.Fatalf("resolved source = %q, unexpectedly used cwd manifest", got)
+	if !strings.Contains(payload.source, `\ --- lib/right.froth ---`) {
+		t.Fatalf("resolved source = %q, want project-b dependency", payload.source)
+	}
+	if strings.Contains(payload.source, "wrong 111") {
+		t.Fatalf("resolved source = %q, unexpectedly used cwd manifest", payload.source)
 	}
 }

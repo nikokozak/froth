@@ -12,17 +12,22 @@ import (
 	"github.com/nikokozak/froth/tools/cli/internal/session"
 )
 
+type sendPayload struct {
+	source          string
+	resetBeforeEval bool
+}
+
 func runSend(fileArg string) error {
-	source, err := resolveSource(fileArg)
+	payload, err := resolveSource(fileArg)
 	if err != nil {
 		return err
 	}
 
 	// Append autorun invocation for send path (ADR-044)
-	source = project.AppendAutorun(source)
+	payload.source = project.AppendAutorun(payload.source)
 
 	if !serialFlag {
-		err := sendViaDaemon(source)
+		err := sendViaDaemon(payload)
 		if err == nil {
 			return nil
 		}
@@ -30,55 +35,58 @@ func runSend(fileArg string) error {
 			return fmt.Errorf("daemon: %w", err)
 		}
 	}
-	return sendViaSerial(source)
+	return sendViaSerial(payload)
 }
 
 // resolveSource resolves includes and produces a merged source string.
 // If fileArg is a raw .froth source string (not a file path), it's sent directly.
 // If fileArg is a file path, the resolver runs. If no fileArg, uses froth.toml entry.
-func resolveSource(fileArg string) (string, error) {
+func resolveSource(fileArg string) (*sendPayload, error) {
 	if fileArg != "" {
 		info, err := os.Stat(fileArg)
 		if err == nil {
 			if info.IsDir() {
-				return "", fmt.Errorf("%s is a directory, not a file", fileArg)
+				return nil, fmt.Errorf("%s is a directory, not a file", fileArg)
 			}
 			return resolveFromFile(fileArg)
 		}
 		// If it looks like a file path but doesn't exist, error instead of
 		// silently treating it as raw source
 		if strings.HasSuffix(fileArg, ".froth") || strings.Contains(fileArg, "/") {
-			return "", fmt.Errorf("file not found: %s", fileArg)
+			return nil, fmt.Errorf("file not found: %s", fileArg)
 		}
 		// Raw source (backward compat with `froth send "1 2 +"`)
-		return fileArg, nil
+		return &sendPayload{source: fileArg}, nil
 	}
 
 	// No argument — try to use froth.toml
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "", fmt.Errorf("working directory: %w", err)
+		return nil, fmt.Errorf("working directory: %w", err)
 	}
 
 	manifest, root, err := project.Load(cwd)
 	if err != nil {
-		return "", fmt.Errorf("no file specified and %w", err)
+		return nil, fmt.Errorf("no file specified and %w", err)
 	}
 
 	result, err := project.Resolve(manifest, root)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	printWarnings(result.Warnings)
 	printResolveSummary(result)
 
-	return result.Source, nil
+	return &sendPayload{
+		source:          result.Source,
+		resetBeforeEval: true,
+	}, nil
 }
 
-func resolveFromFile(filePath string) (string, error) {
+func resolveFromFile(filePath string) (*sendPayload, error) {
 	absPath, err := filepath.Abs(filePath)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Search for manifest starting from the file's directory, not CWD.
@@ -100,22 +108,28 @@ func resolveFromFile(filePath string) (string, error) {
 
 	result, err := project.Resolve(manifest, root)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	printWarnings(result.Warnings)
 	printResolveSummary(result)
 
-	return result.Source, nil
+	return &sendPayload{
+		source:          result.Source,
+		resetBeforeEval: true,
+	}, nil
 }
 
-func resolveBareSingleFile(absPath string) (string, error) {
+func resolveBareSingleFile(absPath string) (*sendPayload, error) {
 	dir := filepath.Dir(absPath)
 	result, err := project.ResolveEntry(absPath, dir)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	printWarnings(result.Warnings)
-	return result.Source, nil
+	return &sendPayload{
+		source:          result.Source,
+		resetBeforeEval: true,
+	}, nil
 }
 
 func printWarnings(warnings []string) {
@@ -131,7 +145,7 @@ func printResolveSummary(result *project.ResolveResult) {
 	}
 }
 
-func sendViaDaemon(source string) error {
+func sendViaDaemon(payload *sendPayload) error {
 	client, err := daemon.Dial()
 	if err != nil {
 		return err
@@ -146,7 +160,13 @@ func sendViaDaemon(source string) error {
 		}
 	}
 
-	result, err := client.Eval(source)
+	if payload.resetBeforeEval {
+		if _, err := client.Reset(); err != nil {
+			return fmt.Errorf("reset: %w", err)
+		}
+	}
+
+	result, err := client.Eval(payload.source)
 	if err != nil {
 		return fmt.Errorf("eval: %w", err)
 	}
@@ -166,7 +186,7 @@ func sendViaDaemon(source string) error {
 	return nil
 }
 
-func sendViaSerial(source string) error {
+func sendViaSerial(payload *sendPayload) error {
 	sess, err := session.Connect(portFlag)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
@@ -175,7 +195,13 @@ func sendViaSerial(source string) error {
 
 	sess.SetPassthrough(os.Stdout)
 
-	result, err := sess.Eval(source)
+	if payload.resetBeforeEval {
+		if _, err := sess.Reset(); err != nil {
+			return fmt.Errorf("reset: %w", err)
+		}
+	}
+
+	result, err := sess.Eval(payload.source)
 	if err != nil {
 		return fmt.Errorf("eval: %w", err)
 	}
