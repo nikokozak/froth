@@ -322,21 +322,22 @@
 - [x] New message type constants — C and Go (renumbered, INSPECT/EVENT removed)
 - [x] `platform_uptime_ms()` — POSIX + ESP32
 
-#### Device side (kernel, POSIX first, then ESP32)
+#### Device side (kernel) — DONE (Mar 22, two review passes clean)
 - [x] Bounded Direct Mode recognizer (`froth_console.c`): 64-byte cap, 50ms timeout, HELLO_REQ + ATTACH_REQ
 - [x] HELLO_REQ/RES in Direct Mode: stateless discovery, no state transition
-- [x] ATTACH state transition: precondition checks, ATTACH_RES OK/BUSY/INVALID, mode switch after send
-- [x] EVAL/INFO/RESET handlers ported to v2 framing (session_id + seq threaded)
-- [x] `froth_console_mux.c` replaced by `froth_console.c`, wired into boot, REPL smoke-tested
-- [x] `froth_repl_is_idle()` accessor, `froth_link_send_hello_res()` helper extracted
-- [ ] Live frame dispatch loop: frame-only I/O in LIVE_IDLE/LIVE_EVAL, session_id validation, DETACH
-- [ ] Output buffering: `platform_emit` to static buffer in Live Mode, flush on `\n` / buffer full / before terminal frames
-- [ ] Live poll hook (`froth_live_poll_control`): executor safe points, KEEPALIVE + INPUT_DATA + INTERRUPT_REQ
-- [ ] Input FIFO + key/key? in Live Mode: FIFO, INPUT_WAIT (edge-triggered), blocking wait with poll
-- [ ] Lease timer: any valid frame refreshes, expiry returns to DIRECT_IDLE (interrupts eval)
-- [ ] INTERRUPT_REQ: sets `vm->interrupted` at safe points
-- [ ] Feature gating: `FROTH_HAS_LIVE` CMake define, old `FROTH_HAS_LINK` / mux / v1 transport removed
-- [ ] **Proof**: POSIX round-trip — attach, eval, OUTPUT_DATA, interrupt, key, detach, lease expiry
+- [x] ATTACH/DETACH state transitions: precondition checks, ATTACH_RES OK/BUSY/INVALID
+- [x] Live frame dispatch loop: frame-only I/O, session_id + seq validation, DETACH
+- [x] Output buffering: `froth_console_emit` shim, flush on `\n` / full / before terminal frames
+- [x] EVAL/INFO/RESET handlers ported to v2 framing
+- [x] Live poll hook (`froth_console_poll`): executor safe points, KEEPALIVE + INPUT_DATA + INTERRUPT_REQ with seq discipline
+- [x] Input FIFO + key/key?: 64-byte FIFO, INPUT_WAIT edge-triggered, blocking wait with poll
+- [x] Lease timer: refreshed on valid frames only, expiry returns to Direct (interrupts eval)
+- [x] INTERRUPT_REQ: sets `vm->interrupted`, seq-validated against active_seq
+- [x] Feature gating: `FROTH_HAS_LIVE` CMake define, `FROTH_HAS_LINK` removed, Direct-only build verified
+- [x] Review pass 1: seq validation, strict frame length, error frames, flush ordering (5 fixes)
+- [x] Review pass 2: non-blocking idle, poll seq discipline, helpers extracted (no new issues)
+- [x] `froth_console_mux.c` replaced, `froth_repl_is_idle()`, `froth_link_send_hello_res()` extracted
+- [ ] **Proof**: POSIX round-trip — attach, eval, OUTPUT_DATA, interrupt, key, detach, lease expiry (needs host side)
 - [ ] ESP32 validation: same tests on real hardware
 
 #### Host side (daemon + CLI + extension)

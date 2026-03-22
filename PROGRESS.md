@@ -177,47 +177,47 @@
 
 ### ADR-048: Exclusive Live Session Transport — IMMEDIATE PRIORITY
 
-#### Shared foundation — DONE
+#### Shared foundation — DONE (Mar 22)
 1. ~~V2 frame header format (20 bytes) in C and Go~~ done
-2. ~~New message type constants in C and Go~~ done (renumbered, INSPECT/EVENT removed, ATTACH/DETACH/KEEPALIVE/INPUT_DATA/INPUT_WAIT/INTERRUPT_REQ/OUTPUT_DATA added)
+2. ~~New message type constants in C and Go~~ done (renumbered, INSPECT/EVENT removed)
 
-#### Device side (kernel, POSIX first, then ESP32) — PARTIAL
-3. ~~Bounded Direct Mode recognizer~~ done (`froth_console.c`: 64-byte cap, 50ms timeout, acts on HELLO_REQ + ATTACH_REQ)
-4. ~~HELLO_REQ/RES in Direct Mode~~ done (stateless, no state transition, calls `froth_link_send_hello_res`)
-5. ~~ATTACH state transition~~ done (precondition checks, ATTACH_RES OK/BUSY/INVALID, mode switch after send). DETACH is Live-side, comes with step 6.
-6. Live frame dispatch loop: frame-only I/O when in LIVE_IDLE or LIVE_EVAL, validates session_id
-7. Output buffering: `platform_emit` redirects to static buffer in Live Mode, flushes on `\n`, buffer full, or before terminal frames (OUTPUT_DATA)
-8. ~~EVAL/INFO/RESET handlers ported to v2 framing~~ done (session_id + seq threaded through all callers)
-9. Live poll hook: `froth_live_poll_control()` at executor safe points, processes KEEPALIVE, INPUT_DATA, INTERRUPT_REQ
-10. Input FIFO + key/key? in Live Mode: fixed-size FIFO (`FROTH_LIVE_INPUT_CAP`), INPUT_WAIT emission (edge-triggered), blocking wait with poll
-11. Lease timer: refreshed by any valid host frame, expiry returns to DIRECT_IDLE (interrupts eval if active)
-12. INTERRUPT_REQ handling: sets `vm->interrupted`, checked at safe points
-13. Feature gating: `FROTH_HAS_LIVE` CMake define, `FROTH_HAS_LINK` and old mux/transport/link code removed
-14. ESP32 validation: attach, eval, OUTPUT_DATA, INTERRUPT_REQ, lease expiry, detach
+#### Device side (kernel) — DONE (Mar 22, two review passes clean)
+3. ~~Bounded Direct Mode recognizer~~ done (`froth_console.c`: 64-byte cap, 50ms timeout)
+4. ~~HELLO_REQ/RES in Direct Mode~~ done (stateless, no state transition)
+5. ~~ATTACH/DETACH state transitions~~ done (precondition checks, ATTACH_RES OK/BUSY/INVALID)
+6. ~~Live frame dispatch loop~~ done (frame-only I/O, session_id + seq validation, DETACH)
+7. ~~Output buffering~~ done (`froth_console_emit` shim, flush on `\n`/full/before terminal frames)
+8. ~~EVAL/INFO/RESET handlers ported to v2 framing~~ done
+9. ~~Live poll hook~~ done (`froth_console_poll` at executor safe points, KEEPALIVE/INPUT_DATA/INTERRUPT_REQ)
+10. ~~Input FIFO + key/key?~~ done (64-byte FIFO, INPUT_WAIT edge-triggered, blocking wait with poll)
+11. ~~Lease timer~~ done (refreshed on valid frames only, expiry returns to Direct, interrupts eval)
+12. ~~INTERRUPT_REQ~~ done (sets `vm->interrupted`, seq-validated against active_seq)
+13. ~~Feature gating~~ done (`FROTH_HAS_LIVE` CMake define, `FROTH_HAS_LINK` removed, Direct-only build verified)
+- ~~Review pass 1~~: seq validation, strict frame length, error frames, flush ordering (5 issues fixed)
+- ~~Review pass 2~~: non-blocking idle loop, poll seq discipline, helpers extracted, no new issues
+14. ESP32 validation: attach, eval, OUTPUT_DATA, INTERRUPT_REQ, lease expiry, detach — needs bench
 
 #### Also done (not originally listed)
-- `platform_uptime_ms()` added to platform API (POSIX: `clock_gettime`, ESP32: `esp_timer_get_time`)
-- `froth_repl_is_idle()` accessor for attach precondition checking
-- `froth_link_send_hello_res()` extracted as public helper
-- `froth_console_mux.c` replaced by `froth_console.c` in CMake and boot
-- Old mux include/call removed from `froth_boot.c`
-- Direct Mode REPL smoke-tested through console governor
+- `platform_uptime_ms()` on both platforms (POSIX: `clock_gettime`, ESP32: `esp_timer_get_time`)
+- `froth_repl_is_idle()`, `froth_link_send_hello_res()` extracted
+- `froth_console_mux.c` replaced by `froth_console.c`, old mux removed from build
+- `enter_direct_mode()`, `lease_expired()`, `next_seq()` helpers for state management
+- `froth_console_emit` overflow guard, `froth_console_flush_output` clears only on success
+- Dispatch errors send ERROR frame to host (no silent drops)
+- Direct-only build (`FROTH_HAS_LIVE=OFF`) verified: compiles, runs REPL, no Live code linked
 
-#### Host side (daemon + CLI + extension) — PARTIAL
-15. ~~Protocol package: v2 header encode/decode, new message builders/parsers in Go~~ done
-16. Session lifecycle in daemon: `liveSession` struct (session_id, seq, lease ticker), attach/detach
-17. Simplified transport read loop: frame-only after attach, no console/frame classification
-18. ~~HELLO probe updated for v2: Direct Mode discovery, no v1 fallback~~ done (discover.go)
-19. Console events from OUTPUT_DATA: replaces raw-byte console accumulation
+#### Host side (daemon + CLI + extension) — NEXT
+15. ~~Protocol package: v2 header, message builders/parsers~~ done
+16. Session lifecycle in daemon: attach/detach, session_id generation, seq tracking
+17. Simplified transport read loop: frame-only after attach, no byte classification
+18. ~~HELLO probe updated for v2~~ done (discover.go)
+19. Console events from OUTPUT_DATA (replaces raw-byte accumulation)
 20. KEEPALIVE timer: fire-and-forget every 2-3s while attached
-21. INTERRUPT_REQ replaces raw 0x03: framed interrupt with eval seq, still cancels waiter
-22. INPUT_DATA sending: on INPUT_WAIT, signal extension/CLI for input, send as framed message
+21. INTERRUPT_REQ replaces raw 0x03: framed interrupt with eval seq
+22. INPUT_DATA sending: on INPUT_WAIT, relay to extension/CLI
 23. Session failure and recovery: timeout marks session failed, reconnect + reattach
-24. CLI commands updated: send/connect use attach/detach, info uses HELLO (no attach)
+24. CLI commands updated: send/connect use attach/detach, info uses HELLO
 25. Extension updates: console from OUTPUT_DATA events, INPUT_WAIT prompt
-
-#### Critical path
-Steps 1-2 (shared gate) → device 3-8 parallel with host 15-18 → device 9-12 parallel with host 19-23 → device 13-14 and host 24-25 → integration testing
 
 ### Hardware validation (interleave with ADR-048 on bench days)
 - LEDC/PWM: LED fade, piezo tone, convenience words
