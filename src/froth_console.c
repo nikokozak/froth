@@ -429,7 +429,10 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
           FROTH_TRY(emit_string(prompt_normal));
           break;
         default:
+          if (header.message_type == FROTH_LINK_EVAL_REQ)
+            g_console.active_seq = header.seq;
           froth_link_dispatch(vm, &header, payload);
+          g_console.active_seq = 0;
           break;
         }
         froth_link_frame_reset();
