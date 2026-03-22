@@ -3,7 +3,10 @@
 #include "froth_types.h"
 #include "froth_vm.h"
 #include "platform.h"
+#include <stdbool.h>
 #include <stdint.h>
+
+#ifdef FROTH_HAS_LIVE
 
 /* Attach recognizer limits. Stray 0x00 eats at most this many bytes / ms. */
 #define FROTH_CONSOLE_RECOGNIZE_CAP 64u
@@ -45,25 +48,37 @@ typedef struct {
 
   /* Live input FIFO. Fed by INPUT_DATA, consumed by key/key?. */
   uint8_t input_buf[FROTH_CONSOLE_INPUT_CAP];
-  uint8_t input_head;       /* next read position */
-  uint8_t input_count;      /* number of bytes in FIFO */
-  uint8_t input_wait_sent;  /* edge trigger for INPUT_WAIT */
+  uint8_t input_head;
+  uint8_t input_count;
+  uint8_t input_wait_sent;
 } froth_console_t;
 
 /* Main loop. Boots into Direct, never returns. */
 froth_error_t froth_console_start(froth_vm_t *vm);
 
-/* Output shim. In Direct mode, forwards to platform_emit.
- * In Live mode, buffers and flushes as OUTPUT_DATA. */
 froth_error_t froth_console_emit(uint8_t byte);
-
-/* Flush any buffered Live output as an OUTPUT_DATA frame. No-op in Direct. */
 froth_error_t froth_console_flush_output(void);
-
-/* Live-aware key/key?. Direct: platform_key/platform_key_ready.
- * Live: input FIFO + INPUT_WAIT edge trigger. */
 froth_error_t froth_console_key(froth_vm_t *vm, uint8_t *byte);
 bool froth_console_key_ready(void);
-
-/* Executor safe-point poll hook. Non-blocking. */
 void froth_console_poll(froth_vm_t *vm);
+
+#else /* !FROTH_HAS_LIVE — Direct-only passthroughs */
+
+static inline froth_error_t froth_console_emit(uint8_t byte) {
+  return platform_emit(byte);
+}
+static inline froth_error_t froth_console_flush_output(void) {
+  return FROTH_OK;
+}
+static inline froth_error_t froth_console_key(froth_vm_t *vm, uint8_t *byte) {
+  (void)vm;
+  return platform_key(byte);
+}
+static inline bool froth_console_key_ready(void) {
+  return platform_key_ready();
+}
+static inline void froth_console_poll(froth_vm_t *vm) {
+  platform_check_interrupt(vm);
+}
+
+#endif /* FROTH_HAS_LIVE */

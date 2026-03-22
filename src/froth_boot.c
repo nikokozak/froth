@@ -112,5 +112,9 @@ void froth_boot(const froth_ffi_entry_t *board_bindings) {
     emit_string("boot: Safe Boot, skipped restore and autorun.");
   }
 
+#ifdef FROTH_HAS_LIVE
   froth_console_start(&froth_vm);
+#else
+  froth_repl_start(&froth_vm);
+#endif
 }

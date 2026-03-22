@@ -18,9 +18,10 @@ set(FROTH_KERNEL_SRCS
     ${FROTH_ROOT}/src/froth_snapshot_writer.c
     ${FROTH_ROOT}/src/froth_crc32.c
     ${FROTH_ROOT}/src/froth_snapshot_prims.c
+    ${FROTH_ROOT}/src/froth_console.c
     ${FROTH_ROOT}/src/froth_transport.c
     ${FROTH_ROOT}/src/froth_link.c
-    ${FROTH_ROOT}/src/froth_console_mux.c
+    ${FROTH_ROOT}/src/froth_tbuf.c
 )
 
 idf_component_register(
@@ -49,7 +50,7 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
     FROTH_BOARD_NAME="${FROTH_BOARD}"
     FROTH_HAS_SNAPSHOTS=1
     FROTH_SNAPSHOT_BLOCK_SIZE=2048
-    FROTH_HAS_LINK=1
+    FROTH_HAS_LIVE=1
     FROTH_STRING_MAX_LEN=256
 )
 
