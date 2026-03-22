@@ -118,7 +118,8 @@ static uint8_t resp_buf[FROTH_LINK_MAX_PAYLOAD];
 
 /* ── HELLO ───────────────────────────────────────────────────────── */
 
-static froth_error_t handle_hello(froth_vm_t *vm, uint16_t request_id) {
+froth_error_t froth_link_send_hello_res(froth_vm_t *vm, uint64_t session_id,
+                                        uint16_t seq) {
   payload_writer_t pw = {resp_buf, sizeof(resp_buf), 0};
 
   FROTH_TRY(pw_u8(&pw, FROTH_CELL_SIZE_BITS));
@@ -131,21 +132,27 @@ static froth_error_t handle_hello(froth_vm_t *vm, uint16_t request_id) {
   FROTH_TRY(pw_str(&pw, FROTH_BOARD_NAME));
   FROTH_TRY(pw_u8(&pw, 0)); /* capability_count */
 
-  return froth_link_send_frame(FROTH_LINK_HELLO_RES, request_id, resp_buf,
+  return froth_link_send_frame(session_id, FROTH_LINK_HELLO_RES, seq, resp_buf,
                                pw.pos);
+}
+
+static froth_error_t handle_hello(froth_vm_t *vm,
+                                  const froth_link_header_t *header) {
+  return froth_link_send_hello_res(vm, header->session_id, header->seq);
 }
 
 /* ── EVAL ────────────────────────────────────────────────────────── */
 
-static froth_error_t handle_eval(froth_vm_t *vm, uint16_t request_id,
-                                 const uint8_t *payload, uint16_t payload_len) {
-  if (payload_len < 3)
+static froth_error_t handle_eval(froth_vm_t *vm,
+                                 const froth_link_header_t *header,
+                                 const uint8_t *payload) {
+  if (header->payload_length < 3)
     return FROTH_ERROR_LINK_TOO_LARGE;
 
   /* uint8_t flags = payload[0]; */
   uint16_t source_len = (uint16_t)payload[1] | ((uint16_t)payload[2] << 8);
 
-  if (3 + source_len > payload_len)
+  if (3 + source_len > header->payload_length)
     return FROTH_ERROR_LINK_TOO_LARGE;
 
   /* Copy source into a null-terminated buffer on the stack */
@@ -195,13 +202,14 @@ static froth_error_t handle_eval(froth_vm_t *vm, uint16_t request_id,
     vm->rs.pointer = rs_snap;
   }
 
-  return froth_link_send_frame(FROTH_LINK_EVAL_RES, request_id, resp_buf,
-                               pw.pos);
+  return froth_link_send_frame(header->session_id, FROTH_LINK_EVAL_RES,
+                               header->seq, resp_buf, pw.pos);
 }
 
 /* ── INFO ────────────────────────────────────────────────────────── */
 
-static froth_error_t handle_info(froth_vm_t *vm, uint16_t request_id) {
+static froth_error_t handle_info(froth_vm_t *vm,
+                                 const froth_link_header_t *header) {
   payload_writer_t pw = {resp_buf, sizeof(resp_buf), 0};
 
   FROTH_TRY(pw_u32(&pw, FROTH_HEAP_SIZE));
@@ -226,13 +234,14 @@ static froth_error_t handle_info(froth_vm_t *vm, uint16_t request_id) {
   FROTH_TRY(pw_u8(&pw, 0)); /* flags */
   FROTH_TRY(pw_str(&pw, FROTH_VERSION));
 
-  return froth_link_send_frame(FROTH_LINK_INFO_RES, request_id, resp_buf,
-                               pw.pos);
+  return froth_link_send_frame(header->session_id, FROTH_LINK_INFO_RES,
+                               header->seq, resp_buf, pw.pos);
 }
 
 /* ── RESET ────────────────────────────────────────────────────────── */
 
-static froth_error_t handle_reset(froth_vm_t *vm, uint16_t request_id) {
+static froth_error_t handle_reset(froth_vm_t *vm,
+                                  const froth_link_header_t *header) {
   payload_writer_t pw = {resp_buf, sizeof(resp_buf), 0};
 
   /* Reset clears VM stacks, overlay slots, and heap back to watermark.
@@ -265,18 +274,19 @@ static froth_error_t handle_reset(froth_vm_t *vm, uint16_t request_id) {
   FROTH_TRY(pw_u8(&pw, 0)); /* flags */
   FROTH_TRY(pw_str(&pw, FROTH_VERSION));
 
-  return froth_link_send_frame(FROTH_LINK_RESET_RES, request_id, resp_buf,
-                               pw.pos);
+  return froth_link_send_frame(header->session_id, FROTH_LINK_RESET_RES,
+                               header->seq, resp_buf, pw.pos);
 }
 
 /* ── ERROR response ──────────────────────────────────────────────── */
 
-static froth_error_t send_error(uint16_t request_id, uint8_t category,
-                                const char *detail) {
+static froth_error_t send_error(const froth_link_header_t *header,
+                                uint8_t category, const char *detail) {
   payload_writer_t pw = {resp_buf, sizeof(resp_buf), 0};
   FROTH_TRY(pw_u8(&pw, category));
   FROTH_TRY(pw_str(&pw, detail));
-  return froth_link_send_frame(FROTH_LINK_ERROR, request_id, resp_buf, pw.pos);
+  return froth_link_send_frame(header->session_id, FROTH_LINK_ERROR,
+                               header->seq, resp_buf, pw.pos);
 }
 
 /* ── Dispatch ────────────────────────────────────────────────────── */
@@ -286,16 +296,14 @@ froth_error_t froth_link_dispatch(froth_vm_t *vm,
                                   const uint8_t *payload) {
   switch (header->message_type) {
   case FROTH_LINK_HELLO_REQ:
-    return handle_hello(vm, header->request_id);
+    return handle_hello(vm, header);
   case FROTH_LINK_EVAL_REQ:
-    return handle_eval(vm, header->request_id, payload, header->payload_length);
+    return handle_eval(vm, header, payload);
   case FROTH_LINK_INFO_REQ:
-    return handle_info(vm, header->request_id);
-  case FROTH_LINK_INSPECT_REQ:
-    return send_error(header->request_id, 1, "not implemented");
+    return handle_info(vm, header);
   case FROTH_LINK_RESET_REQ:
-    return handle_reset(vm, header->request_id);
+    return handle_reset(vm, header);
   default:
-    return send_error(header->request_id, 0, "unknown message type");
+    return send_error(header, 0, "unknown message type");
   }
 }

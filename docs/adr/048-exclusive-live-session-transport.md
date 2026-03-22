@@ -629,13 +629,7 @@ Raw passthrough to the real device UART remains a Direct Mode concern outside th
 
 ### 15. Migration strategy
 
-1. Mark the current mixed-stream Link Mode as deprecated in the interactive spec.
-2. Implement the exclusive Live session alongside existing Direct Mode.
-3. Update CLI, daemon, and extension against the new message set.
-4. Validate the new path on POSIX and ESP32.
-5. Only then remove the old mixed-stream implementation from the firmware and host.
-
-This avoids a flag-day rewrite while keeping the end state clear.
+Clean cut. The v1 mixed-stream protocol (ADR-033, ADR-034) is removed, not deprecated. The old `froth_transport.c`, `froth_link.c`, `froth_console_mux.c`, and Go `internal/protocol` v1 code are replaced in place. There is no coexistence period and no backwards compatibility layer. Git history is the rollback plan. The only consumer of v1 is our own tooling, and mixed-version complexity is exactly the kind of spaghetti this ADR exists to eliminate.
 
 ## Consequences
 
@@ -645,7 +639,7 @@ This avoids a flag-day rewrite while keeping the end state clear.
 - `key` and `key?` remain available to interactive editor-driven programs without relying on timing heuristics.
 - Corrupt protocol bytes can no longer surface as user console output by design.
 - The daemon and extension become simpler because they no longer have to treat one byte stream as two active semantic channels.
-- Existing mixed-stream assumptions in ADR-033 and ADR-034 become technical debt and must eventually be removed.
+- ADR-033 and ADR-034 are superseded. Their implementations are removed, not maintained.
 - Simultaneous raw terminal use and live editor use on the same active session becomes intentionally unsupported.
 - A future PTY bridge remains possible, but as a host adapter rather than a transport primitive.
 - Small targets can opt out of Live support without losing host-side manifest resolution, build, or flash.

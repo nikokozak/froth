@@ -163,7 +163,7 @@ func ProbeHello(port *Port) (*protocol.HelloResponse, error) {
 func ProbeHelloTransport(port Transport) (*protocol.HelloResponse, error) {
 	deadline := time.Now().Add(ProbeDeadline)
 
-	helloFrame, err := protocol.EncodeWireFrame(protocol.HelloReq, 0, nil)
+	helloFrame, err := protocol.EncodeWireFrame(0, protocol.HelloReq, 0, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build HELLO_REQ: %w", err)
 	}

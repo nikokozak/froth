@@ -317,30 +317,33 @@
 > Direct/Live two-mode model. Fixes architectural root cause of daemon hangs
 > and serial corruption. Device and host work proceed in parallel after step 2.
 
-#### Shared foundation (gate for all other steps)
-- [ ] V2 frame header (20 bytes: magic, version, type, session_id u64, seq u16, payload_len u16, crc32) — C and Go
-- [ ] New message type constants (HELLO, ATTACH, DETACH, KEEPALIVE, INPUT_DATA, INPUT_WAIT, INTERRUPT_REQ, OUTPUT_DATA) — C and Go
+#### Shared foundation — DONE (Mar 22)
+- [x] V2 frame header (20 bytes: magic, version, type, session_id u64, seq u16, payload_len u16, crc32) — C and Go
+- [x] New message type constants — C and Go (renumbered, INSPECT/EVENT removed)
+- [x] `platform_uptime_ms()` — POSIX + ESP32
 
 #### Device side (kernel, POSIX first, then ESP32)
-- [ ] Bounded Direct Mode recognizer: 0x00-delimited accumulation, 64-byte cap, 50ms timeout, acts only on HELLO_REQ + ATTACH_REQ. Gated `FROTH_HAS_LIVE`.
-- [ ] HELLO_REQ/RES in Direct Mode: stateless discovery, no state transition
-- [ ] ATTACH/DETACH: session state struct, precondition checks, mode transitions
-- [ ] Live frame dispatch loop: frame-only I/O in LIVE_IDLE/LIVE_EVAL, session_id validation
+- [x] Bounded Direct Mode recognizer (`froth_console.c`): 64-byte cap, 50ms timeout, HELLO_REQ + ATTACH_REQ
+- [x] HELLO_REQ/RES in Direct Mode: stateless discovery, no state transition
+- [x] ATTACH state transition: precondition checks, ATTACH_RES OK/BUSY/INVALID, mode switch after send
+- [x] EVAL/INFO/RESET handlers ported to v2 framing (session_id + seq threaded)
+- [x] `froth_console_mux.c` replaced by `froth_console.c`, wired into boot, REPL smoke-tested
+- [x] `froth_repl_is_idle()` accessor, `froth_link_send_hello_res()` helper extracted
+- [ ] Live frame dispatch loop: frame-only I/O in LIVE_IDLE/LIVE_EVAL, session_id validation, DETACH
 - [ ] Output buffering: `platform_emit` to static buffer in Live Mode, flush on `\n` / buffer full / before terminal frames
-- [ ] EVAL/INFO/RESET handlers ported to v2 framing
 - [ ] Live poll hook (`froth_live_poll_control`): executor safe points, KEEPALIVE + INPUT_DATA + INTERRUPT_REQ
 - [ ] Input FIFO + key/key? in Live Mode: FIFO, INPUT_WAIT (edge-triggered), blocking wait with poll
 - [ ] Lease timer: any valid frame refreshes, expiry returns to DIRECT_IDLE (interrupts eval)
 - [ ] INTERRUPT_REQ: sets `vm->interrupted` at safe points
-- [ ] Feature gating: `FROTH_HAS_LIVE` CMake define, old `FROTH_HAS_LINK` stays until validated
+- [ ] Feature gating: `FROTH_HAS_LIVE` CMake define, old `FROTH_HAS_LINK` / mux / v1 transport removed
 - [ ] **Proof**: POSIX round-trip — attach, eval, OUTPUT_DATA, interrupt, key, detach, lease expiry
 - [ ] ESP32 validation: same tests on real hardware
 
 #### Host side (daemon + CLI + extension)
-- [ ] Protocol package: v2 header, new message builders/parsers
+- [x] Protocol package: v2 header, new message builders/parsers
+- [x] HELLO probe updated for v2: Direct Mode discovery, no v1 fallback
 - [ ] Session lifecycle: `liveSession` struct (session_id, seq, lease ticker), attach/detach
 - [ ] Simplified transport read loop: frame-only after attach, no byte classification
-- [ ] HELLO probe updated for v2: Direct Mode discovery, v1 fallback
 - [ ] Console events from OUTPUT_DATA (replaces raw-byte accumulation)
 - [ ] KEEPALIVE timer: fire-and-forget every 2-3s
 - [ ] INTERRUPT_REQ replaces raw 0x03

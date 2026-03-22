@@ -276,6 +276,11 @@ froth_error_t froth_repl_init(froth_vm_t *vm) {
   return FROTH_OK;
 }
 
+int froth_repl_is_idle(void) {
+  return buf_pos == 0 && line_start == 0 && bracket_depth == 0 &&
+         paren_depth == 0 && in_string == 0;
+}
+
 froth_error_t froth_repl_evaluate(froth_vm_t *vm) {
   if (!is_blank(repl_buffer)) {
     froth_cell_u_t ds_snapshot = vm->ds.pointer;

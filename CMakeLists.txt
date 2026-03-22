@@ -29,7 +29,7 @@ target_sources(Froth
     src/froth_snapshot_writer.c
     src/froth_crc32.c
     src/froth_snapshot_prims.c
-    src/froth_console_mux.c
+    src/froth_console.c
     src/froth_transport.c
     src/froth_link.c
     src/froth_tbuf.c

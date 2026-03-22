@@ -136,9 +136,9 @@ func (s *Session) tryDecode(encoded []byte, reqID uint16, lastErr *error) (*prot
 		return nil, nil, false
 	}
 
-	if header.RequestID != reqID {
-		*lastErr = fmt.Errorf("stale response (got ID %d, want %d)", header.RequestID, reqID)
-		log.Printf("frame: discard stale (got ID %d, want %d)", header.RequestID, reqID)
+	if header.Seq != reqID {
+		*lastErr = fmt.Errorf("stale response (got ID %d, want %d)", header.Seq, reqID)
+		log.Printf("frame: discard stale (got ID %d, want %d)", header.Seq, reqID)
 		return nil, nil, false
 	}
 
@@ -149,7 +149,7 @@ func (s *Session) tryDecode(encoded []byte, reqID uint16, lastErr *error) (*prot
 func (s *Session) Reset() (*protocol.ResetResponse, error) {
 	reqID := s.allocReqID()
 
-	wire, err := protocol.EncodeWireFrame(protocol.ResetReq, reqID, nil)
+	wire, err := protocol.EncodeWireFrame(0, protocol.ResetReq, reqID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build frame: %w", err)
 	}
@@ -191,7 +191,7 @@ func (s *Session) Eval(source string) (*protocol.EvalResponse, error) {
 
 		payload := protocol.BuildEvalPayload(chunk)
 
-		wire, err := protocol.EncodeWireFrame(protocol.EvalReq, reqID, payload)
+		wire, err := protocol.EncodeWireFrame(0, protocol.EvalReq, reqID, payload)
 		if err != nil {
 			return nil, fmt.Errorf("build frame: %w", err)
 		}
@@ -233,7 +233,7 @@ func (s *Session) Eval(source string) (*protocol.EvalResponse, error) {
 }
 
 // allocReqID returns the next request ID in [1, 0xFFFE].
-// 0x0000 is unused, 0xFFFF is the sentinel (ReqIDNone).
+// 0x0000 is unused, 0xFFFF is reserved as a sentinel.
 func (s *Session) allocReqID() uint16 {
 	id := atomic.AddUint32(&s.nextReqID, 1)
 	return uint16((id % 0xFFFE) + 1)

@@ -6,38 +6,44 @@ import (
 	"hash/crc32"
 )
 
-// Frame layout constants matching ADR-033 and froth_transport.h.
+// Frame layout constants matching ADR-048 and froth_transport.h.
 const (
-	HeaderSize      = 12
+	HeaderSize      = 20
 	MaxPayload      = 256
 	Magic0          = 'F'
 	Magic1          = 'L'
-	ProtocolVersion = 1
+	ProtocolVersion = 2
 )
 
-// Message types matching froth_transport.h.
+// Message types (ADR-048 v2). 0x00 reserved (COBS delimiter).
 const (
-	HelloReq   = 0x01
-	HelloRes   = 0x02
-	EvalReq    = 0x03
-	EvalRes    = 0x04
-	InspectReq = 0x05
-	InspectRes = 0x06
-	InfoReq    = 0x07
-	InfoRes    = 0x08
-	ResetReq   = 0x09
-	ResetRes   = 0x0A
-	Event      = 0xFE
-	Error      = 0xFF
+	HelloReq     = 0x01
+	HelloRes     = 0x02
+	AttachReq    = 0x03
+	AttachRes    = 0x04
+	DetachReq    = 0x05
+	DetachRes    = 0x06
+	InfoReq      = 0x07
+	InfoRes      = 0x08
+	ResetReq     = 0x09
+	ResetRes     = 0x0A
+	EvalReq      = 0x0B
+	EvalRes      = 0x0C
+	InterruptReq = 0x0D
+	Keepalive    = 0x0E
+	InputData    = 0x0F
+	InputWait    = 0x10
+	OutputData   = 0x11
+	Error        = 0xFF
 )
 
-// Sentinel request ID for unparseable requests.
-const ReqIDNone = 0xFFFF
-
-// Header represents a parsed FROTH-LINK/1 frame header.
+// Header represents a parsed FROTH-LINK/2 frame header.
 type Header struct {
+	Magic         [2]byte
+	Version       byte
 	MessageType   byte
-	RequestID     uint16
+	SessionID     uint64
+	Seq           uint16
 	PayloadLength uint16
 	CRC32         uint32
 }
@@ -45,17 +51,18 @@ type Header struct {
 // BuildFrame constructs a complete raw frame (header + payload) with
 // computed CRC32. Returns the frame bytes ready for COBS encoding.
 // This mirrors froth_link_header_build in froth_transport.c.
-func BuildFrame(msgType byte, requestID uint16, payload []byte) ([]byte, error) {
-	// Frame layout (12-byte header + N payload bytes):
+func BuildFrame(sessionID uint64, msgType byte, seq uint16, payload []byte) ([]byte, error) {
+	// Frame layout (20-byte header + N payload bytes):
 	//   [0..1]   magic "FL"
-	//   [2]      version = 1
+	//   [2]      version = 2
 	//   [3]      message_type
-	//   [4..5]   request_id (LE)
-	//   [6..7]   payload_length (LE)
-	//   [8..11]  crc32 (LE)
-	//   [12..N]  payload
+	//   [4..11]  session_id (LE u64)
+	//   [12..13] seq (LE u16)
+	//   [14..15] payload_length (LE u16)
+	//   [16..19] crc32 (LE u32)
+	//   [20..N]  payload
 	//
-	// CRC32 covers header[0..7] concatenated with payload.
+	// CRC32 covers header[0..15] concatenated with payload.
 	// This is IEEE CRC32 (same polynomial as Go's crc32.IEEE).
 
 	plen := len(payload)
@@ -70,18 +77,19 @@ func BuildFrame(msgType byte, requestID uint16, payload []byte) ([]byte, error) 
 	frame[1] = Magic1
 	frame[2] = ProtocolVersion
 	frame[3] = msgType
-	binary.LittleEndian.PutUint16(frame[4:6], requestID)
-	binary.LittleEndian.PutUint16(frame[6:8], uint16(plen))
+	binary.LittleEndian.PutUint64(frame[4:12], sessionID)
+	binary.LittleEndian.PutUint16(frame[12:14], seq)
+	binary.LittleEndian.PutUint16(frame[14:16], uint16(plen))
 
 	// Copy payload
 	copy(frame[HeaderSize:], payload)
 
-	// CRC32 over header[0..7] + payload
-	crcData := make([]byte, 8+plen)
-	copy(crcData[:8], frame[:8])
-	copy(crcData[8:], payload)
+	// CRC32 over header[0..15] + payload
+	crcData := make([]byte, 16+plen)
+	copy(crcData[:16], frame[:16])
+	copy(crcData[16:], payload)
 	checksum := crc32.ChecksumIEEE(crcData)
-	binary.LittleEndian.PutUint32(frame[8:12], checksum)
+	binary.LittleEndian.PutUint32(frame[16:20], checksum)
 
 	return frame, nil
 }
@@ -91,13 +99,13 @@ func BuildFrame(msgType byte, requestID uint16, payload []byte) ([]byte, error) 
 // This mirrors froth_link_header_parse in froth_transport.c.
 func ParseFrame(frame []byte) (*Header, []byte, error) {
 	// Validation order (matches device side):
-	// 1. Frame must be at least 12 bytes (header size).
+	// 1. Frame must be at least 20 bytes (header size).
 	// 2. Magic must be "FL".
-	// 3. Version must be 1.
-	// 4. Read message_type, request_id, payload_length, crc32 (all LE).
+	// 3. Version must be 2.
+	// 4. Read message_type, session_id, seq, payload_length, crc32 (all LE).
 	// 5. payload_length must not exceed MaxPayload.
 	// 6. Frame must be at least HeaderSize + payload_length bytes.
-	// 7. Compute CRC32 over header[0..7] + payload. Must match.
+	// 7. Compute CRC32 over header[0..15] + payload. Must match.
 
 	if len(frame) < HeaderSize {
 		return nil, nil, fmt.Errorf("frame too short: %d bytes", len(frame))
@@ -112,10 +120,13 @@ func ParseFrame(frame []byte) (*Header, []byte, error) {
 	}
 
 	h := &Header{
+		Magic:         [2]byte{frame[0], frame[1]},
+		Version:       frame[2],
 		MessageType:   frame[3],
-		RequestID:     binary.LittleEndian.Uint16(frame[4:6]),
-		PayloadLength: binary.LittleEndian.Uint16(frame[6:8]),
-		CRC32:         binary.LittleEndian.Uint32(frame[8:12]),
+		SessionID:     binary.LittleEndian.Uint64(frame[4:12]),
+		Seq:           binary.LittleEndian.Uint16(frame[12:14]),
+		PayloadLength: binary.LittleEndian.Uint16(frame[14:16]),
+		CRC32:         binary.LittleEndian.Uint32(frame[16:20]),
 	}
 
 	if h.PayloadLength > MaxPayload {
@@ -130,9 +141,9 @@ func ParseFrame(frame []byte) (*Header, []byte, error) {
 	payload := frame[HeaderSize:total]
 
 	// CRC check
-	crcData := make([]byte, 8+len(payload))
-	copy(crcData[:8], frame[:8])
-	copy(crcData[8:], payload)
+	crcData := make([]byte, 16+len(payload))
+	copy(crcData[:16], frame[:16])
+	copy(crcData[16:], payload)
 	expected := crc32.ChecksumIEEE(crcData)
 
 	if expected != h.CRC32 {
@@ -144,8 +155,8 @@ func ParseFrame(frame []byte) (*Header, []byte, error) {
 
 // EncodeWireFrame builds a complete wire frame: 0x00 + COBS(raw) + 0x00.
 // This is what gets written to the serial port.
-func EncodeWireFrame(msgType byte, requestID uint16, payload []byte) ([]byte, error) {
-	raw, err := BuildFrame(msgType, requestID, payload)
+func EncodeWireFrame(sessionID uint64, msgType byte, seq uint16, payload []byte) ([]byte, error) {
+	raw, err := BuildFrame(sessionID, msgType, seq, payload)
 	if err != nil {
 		return nil, err
 	}

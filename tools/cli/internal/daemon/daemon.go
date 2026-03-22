@@ -85,7 +85,7 @@ type Daemon struct {
 	reqIDSeq atomic.Uint32
 
 	// Per-request waiter. Before sending a frame, the caller registers
-	// a waiter with the expected request ID. The serial reader delivers
+	// a waiter with the expected sequence number. The serial reader delivers
 	// matching frames directly. No buffering, no drain, no race.
 	waiterMu sync.Mutex
 	waiterID interruptibleWaiter
@@ -108,7 +108,7 @@ type Daemon struct {
 
 type interruptibleWaiter struct {
 	messageType   byte
-	requestID     uint16
+	seq           uint16
 	interruptible bool
 }
 
@@ -599,7 +599,7 @@ func (d *Daemon) flushConsoleBuffer(consoleBuf []byte) {
 
 func (d *Daemon) recoverConsoleFrame(consoleBuf []byte) bool {
 	waiter := d.currentWaiter()
-	if waiter.requestID == 0 {
+	if waiter.seq == 0 {
 		return false
 	}
 
@@ -613,14 +613,14 @@ func (d *Daemon) recoverConsoleFrame(consoleBuf []byte) bool {
 		return false
 	}
 
-	if header.RequestID != waiter.requestID {
+	if header.Seq != waiter.seq {
 		return false
 	}
 
 	log.Printf(
-		"console: recovered leaked %s from console stream (id=%d)",
+		"console: recovered leaked %s from console stream (seq=%d)",
 		msgTypeName(header.MessageType),
-		header.RequestID,
+		header.Seq,
 	)
 
 	d.waiterMu.Lock()
@@ -635,9 +635,9 @@ func (d *Daemon) recoverConsoleFrame(consoleBuf []byte) bool {
 		return true
 	default:
 		log.Printf(
-			"console: recovered %s but waiter channel was full (id=%d)",
+			"console: recovered %s but waiter channel was full (seq=%d)",
 			msgTypeName(header.MessageType),
-			header.RequestID,
+			header.Seq,
 		)
 		return false
 	}
@@ -662,8 +662,8 @@ func suspiciousConsoleSummary(consoleBuf []byte, waiter interruptibleWaiter) (st
 	}
 
 	waiterSummary := "none"
-	if waiter.requestID != 0 {
-		waiterSummary = fmt.Sprintf("%s id=%d", msgTypeName(waiter.messageType), waiter.requestID)
+	if waiter.seq != 0 {
+		waiterSummary = fmt.Sprintf("%s seq=%d", msgTypeName(waiter.messageType), waiter.seq)
 	}
 
 	return fmt.Sprintf(
@@ -698,7 +698,7 @@ func looksLikeConsoleText(buf []byte) bool {
 }
 
 // deliverFrame decodes a raw COBS frame and delivers it to the
-// registered waiter if the request ID matches. Unmatched or corrupt
+// registered waiter if the sequence number matches. Unmatched or corrupt
 // frames are logged and dropped.
 func (d *Daemon) deliverFrame(raw []byte) {
 	decoded, err := protocol.COBSDecode(raw)
@@ -719,12 +719,12 @@ func (d *Daemon) deliverFrame(raw []byte) {
 	d.waiterMu.Unlock()
 
 	if ch == nil {
-		log.Printf("frame: no waiter, dropping %s (id=%d)", msgTypeName(header.MessageType), header.RequestID)
+		log.Printf("frame: no waiter, dropping %s (seq=%d)", msgTypeName(header.MessageType), header.Seq)
 		return
 	}
 
-	if header.RequestID != waiter.requestID {
-		log.Printf("frame: stale (got id=%d, want %d), dropping", header.RequestID, waiter.requestID)
+	if header.Seq != waiter.seq {
+		log.Printf("frame: stale (got seq=%d, want %d), dropping", header.Seq, waiter.seq)
 		return
 	}
 
@@ -733,7 +733,7 @@ func (d *Daemon) deliverFrame(raw []byte) {
 	select {
 	case ch <- frameResponse{header: header, payload: payload}:
 	default:
-		log.Printf("frame: waiter channel full, dropping %s (id=%d)", msgTypeName(header.MessageType), header.RequestID)
+		log.Printf("frame: waiter channel full, dropping %s (seq=%d)", msgTypeName(header.MessageType), header.Seq)
 	}
 }
 
@@ -859,7 +859,7 @@ func (d *Daemon) shutdown() {
 
 // sendFrame acquires writeMu, builds and writes a COBS frame.
 func (d *Daemon) sendFrame(msgType byte, reqID uint16, payload []byte) error {
-	wire, err := protocol.EncodeWireFrame(msgType, reqID, payload)
+	wire, err := protocol.EncodeWireFrame(0, msgType, reqID, payload)
 	if err != nil {
 		return fmt.Errorf("build frame: %w", err)
 	}
@@ -886,7 +886,7 @@ func (d *Daemon) registerWaiter(reqID uint16, messageType byte, interruptible bo
 	d.waiterMu.Lock()
 	d.waiterID = interruptibleWaiter{
 		messageType:   messageType,
-		requestID:     reqID,
+		seq:           reqID,
 		interruptible: interruptible,
 	}
 	d.waiterCh = ch
@@ -1132,7 +1132,7 @@ func (d *Daemon) deviceInterrupt() error {
 	return nil
 }
 
-// allocReqID returns a unique request ID in the range [1, 0xFFFE].
+// allocReqID returns a unique sequence number in the range [1, 0xFFFE].
 func (d *Daemon) allocReqID() uint16 {
 	id := d.reqIDSeq.Add(1)
 	return uint16((id % 0xFFFE) + 1)
@@ -1160,10 +1160,6 @@ func msgTypeName(t byte) string {
 		return "EVAL_REQ"
 	case protocol.EvalRes:
 		return "EVAL_RES"
-	case protocol.InspectReq:
-		return "INSPECT_REQ"
-	case protocol.InspectRes:
-		return "INSPECT_RES"
 	case protocol.InfoReq:
 		return "INFO_REQ"
 	case protocol.InfoRes:

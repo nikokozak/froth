@@ -77,7 +77,7 @@ func TestPrepareSocketPathRejectsHealthyDaemon(t *testing.T) {
 }
 
 func TestTransportReadLoopReturnsToConsoleModeAfterFrame(t *testing.T) {
-	wire, err := protocol.EncodeWireFrame(protocol.EvalRes, 7, []byte("ok"))
+	wire, err := protocol.EncodeWireFrame(0, protocol.EvalRes, 7, []byte("ok"))
 	if err != nil {
 		t.Fatalf("encode frame: %v", err)
 	}
@@ -159,12 +159,12 @@ func TestDeviceInterruptCancelsInterruptibleWaiter(t *testing.T) {
 func TestSuspiciousConsoleSummaryFlagsBinaryBurstWithWaiterContext(t *testing.T) {
 	summary, ok := suspiciousConsoleSummary(
 		[]byte{0x9d, 0x4c, 0xff, 0x01, 0x02},
-		interruptibleWaiter{messageType: protocol.InfoReq, requestID: 7},
+		interruptibleWaiter{messageType: protocol.InfoReq, seq: 7},
 	)
 	if !ok {
 		t.Fatal("suspiciousConsoleSummary returned ok=false, want true")
 	}
-	if !containsAll(summary, "suspicious binary burst", "INFO_REQ id=7", "9d 4c ff 01 02") {
+	if !containsAll(summary, "suspicious binary burst", "INFO_REQ seq=7", "9d 4c ff 01 02") {
 		t.Fatalf("summary = %q", summary)
 	}
 }
@@ -188,7 +188,7 @@ func TestRecoverConsoleFrameDeliversLeakedInfoResponse(t *testing.T) {
 		'0', '.', '1', '.', '0', // version
 	)
 
-	wire, err := protocol.EncodeWireFrame(protocol.InfoRes, 3, payload)
+	wire, err := protocol.EncodeWireFrame(0, protocol.InfoRes, 3, payload)
 	if err != nil {
 		t.Fatalf("encode frame: %v", err)
 	}
@@ -209,8 +209,8 @@ func TestRecoverConsoleFrameDeliversLeakedInfoResponse(t *testing.T) {
 		if resp.header.MessageType != protocol.InfoRes {
 			t.Fatalf("message type = 0x%02x, want INFO_RES", resp.header.MessageType)
 		}
-		if resp.header.RequestID != 3 {
-			t.Fatalf("request id = %d, want 3", resp.header.RequestID)
+		if resp.header.Seq != 3 {
+			t.Fatalf("seq = %d, want 3", resp.header.Seq)
 		}
 		if len(resp.payload) != len(payload) {
 			t.Fatalf("payload len = %d, want %d", len(resp.payload), len(payload))

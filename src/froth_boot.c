@@ -14,9 +14,7 @@
 #include "froth_board_lib.h"
 #endif
 
-#ifdef FROTH_HAS_LINK
-#include "froth_console_mux.h"
-#endif
+#include "froth_console.h"
 
 #ifdef FROTH_HAS_SNAPSHOTS
 #include "froth_snapshot.h"
@@ -114,9 +112,5 @@ void froth_boot(const froth_ffi_entry_t *board_bindings) {
     emit_string("boot: Safe Boot, skipped restore and autorun.");
   }
 
-#ifdef FROTH_HAS_LINK
-  froth_console_mux_start(&froth_vm);
-#else
-  froth_repl_start(&froth_vm);
-#endif
+  froth_console_start(&froth_vm);
 }

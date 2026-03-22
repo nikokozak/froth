@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 // Keep term state so we can reset at end.
@@ -25,6 +26,12 @@ static void interrupt_handler(int signum) {
 }
 
 void platform_delay_ms(froth_cell_u_t ms) { usleep((useconds_t)ms * 1000); }
+
+uint32_t platform_uptime_ms(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (uint32_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+}
 
 static void cleanup_term(void) {
   if (!term_configured)
