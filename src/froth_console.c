@@ -136,8 +136,12 @@ static froth_error_t handle_recognized_frame(froth_vm_t *vm,
     console->mode = FROTH_CONSOLE_LIVE;
     console->session_id = header.session_id;
     console->seq = 1;
+    console->active_seq = 0;
     console->lease_deadline_ms =
         platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
+    console->poll_in_frame = 0;
+    console->output_pos = 0;
+    froth_link_frame_reset();
     break;
 
   default:
@@ -178,6 +182,74 @@ froth_error_t froth_console_emit(uint8_t byte) {
   return FROTH_OK;
 }
 
+void froth_console_poll(froth_vm_t *vm) {
+  if (g_console.mode != FROTH_CONSOLE_LIVE) {
+    platform_check_interrupt(vm);
+    return;
+  }
+
+  while (platform_key_ready()) {
+    uint8_t byte;
+    froth_error_t err = platform_key(&byte);
+    if (err != FROTH_OK)
+      continue;
+
+    if (byte == 0x00 && !g_console.poll_in_frame) {
+      froth_link_frame_reset();
+      g_console.poll_in_frame = 1;
+      continue;
+    }
+
+    if (byte == 0x00 && g_console.poll_in_frame) {
+      froth_link_header_t header;
+      const uint8_t *payload = NULL;
+
+      err = froth_link_frame_decode(&header, &payload);
+      g_console.poll_in_frame = 0;
+      if (err != FROTH_OK) {
+        froth_link_frame_reset();
+        continue;
+      }
+
+      if (header.session_id != g_console.session_id) {
+        froth_link_frame_reset();
+        continue;
+      }
+
+      switch (header.message_type) {
+      case FROTH_LINK_KEEPALIVE:
+        g_console.lease_deadline_ms =
+            platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
+        break;
+
+      case FROTH_LINK_INTERRUPT_REQ:
+        vm->interrupted = 1;
+        break;
+
+      case FROTH_LINK_INPUT_DATA:
+        /* TODO: enqueue to input FIFO (step 10). */
+        break;
+
+      default:
+        break;
+      }
+
+      froth_link_frame_reset();
+      continue;
+    }
+
+    if (g_console.poll_in_frame) {
+      froth_link_frame_byte(byte);
+      continue;
+    }
+  }
+
+  if (g_console.lease_deadline_ms != 0 &&
+      (platform_uptime_ms() - g_console.lease_deadline_ms) < 0x80000000u) {
+    vm->interrupted = 1;
+  }
+}
+
 /* ── Main loop ──────────────────────────────────────────────────────
  * Direct mode: 0x00 -> recognizer, 0x03 -> interrupt, CR/LF ->
  * REPL, everything else -> REPL. Timeout checked each iteration.
@@ -196,7 +268,9 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
   g_console.mode = FROTH_CONSOLE_DIRECT;
   g_console.session_id = 0;
   g_console.seq = 0;
+  g_console.active_seq = 0;
   g_console.lease_deadline_ms = 0;
+  g_console.poll_in_frame = 0;
   recognize_reset(&g_console);
 
   FROTH_TRY(emit_string(prompt_normal));

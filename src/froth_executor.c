@@ -1,4 +1,5 @@
 #include "froth_executor.h"
+#include "froth_console.h"
 #include "froth_slot_table.h"
 #include "froth_stack.h"
 #include "platform.h"
@@ -90,7 +91,7 @@ froth_error_t froth_execute_quote(froth_vm_t *vm, froth_cell_t quote_cell) {
       continue;
     }
 
-    platform_check_interrupt(vm);
+    froth_console_poll(vm);
     if (vm->interrupted != 0) {
       vm->interrupted = 0;
       vm->thrown = FROTH_ERROR_PROGRAM_INTERRUPTED;

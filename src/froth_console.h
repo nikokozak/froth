@@ -33,6 +33,7 @@ typedef struct {
   uint16_t seq;         /* next expected request seq */
   uint16_t active_seq;  /* seq of the in-flight eval (for OUTPUT_DATA) */
   uint32_t lease_deadline_ms;
+  uint8_t poll_in_frame;
 
   /* Live output buffer. Flushed on \n, full, or before terminal frames. */
   uint8_t output_buf[FROTH_CONSOLE_OUTPUT_CAP];
@@ -48,3 +49,6 @@ froth_error_t froth_console_emit(uint8_t byte);
 
 /* Flush any buffered Live output as an OUTPUT_DATA frame. No-op in Direct. */
 froth_error_t froth_console_flush_output(void);
+
+/* Executor safe-point poll hook. Non-blocking. */
+void froth_console_poll(froth_vm_t *vm);
