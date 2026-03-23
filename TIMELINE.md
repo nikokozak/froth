@@ -376,17 +376,19 @@
 - [ ] `millis` binding (both platforms)
 - [ ] Flash workshop boards with user program, test workshop flow
 
-#### Before workshop
-- [ ] LEDC/PWM smoke test on ESP32
+#### Bindings + demo richness — before workshop
+- [ ] LEDC/PWM smoke test on ESP32 (C code exists, needs hardware validation)
+- [ ] I2C smoke test on ESP32 (C code exists, needs hardware validation)
+- [ ] ADC: `adc.read ( pin -- value )` (new FFI word)
+- [ ] WiFi: `wifi.connect`, `wifi.status`, `wifi.ip` (new FFI, transient strings for SSID/password)
+
+#### Polish — before workshop
 - [ ] Example Froth library using `\ #use` include system
 - [ ] Getting started guide
 - [ ] Error location mapping in CLI (file:line from boundary markers)
 
-#### If time permits
-- [ ] I2C sensor read
-- [ ] ADC: `adc.read`
+#### Low priority
 - [ ] UART bindings
-- [ ] WiFi: `wifi.connect`, `wifi.status`, `wifi.ip`
 
 #### Wishlist (post-workshop, high thesis value)
 - [ ] FROTH-Named (spec section 8): named stack frames compiled to `perm`. Delta-tracking compiler, `arity!`, binding syntax. The distinctive feature.

@@ -241,16 +241,16 @@
 - [ ] Flash workshop boards with user program, test workshop flow
 
 #### Medium priority (before workshop)
-- [ ] LEDC/PWM smoke test on ESP32 (LED fade, convenience words)
+- [ ] LEDC/PWM smoke test on ESP32 (LED fade, convenience words — C code exists, needs hardware)
+- [ ] I2C smoke test on ESP32 (sensor read — C code exists, needs hardware)
+- [ ] ADC: `adc.read ( pin -- value )` (new FFI word, simple)
+- [ ] WiFi: `wifi.connect`, `wifi.status`, `wifi.ip` (new FFI, uses transient strings for SSID/password)
 - [ ] One example Froth library using `\ #use` (e.g., `lib/collections.froth` with map/filter/reduce)
 - [ ] Getting started guide (flash, connect, first program, include a library, deploy)
 - [ ] Error location mapping in CLI (source file + line from boundary markers)
 
 #### Low priority (if time permits)
-- [ ] I2C sensor read (temperature or accelerometer)
-- [ ] ADC: `adc.read ( pin -- value )`
 - [ ] UART bindings: `uart.init`, `uart.write`, `uart.read`
-- [ ] WiFi: `wifi.connect`, `wifi.status`, `wifi.ip` (even without HTTP, connecting + printing IP is a strong demo)
 
 #### Wishlist (post-workshop, high thesis value)
 - [ ] FROTH-Named: named stack frames compiled to `perm` sequences. The distinctive Froth feature for readability. Requires delta-tracking compiler pass, `arity!` primitive, `( x y -- r )` binding syntax. Estimated 1-2 days.
