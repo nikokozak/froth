@@ -6,10 +6,14 @@ import (
 	"io"
 	"time"
 
+	"github.com/nikokozak/froth/tools/cli/internal/protocol"
 	"go.bug.st/serial"
 )
 
 var ErrTimeout = errors.New("serial read timeout")
+
+const maxEncodedFrameSize = protocol.HeaderSize + protocol.MaxPayload +
+	((protocol.HeaderSize + protocol.MaxPayload) / 254) + 1
 
 // Transport is the shared host-side byte transport used by the direct
 // session path and the daemon backends.
@@ -27,9 +31,6 @@ type Transport interface {
 type Port struct {
 	port serial.Port
 	path string
-	// PassthroughWriter receives non-frame bytes (device console output).
-	// If nil, non-frame bytes are discarded.
-	PassthroughWriter io.Writer
 }
 
 // Open opens a serial port at the given path with Froth defaults (115200 8N1).
@@ -67,7 +68,7 @@ func (p *Port) Write(data []byte) error {
 // between two 0x00 delimiters). Non-frame bytes are discarded.
 // Returns the raw COBS-encoded bytes (without delimiters).
 func (p *Port) ReadFrame(timeout time.Duration) ([]byte, error) {
-	return ReadFrameTransport(p, timeout, p.PassthroughWriter)
+	return ReadFrameTransport(p, timeout, nil)
 }
 
 // ReadFrameTransport reads bytes until a complete COBS frame is captured
@@ -109,6 +110,11 @@ func ReadFrameTransport(conn Transport, timeout time.Duration, passthrough io.Wr
 		}
 
 		if inFrame {
+			if len(frame) >= maxEncodedFrameSize {
+				frame = frame[:0]
+				inFrame = false
+				continue
+			}
 			frame = append(frame, b)
 		} else if passthrough != nil {
 			_, _ = passthrough.Write([]byte{b})

@@ -3,22 +3,29 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/nikokozak/froth/tools/cli/internal/daemon"
+)
+
+var (
+	localRuntimeOnce sync.Once
+	localRuntimePath string
+	localRuntimeErr  error
 )
 
 func TestDaemonBackgroundLocalHappyPath(t *testing.T) {
 	repoRoot := repoRoot(t)
-	runtimePath := filepath.Join(repoRoot, "build64", "Froth")
-	if _, err := os.Stat(runtimePath); err != nil {
-		t.Fatalf("local runtime missing: %v", err)
-	}
+	runtimePath := ensureLocalRuntime(t, repoRoot)
 
 	cliPath := buildCLI(t, repoRoot)
 	home := shortHome(t)
@@ -35,7 +42,7 @@ func TestDaemonBackgroundLocalHappyPath(t *testing.T) {
 		func(out string) bool {
 			return strings.Contains(out, fmt.Sprintf("pid: %d", pid)) &&
 				strings.Contains(out, "target: local") &&
-				strings.Contains(out, "daemon: 0.1.0 (api 1)") &&
+				strings.Contains(out, "daemon: 0.1.0 (api 2)") &&
 				strings.Contains(out, "device: 0.1.0 on posix (32-bit)")
 		},
 	)
@@ -108,7 +115,7 @@ func TestDaemonBackgroundReadyBeforeHandshake(t *testing.T) {
 
 func TestDaemonStopPIDGuard(t *testing.T) {
 	repoRoot := repoRoot(t)
-	runtimePath := filepath.Join(repoRoot, "build64", "Froth")
+	runtimePath := ensureLocalRuntime(t, repoRoot)
 	cliPath := buildCLI(t, repoRoot)
 	home := shortHome(t)
 
@@ -137,7 +144,7 @@ func TestDaemonStopPIDGuard(t *testing.T) {
 
 func TestDaemonChunkedEvalThroughLocalRuntime(t *testing.T) {
 	repoRoot := repoRoot(t)
-	runtimePath := filepath.Join(repoRoot, "build64", "Froth")
+	runtimePath := ensureLocalRuntime(t, repoRoot)
 	cliPath := buildCLI(t, repoRoot)
 	home := shortHome(t)
 
@@ -165,6 +172,201 @@ func TestDaemonChunkedEvalThroughLocalRuntime(t *testing.T) {
 	}
 	if strings.TrimSpace(out) != "[3]" {
 		t.Fatalf("unexpected chunked send output: %q", out)
+	}
+}
+
+func TestLiveInfoRoundTrip(t *testing.T) {
+	_, home := startConnectedDaemon(t)
+
+	client, err := daemon.DialPath(daemonSocketPath(home))
+	if err != nil {
+		t.Fatalf("dial daemon: %v", err)
+	}
+	defer client.Close()
+
+	info, err := client.Info()
+	if err != nil {
+		t.Fatalf("info failed: %v", err)
+	}
+	if info.Version != "0.1.0" {
+		t.Fatalf("version = %q, want %q", info.Version, "0.1.0")
+	}
+	if info.HeapSize <= 0 || info.SlotCount <= 0 {
+		t.Fatalf("unexpected info result: %#v", info)
+	}
+}
+
+func TestLiveEvalWithOutputData(t *testing.T) {
+	cliPath, home := startConnectedDaemon(t)
+
+	out, err := runCLI(cliPath, home, "send", ": foo 42 . ; foo", "--daemon")
+	if err != nil {
+		t.Fatalf("send failed: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "42 ") {
+		t.Fatalf("missing OUTPUT_DATA content in output:\n%s", out)
+	}
+}
+
+func TestLiveResetThenEval(t *testing.T) {
+	cliPath, home := startConnectedDaemon(t)
+
+	out1, err := runCLI(cliPath, home, "send", ": myword 99 ;", "--daemon")
+	if err != nil {
+		t.Fatalf("first send failed: %v\n%s", err, out1)
+	}
+
+	resetOut, err := runCLI(cliPath, home, "reset", "--daemon")
+	if err != nil {
+		t.Fatalf("reset failed: %v\n%s", err, resetOut)
+	}
+	if !strings.Contains(resetOut, "Reset result: OK") {
+		t.Fatalf("unexpected reset output:\n%s", resetOut)
+	}
+
+	out2, err := runCLI(cliPath, home, "send", ": fresh 77 ; fresh", "--daemon")
+	if err != nil {
+		t.Fatalf("post-reset send failed: %v\n%s", err, out2)
+	}
+	if !strings.Contains(out2, "[77]") {
+		t.Fatalf("unexpected post-reset eval result:\n%s", out2)
+	}
+}
+
+func TestLiveInterruptDuringEval(t *testing.T) {
+	_, home := startConnectedDaemon(t)
+
+	evalClient, err := daemon.DialPath(daemonSocketPath(home))
+	if err != nil {
+		t.Fatalf("dial daemon: %v", err)
+	}
+	defer evalClient.Close()
+
+	controlClient, err := daemon.DialPath(daemonSocketPath(home))
+	if err != nil {
+		t.Fatalf("dial control client: %v", err)
+	}
+	defer controlClient.Close()
+
+	evalRunning := make(chan struct{}, 1)
+	evalClient.EventHandler = func(method string, params json.RawMessage) {
+		if method != daemon.EventConsole {
+			return
+		}
+		var evt daemon.ConsoleEvent
+		if err := json.Unmarshal(params, &evt); err != nil {
+			return
+		}
+		if strings.Contains(string(evt.Data), "42") {
+			select {
+			case evalRunning <- struct{}{}:
+			default:
+			}
+		}
+	}
+
+	type evalResult struct {
+		result *daemon.EvalResult
+		err    error
+	}
+
+	ch := make(chan evalResult, 1)
+	go func() {
+		result, err := evalClient.Eval("42 . cr [ -1 ] [ ] while")
+		ch <- evalResult{result: result, err: err}
+	}()
+
+	select {
+	case <-evalRunning:
+	case <-time.After(5 * time.Second):
+		t.Fatal("eval did not start producing output within 5s")
+	}
+
+	if err := controlClient.Interrupt(); err != nil {
+		t.Fatalf("interrupt failed: %v", err)
+	}
+
+	select {
+	case got := <-ch:
+		if got.err != nil {
+			if !strings.Contains(got.err.Error(), "interrupted") {
+				t.Fatalf("unexpected eval error: %v", got.err)
+			}
+			return
+		}
+		if got.result == nil {
+			t.Fatal("eval returned nil result")
+		}
+		if got.result.Status == 0 {
+			t.Fatalf("eval succeeded despite interrupt: %#v", got.result)
+		}
+		if got.result.ErrorCode != 14 {
+			t.Fatalf("error code = %d, want 14", got.result.ErrorCode)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("eval did not return after interrupt")
+	}
+}
+
+func TestLiveKeyInputWaitRoundTrip(t *testing.T) {
+	_, home := startConnectedDaemon(t)
+
+	evalClient, err := daemon.DialPath(daemonSocketPath(home))
+	if err != nil {
+		t.Fatalf("dial daemon: %v", err)
+	}
+	defer evalClient.Close()
+
+	inputClient, err := daemon.DialPath(daemonSocketPath(home))
+	if err != nil {
+		t.Fatalf("dial input client: %v", err)
+	}
+	defer inputClient.Close()
+
+	var (
+		consoleOutput strings.Builder
+		consoleMu     sync.Mutex
+		sendOnce      sync.Once
+	)
+
+	evalClient.EventHandler = func(method string, params json.RawMessage) {
+		switch method {
+		case daemon.EventConsole:
+			var evt daemon.ConsoleEvent
+			if err := json.Unmarshal(params, &evt); err == nil {
+				consoleMu.Lock()
+				consoleOutput.Write(evt.Data)
+				consoleMu.Unlock()
+			}
+		case daemon.EventInputWait:
+			var evt daemon.InputWaitEvent
+			if err := json.Unmarshal(params, &evt); err != nil {
+				t.Errorf("decode input wait failed: %v", err)
+				return
+			}
+			sendOnce.Do(func() {
+				go func() {
+					if err := inputClient.SendInput([]byte("A"), evt.Seq); err != nil {
+						t.Errorf("SendInput failed: %v", err)
+					}
+				}()
+			})
+		}
+	}
+
+	result, err := evalClient.Eval("key .")
+	if err != nil {
+		t.Fatalf("eval failed: %v", err)
+	}
+	if result == nil || result.Status != 0 {
+		t.Fatalf("unexpected eval result: %#v err=%v", result, err)
+	}
+
+	consoleMu.Lock()
+	output := consoleOutput.String()
+	consoleMu.Unlock()
+	if !strings.Contains(output, "65 ") {
+		t.Fatalf("missing key output in console stream:\n%s", output)
 	}
 }
 
@@ -198,6 +400,70 @@ func repoRoot(t *testing.T) string {
 		t.Fatalf("getwd: %v", err)
 	}
 	return filepath.Clean(filepath.Join(wd, "..", "..", ".."))
+}
+
+func daemonSocketPath(home string) string {
+	return filepath.Join(home, ".froth", "daemon.sock")
+}
+
+func startConnectedDaemon(t *testing.T) (cliPath string, home string) {
+	t.Helper()
+
+	repoRoot := repoRoot(t)
+	runtimePath := ensureLocalRuntime(t, repoRoot)
+	cliPath = buildCLI(t, repoRoot)
+	home = shortHome(t)
+
+	_ = startBackgroundDaemon(t, cliPath, home, runtimePath)
+	t.Cleanup(func() {
+		stopDaemonBestEffort(t, cliPath, home)
+	})
+
+	waitForOutput(
+		t,
+		5*time.Second,
+		func() (string, error) {
+			return runCLI(cliPath, home, "daemon", "status")
+		},
+		func(out string) bool {
+			return strings.Contains(out, "device: 0.1.0 on posix (32-bit)")
+		},
+	)
+
+	return cliPath, home
+}
+
+func ensureLocalRuntime(t *testing.T, repoRoot string) string {
+	t.Helper()
+
+	localRuntimeOnce.Do(func() {
+		buildDir := filepath.Join(repoRoot, "build64")
+		localRuntimePath = filepath.Join(buildDir, "Froth")
+
+		configure := exec.Command("cmake", "-S", repoRoot, "-B", buildDir, "-DFROTH_HAS_LIVE=ON")
+		configure.Dir = repoRoot
+		if output, err := configure.CombinedOutput(); err != nil {
+			localRuntimeErr = fmt.Errorf("configure local runtime: %w\n%s", err, output)
+			return
+		}
+
+		build := exec.Command("cmake", "--build", buildDir)
+		build.Dir = repoRoot
+		if output, err := build.CombinedOutput(); err != nil {
+			localRuntimeErr = fmt.Errorf("build local runtime: %w\n%s", err, output)
+			return
+		}
+
+		if _, err := os.Stat(localRuntimePath); err != nil {
+			localRuntimeErr = fmt.Errorf("local runtime missing after build: %w", err)
+		}
+	})
+
+	if localRuntimeErr != nil {
+		t.Fatal(localRuntimeErr)
+	}
+
+	return localRuntimePath
 }
 
 func buildCLI(t *testing.T, repoRoot string) string {

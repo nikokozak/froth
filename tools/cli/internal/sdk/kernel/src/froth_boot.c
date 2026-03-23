@@ -14,9 +14,7 @@
 #include "froth_board_lib.h"
 #endif
 
-#ifdef FROTH_HAS_LINK
-#include "froth_console_mux.h"
-#endif
+#include "froth_console.h"
 
 #ifdef FROTH_HAS_SNAPSHOTS
 #include "froth_snapshot.h"
@@ -38,7 +36,8 @@ static bool poll_for_safe_boot() {
     platform_delay_ms(10);
     while (platform_key_ready()) {
       uint8_t byte;
-      platform_key(&byte);
+      if (platform_key(&byte) != FROTH_OK)
+        break;
       if (byte == 0x03)
         safe_boot = true;
       if (froth_vm.interrupted) {
@@ -114,8 +113,8 @@ void froth_boot(const froth_ffi_entry_t *board_bindings) {
     emit_string("boot: Safe Boot, skipped restore and autorun.");
   }
 
-#ifdef FROTH_HAS_LINK
-  froth_console_mux_start(&froth_vm);
+#ifdef FROTH_HAS_LIVE
+  froth_console_start(&froth_vm);
 #else
   froth_repl_start(&froth_vm);
 #endif

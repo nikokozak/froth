@@ -2,6 +2,7 @@
 #include "platform.h"
 #include "driver/uart.h"
 #include "esp_system.h"
+#include "esp_timer.h"
 #include "esp_vfs_dev.h" /* uart_vfs_dev_use_driver */
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -15,6 +16,10 @@
 
 void platform_delay_ms(froth_cell_u_t ms) {
   vTaskDelay(pdMS_TO_TICKS(ms)); // sleep
+}
+
+uint32_t platform_uptime_ms(void) {
+  return (uint32_t)(esp_timer_get_time() / 1000);
 }
 
 froth_error_t platform_init(void) {

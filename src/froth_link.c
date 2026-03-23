@@ -133,7 +133,7 @@ froth_error_t froth_link_send_hello_res(froth_vm_t *vm, uint64_t session_id,
   FROTH_TRY(pw_str(&pw, FROTH_BOARD_NAME));
   FROTH_TRY(pw_u8(&pw, 0)); /* capability_count */
 
-  froth_console_flush_output();
+  FROTH_TRY(froth_console_flush_output());
   return froth_link_send_frame(session_id, FROTH_LINK_HELLO_RES, seq, resp_buf,
                                pw.pos);
 }
@@ -154,7 +154,7 @@ static froth_error_t handle_eval(froth_vm_t *vm,
   /* uint8_t flags = payload[0]; */
   uint16_t source_len = (uint16_t)payload[1] | ((uint16_t)payload[2] << 8);
 
-  if (3 + source_len > header->payload_length)
+  if ((uint16_t)(3 + source_len) != header->payload_length)
     return FROTH_ERROR_LINK_TOO_LARGE;
 
   /* Copy source into a null-terminated buffer on the stack */
@@ -204,7 +204,7 @@ static froth_error_t handle_eval(froth_vm_t *vm,
     vm->rs.pointer = rs_snap;
   }
 
-  froth_console_flush_output();
+  FROTH_TRY(froth_console_flush_output());
   return froth_link_send_frame(header->session_id, FROTH_LINK_EVAL_RES,
                                header->seq, resp_buf, pw.pos);
 }
@@ -237,7 +237,7 @@ static froth_error_t handle_info(froth_vm_t *vm,
   FROTH_TRY(pw_u8(&pw, 0)); /* flags */
   FROTH_TRY(pw_str(&pw, FROTH_VERSION));
 
-  froth_console_flush_output();
+  FROTH_TRY(froth_console_flush_output());
   return froth_link_send_frame(header->session_id, FROTH_LINK_INFO_RES,
                                header->seq, resp_buf, pw.pos);
 }
@@ -278,7 +278,7 @@ static froth_error_t handle_reset(froth_vm_t *vm,
   FROTH_TRY(pw_u8(&pw, 0)); /* flags */
   FROTH_TRY(pw_str(&pw, FROTH_VERSION));
 
-  froth_console_flush_output();
+  FROTH_TRY(froth_console_flush_output());
   return froth_link_send_frame(header->session_id, FROTH_LINK_RESET_RES,
                                header->seq, resp_buf, pw.pos);
 }
@@ -290,7 +290,7 @@ static froth_error_t send_error(const froth_link_header_t *header,
   payload_writer_t pw = {resp_buf, sizeof(resp_buf), 0};
   FROTH_TRY(pw_u8(&pw, category));
   FROTH_TRY(pw_str(&pw, detail));
-  froth_console_flush_output();
+  FROTH_TRY(froth_console_flush_output());
   return froth_link_send_frame(header->session_id, FROTH_LINK_ERROR,
                                header->seq, resp_buf, pw.pos);
 }
@@ -301,8 +301,6 @@ froth_error_t froth_link_dispatch(froth_vm_t *vm,
                                   const froth_link_header_t *header,
                                   const uint8_t *payload) {
   switch (header->message_type) {
-  case FROTH_LINK_HELLO_REQ:
-    return handle_hello(vm, header);
   case FROTH_LINK_EVAL_REQ:
     return handle_eval(vm, header, payload);
   case FROTH_LINK_INFO_REQ:

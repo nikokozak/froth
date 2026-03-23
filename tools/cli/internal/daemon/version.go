@@ -1,6 +1,6 @@
 package daemon
 
 const (
-	APIVersion    = 1
+	APIVersion    = 2
 	DaemonVersion = "0.1.0"
 )

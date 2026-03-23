@@ -340,7 +340,7 @@
 - [x] **Proof**: POSIX round-trip — attach, eval, OUTPUT_DATA, interrupt, key+INPUT_WAIT+INPUT_DATA, detach (5 integration tests, Mar 22). Lease expiry deferred to ESP32 bench.
 - [ ] ESP32 validation: same tests on real hardware
 
-#### Host side (daemon + CLI + extension) — DONE except extension (Mar 22)
+#### Host side (daemon + CLI + extension) — DONE (Mar 22, hardened)
 - [x] Protocol package: v2 header, new message builders/parsers, GenerateSessionID, ParseAttachResponse, ParseOutputData, ParseInputWait, BuildInputDataPayload
 - [x] HELLO probe updated for v2: Direct Mode discovery, no v1 fallback
 - [x] Session lifecycle: daemon lazy attach, session_id, sequential seq (wraps 0xFFFF->1), attach/detach
@@ -353,10 +353,11 @@
 - [x] CLI commands: send/reset use attach/detach + OutputHandler, info uses cached HELLO
 - [x] Direct serial session migrated: same attach/detach/seq/KEEPALIVE, inline OUTPUT_DATA
 - [x] v1 mixed-stream code removed, API version 2
-- [x] Review pass: shutdown detach timeout, disconnect ordering, waiter type validation, frameBuf cap
+- [x] Review pass 1: shutdown detach timeout, disconnect ordering, waiter type validation, frameBuf cap
 - [x] POSIX EOF spin fix: orphaned runtimes exit cleanly on broken stdin
 - [x] **Proof**: daemon + CLI end-to-end on POSIX (5 tests: info, eval+output, reset+eval, interrupt, key+input)
 - [x] Extension: API version 2, console from OUTPUT_DATA (no change needed), INPUT_WAIT → input box + sendInput (Mar 22)
+- [x] Hardening sweep (3 review passes): interruptCancel lifetime, OUTPUT_DATA/INPUT_WAIT seq validation, ATTACH_RES session_id check, evalOwner removed from input RPC, deterministic interrupt test, keepalive goroutine drain, extension concurrent input guard + auto-interrupt on cancel
 
 ### Phase 3a-hw: Hardware Validation + New Bindings (interleave with transport, bench days)
 

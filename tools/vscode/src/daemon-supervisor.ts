@@ -6,7 +6,7 @@ import {
   StatusResult,
 } from "./daemon-client";
 
-export const EXPECTED_DAEMON_API_VERSION = 1;
+export const EXPECTED_DAEMON_API_VERSION = 2;
 
 export interface ExecResult {
   stdout: string;

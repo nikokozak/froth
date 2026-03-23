@@ -156,7 +156,7 @@ func sendViaDaemon(payload *sendPayload) error {
 		if method == daemon.EventConsole {
 			var evt daemon.ConsoleEvent
 			json.Unmarshal(params, &evt)
-			fmt.Print(evt.Text)
+			os.Stdout.Write(evt.Data)
 		}
 	}
 
@@ -193,7 +193,9 @@ func sendViaSerial(payload *sendPayload) error {
 	}
 	defer sess.Close()
 
-	sess.SetPassthrough(os.Stdout)
+	sess.OutputHandler = func(data []byte) {
+		_, _ = os.Stdout.Write(data)
+	}
 
 	if payload.resetBeforeEval {
 		if _, err := sess.Reset(); err != nil {

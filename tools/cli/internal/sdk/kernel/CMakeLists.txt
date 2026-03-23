@@ -29,7 +29,7 @@ target_sources(Froth
     src/froth_snapshot_writer.c
     src/froth_crc32.c
     src/froth_snapshot_prims.c
-    src/froth_console_mux.c
+    src/froth_console.c
     src/froth_transport.c
     src/froth_link.c
     src/froth_tbuf.c
@@ -58,10 +58,11 @@ set(FROTH_LINE_BUFFER_SIZE 1024 CACHE STRING "Input line buffer for REPL in numb
 set(FROTH_MAX_PERM_SIZE 8 CACHE STRING "Maximum number of indices in a perm pattern.")
 set(FROTH_VERSION "0.1.0" CACHE STRING "Froth version string")
 set(FROTH_HAS_SNAPSHOTS ON CACHE BOOL "Target supports Froth snapshots")
-set(FROTH_HAS_LINK ON CACHE BOOL "Enable FROTH-LINK/1 binary transport")
+set(FROTH_HAS_LIVE ON CACHE BOOL "Enable FROTH-LINK/2 Live transport")
 set(FROTH_SNAPSHOT_BLOCK_SIZE "2048" CACHE STRING "Snapshot size in target memory (bytes)")
 set(FROTH_SNAPSHOT_PATH_A "froth_a.snap" CACHE STRING "Snapshot A file path (default froth_a.snap)")
 set(FROTH_SNAPSHOT_PATH_B "froth_b.snap" CACHE STRING "Snapshot B file path (default froth_b.snap)")
+set(FROTH_STRING_MAX_LEN 256 CACHE STRING "Maximum string length in bytes (all creation paths).")
 set(FROTH_TBUF_SIZE 1024 CACHE STRING "Transient string scratch ring size in bytes.")
 set(FROTH_TDESC_MAX 32 CACHE STRING "Maximum concurrent transient string descriptors.")
 set(FROTH_FFI_MAX_TABLES 8 CACHE STRING "Maximum number of FFI binding tables.")
@@ -77,6 +78,7 @@ target_compile_definitions(Froth PRIVATE FROTH_LINE_BUFFER_SIZE=${FROTH_LINE_BUF
 target_compile_definitions(Froth PRIVATE FROTH_MAX_PERM_SIZE=${FROTH_MAX_PERM_SIZE})
 target_compile_definitions(Froth PRIVATE FROTH_VERSION="${FROTH_VERSION}")
 target_compile_definitions(Froth PRIVATE FROTH_BOARD_NAME="${FROTH_BOARD}")
+target_compile_definitions(Froth PRIVATE FROTH_STRING_MAX_LEN=${FROTH_STRING_MAX_LEN})
 target_compile_definitions(Froth PRIVATE FROTH_TBUF_SIZE=${FROTH_TBUF_SIZE})
 target_compile_definitions(Froth PRIVATE FROTH_TDESC_MAX=${FROTH_TDESC_MAX})
 target_compile_definitions(Froth PRIVATE FROTH_FFI_MAX_TABLES=${FROTH_FFI_MAX_TABLES})
@@ -88,9 +90,9 @@ if(FROTH_HAS_SNAPSHOTS)
   target_compile_definitions(Froth PRIVATE FROTH_SNAPSHOT_PATH_A="${FROTH_SNAPSHOT_PATH_A}")
   target_compile_definitions(Froth PRIVATE FROTH_SNAPSHOT_PATH_B="${FROTH_SNAPSHOT_PATH_B}")
 endif()
-# Froth "Link" protocol - allows Froth to speak to interactive editors
-if(${FROTH_HAS_LINK})
-  target_compile_definitions(Froth PRIVATE FROTH_HAS_LINK)
+# Froth Live protocol - allows Froth to speak to interactive editors
+if(${FROTH_HAS_LIVE})
+  target_compile_definitions(Froth PRIVATE FROTH_HAS_LIVE)
 endif()
 # Compiles a user program into the flash package, to be executed on startup.
 if(FROTH_USER_PROGRAM)
@@ -127,4 +129,3 @@ add_custom_command(
   DEPENDS "${CMAKE_SOURCE_DIR}/src/lib/core.froth"
   COMMENT "Embedding .froth files as C data..."
 )
-

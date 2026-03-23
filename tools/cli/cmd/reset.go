@@ -52,7 +52,9 @@ func runResetSerial() error {
 	}
 	defer sess.Close()
 
-	sess.SetPassthrough(os.Stdout)
+	sess.OutputHandler = func(data []byte) {
+		_, _ = os.Stdout.Write(data)
+	}
 
 	reset, err := sess.Reset()
 	if err != nil {

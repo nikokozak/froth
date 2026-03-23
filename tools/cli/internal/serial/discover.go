@@ -215,6 +215,10 @@ func ProbeHelloTransport(port Transport) (*protocol.HelloResponse, error) {
 				log.Printf("probe: discard unexpected type 0x%02x", header.MessageType)
 				continue
 			}
+			if header.SessionID != 0 || header.Seq != 0 {
+				log.Printf("probe: discard unexpected hello session/seq (%016x,%d)", header.SessionID, header.Seq)
+				continue
+			}
 
 			return protocol.ParseHelloResponse(payload)
 		}

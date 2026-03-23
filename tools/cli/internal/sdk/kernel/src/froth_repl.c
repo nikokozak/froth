@@ -1,4 +1,5 @@
 #include "froth_repl.h"
+#include "froth_console.h"
 #include "froth_evaluator.h"
 #include "froth_fmt.h"
 #include "froth_primitives.h"
@@ -276,6 +277,11 @@ froth_error_t froth_repl_init(froth_vm_t *vm) {
   return FROTH_OK;
 }
 
+int froth_repl_is_idle(void) {
+  return buf_pos == 0 && line_start == 0 && bracket_depth == 0 &&
+         paren_depth == 0 && in_string == 0;
+}
+
 froth_error_t froth_repl_evaluate(froth_vm_t *vm) {
   if (!is_blank(repl_buffer)) {
     froth_cell_u_t ds_snapshot = vm->ds.pointer;
@@ -332,16 +338,16 @@ froth_error_t froth_repl_accept_byte(froth_vm_t *vm, char byte, int8_t *state) {
   if (byte == '\b' || byte == 127) {
     if (buf_pos > line_start) {
       buf_pos--;
-      FROTH_TRY(platform_emit('\b'));
-      FROTH_TRY(platform_emit(' '));
-      FROTH_TRY(platform_emit('\b'));
+      FROTH_TRY(froth_console_emit('\b'));
+      FROTH_TRY(froth_console_emit(' '));
+      FROTH_TRY(froth_console_emit('\b'));
     }
     *state = 0;
     return FROTH_OK;
   }
 
   if (byte == '\n') {
-    FROTH_TRY(platform_emit('\n'));
+    FROTH_TRY(froth_console_emit('\n'));
     repl_buffer[buf_pos] = '\0';
 
     scan_line_depth(repl_buffer + line_start, &bracket_depth, &paren_depth,
@@ -361,7 +367,7 @@ froth_error_t froth_repl_accept_byte(froth_vm_t *vm, char byte, int8_t *state) {
 
   /* Regular byte */
   repl_buffer[buf_pos++] = byte;
-  platform_emit(byte);
+  froth_console_emit(byte);
   *state = 0;
   return FROTH_OK;
 }
@@ -380,6 +386,13 @@ froth_error_t froth_repl_start(froth_vm_t *vm) {
     state = 0;
 
     froth_error_t err = platform_key(&byte);
+    if (err == FROTH_ERROR_IO) {
+      if (vm->interrupted) {
+        vm->interrupted = 0;
+        continue;
+      }
+      return FROTH_OK;
+    }
     if (err != FROTH_OK)
       continue;
 

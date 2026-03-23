@@ -14,7 +14,6 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
-	"unicode/utf8"
 
 	"github.com/nikokozak/froth/tools/cli/internal/protocol"
 	"github.com/nikokozak/froth/tools/cli/internal/sdk"
@@ -29,12 +28,21 @@ const (
 	// These should respond within milliseconds. 10s catches transport
 	// failures (malformed frame dropped by device, no reply) without
 	// interfering with normal operation. Eval uses 0 (no timeout).
-	commandTimeout = 10 * time.Second
+	commandTimeout        = 10 * time.Second
+	keepaliveInterval     = 2 * time.Second
+	attachTimeout         = 5 * time.Second
+	shutdownDetachTimeout = 1 * time.Second
+	maxAttachRetries      = 3
+	attachRetryDelay      = 500 * time.Millisecond
+	waiterBufferSize      = 8
+	maxEncodedFrameSize   = protocol.HeaderSize + protocol.MaxPayload +
+		((protocol.HeaderSize + protocol.MaxPayload) / 254) + 1
 )
 
 var ErrDisconnected = errors.New("device disconnected")
 var ErrAlreadyRunning = errors.New("daemon already running")
 var ErrEvalInterrupted = errors.New("device eval interrupted")
+var interruptCancelTimeout = 5 * time.Second
 
 type transport = serial.Transport
 
@@ -77,19 +85,33 @@ type Daemon struct {
 	portMu sync.Mutex
 
 	// Serial write serialization. Both framed writes and raw interrupt
-	// bytes acquire this to prevent interleaving on the wire.
+	// writes acquire this to prevent interleaving on the wire.
 	writeMu sync.Mutex
 
-	// One FROTH-LINK/1 transaction at a time
-	reqMu    sync.Mutex
-	reqIDSeq atomic.Uint32
+	// One FROTH-LINK/2 transaction at a time.
+	reqMu sync.Mutex
+
+	// Live session state. reqMu serializes attach/detach and normal requests.
+	nextSeq uint16
+
+	// KEEPALIVE ticker (nil when not attached, guarded by reqMu)
+	keepaliveTicker *time.Ticker
+	keepaliveStop   chan struct{}
 
 	// Per-request waiter. Before sending a frame, the caller registers
 	// a waiter with the expected sequence number. The serial reader delivers
-	// matching frames directly. No buffering, no drain, no race.
-	waiterMu sync.Mutex
-	waiterID interruptibleWaiter
-	waiterCh chan frameResponse // delivery channel, nil = no waiter
+	// matching frames directly. Also guards the active live-session identity
+	// needed by the read loop and interrupt/input side paths.
+	waiterMu          sync.Mutex
+	attached          bool
+	sessionID         uint64
+	activeSeq         uint16
+	waiterSessionID   uint64
+	evalOwner         *rpcConn
+	interruptCancel   chan struct{}
+	interruptWatchSeq uint16
+	waiterID          interruptibleWaiter
+	waiterCh          chan frameResponse // delivery channel, nil = no waiter
 
 	// Closed by handleDisconnect to unblock any waiting request.
 	disconnectCh chan struct{}
@@ -125,6 +147,59 @@ func New(portPath string, local bool, localRuntimePath string) *Daemon {
 		clients:          make(map[*rpcConn]struct{}),
 		done:             make(chan struct{}),
 	}
+}
+
+func (d *Daemon) sessionSnapshot() (attached bool, sessionID uint64, activeSeq uint16) {
+	d.waiterMu.Lock()
+	defer d.waiterMu.Unlock()
+	return d.attached, d.sessionID, d.activeSeq
+}
+
+func (d *Daemon) setSessionState(attached bool, sessionID uint64, activeSeq uint16) {
+	d.waiterMu.Lock()
+	d.attached = attached
+	d.sessionID = sessionID
+	d.activeSeq = activeSeq
+	if !attached {
+		if d.interruptCancel != nil {
+			close(d.interruptCancel)
+			d.interruptCancel = nil
+		}
+		d.evalOwner = nil
+		d.waiterSessionID = 0
+		d.interruptWatchSeq = 0
+	}
+	d.waiterMu.Unlock()
+}
+
+func (d *Daemon) beginActiveEval(seq uint16, owner *rpcConn) {
+	d.waiterMu.Lock()
+	if d.interruptCancel != nil {
+		close(d.interruptCancel)
+	}
+	d.activeSeq = seq
+	d.evalOwner = owner
+	d.interruptCancel = make(chan struct{})
+	d.interruptWatchSeq = 0
+	d.waiterMu.Unlock()
+}
+
+func (d *Daemon) endActiveEval() {
+	d.waiterMu.Lock()
+	d.activeSeq = 0
+	d.evalOwner = nil
+	if d.interruptCancel != nil {
+		close(d.interruptCancel)
+		d.interruptCancel = nil
+	}
+	d.interruptWatchSeq = 0
+	d.waiterMu.Unlock()
+}
+
+func (d *Daemon) isEvalOwner(c *rpcConn) bool {
+	d.waiterMu.Lock()
+	defer d.waiterMu.Unlock()
+	return d.evalOwner == c
 }
 
 // SocketPath returns the Unix socket path for client connections.
@@ -509,14 +584,13 @@ func connectLocal(runtimePath string) (transport, *protocol.HelloResponse, error
 	return conn, hello, nil
 }
 
-// transportReadLoop reads from the active transport, classifies bytes as
-// console text or COBS frames, and delivers decoded frames to replyCh.
+// transportReadLoop reads COBS frames from the active transport.
+// Non-frame bytes are discarded in both Direct and Live modes.
 func (d *Daemon) transportReadLoop() {
 	defer d.wg.Done()
 
 	buf := make([]byte, 1)
-	var frame []byte
-	var consoleBuf []byte
+	frameBuf := make([]byte, 0, maxEncodedFrameSize)
 	inFrame := false
 
 	for {
@@ -544,196 +618,118 @@ func (d *Daemon) transportReadLoop() {
 			return
 		}
 		if n == 0 {
-			// Flush console buffer on idle.
-			d.flushConsoleBuffer(consoleBuf)
-			consoleBuf = consoleBuf[:0]
 			continue
 		}
 
 		b := buf[0]
 		if b == 0x00 {
-			// Flush console buffer before frame processing
-			d.flushConsoleBuffer(consoleBuf)
-			consoleBuf = consoleBuf[:0]
-			if inFrame {
-				if len(frame) > 0 {
-					// Decode and deliver directly to the pending waiter.
-					d.deliverFrame(frame)
-				}
-				frame = frame[:0]
-				inFrame = false
-				continue
+			if inFrame && len(frameBuf) > 0 {
+				d.handleFrame(frameBuf)
 			}
-			frame = frame[:0]
+			frameBuf = frameBuf[:0]
 			inFrame = true
 			continue
 		}
 
 		if inFrame {
-			frame = append(frame, b)
-		} else {
-			consoleBuf = append(consoleBuf, b)
-			if b == '\n' || len(consoleBuf) >= 256 {
-				d.broadcast(EventConsole, &ConsoleEvent{Text: string(consoleBuf)})
-				consoleBuf = consoleBuf[:0]
+			if len(frameBuf) >= maxEncodedFrameSize {
+				frameBuf = frameBuf[:0]
+				inFrame = false
+				continue
 			}
+			frameBuf = append(frameBuf, b)
 		}
+		// Non-frame bytes are discarded.
 	}
 }
 
-func (d *Daemon) flushConsoleBuffer(consoleBuf []byte) {
-	if len(consoleBuf) == 0 {
-		return
-	}
-
-	if d.recoverConsoleFrame(consoleBuf) {
-		return
-	}
-
-	if summary, ok := suspiciousConsoleSummary(consoleBuf, d.currentWaiter()); ok {
-		log.Print(summary)
-	}
-
-	d.broadcast(EventConsole, &ConsoleEvent{Text: string(consoleBuf)})
-}
-
-func (d *Daemon) recoverConsoleFrame(consoleBuf []byte) bool {
-	waiter := d.currentWaiter()
-	if waiter.seq == 0 {
-		return false
-	}
-
-	decoded, err := protocol.COBSDecode(consoleBuf)
+// handleFrame decodes a COBS frame and dispatches it.
+func (d *Daemon) handleFrame(cobsData []byte) {
+	decoded, err := protocol.COBSDecode(cobsData)
 	if err != nil {
-		return false
-	}
-
-	header, payload, err := protocol.ParseFrame(decoded)
-	if err != nil {
-		return false
-	}
-
-	if header.Seq != waiter.seq {
-		return false
-	}
-
-	log.Printf(
-		"console: recovered leaked %s from console stream (seq=%d)",
-		msgTypeName(header.MessageType),
-		header.Seq,
-	)
-
-	d.waiterMu.Lock()
-	ch := d.waiterCh
-	d.waiterMu.Unlock()
-	if ch == nil {
-		return false
-	}
-
-	select {
-	case ch <- frameResponse{header: header, payload: payload}:
-		return true
-	default:
-		log.Printf(
-			"console: recovered %s but waiter channel was full (seq=%d)",
-			msgTypeName(header.MessageType),
-			header.Seq,
-		)
-		return false
-	}
-}
-
-func (d *Daemon) currentWaiter() interruptibleWaiter {
-	d.waiterMu.Lock()
-	defer d.waiterMu.Unlock()
-	return d.waiterID
-}
-
-func suspiciousConsoleSummary(consoleBuf []byte, waiter interruptibleWaiter) (string, bool) {
-	if looksLikeConsoleText(consoleBuf) {
-		return "", false
-	}
-
-	preview := consoleBuf
-	suffix := ""
-	if len(preview) > 24 {
-		preview = preview[:24]
-		suffix = " ..."
-	}
-
-	waiterSummary := "none"
-	if waiter.seq != 0 {
-		waiterSummary = fmt.Sprintf("%s seq=%d", msgTypeName(waiter.messageType), waiter.seq)
-	}
-
-	return fmt.Sprintf(
-		"console: suspicious binary burst (%d bytes, waiter=%s): % x%s",
-		len(consoleBuf),
-		waiterSummary,
-		preview,
-		suffix,
-	), true
-}
-
-func looksLikeConsoleText(buf []byte) bool {
-	if len(buf) == 0 {
-		return true
-	}
-	if !utf8.Valid(buf) {
-		return false
-	}
-
-	printable := 0
-	for _, b := range buf {
-		switch {
-		case b == '\n', b == '\r', b == '\t':
-			printable++
-		case b >= 0x20 && b <= 0x7e:
-			printable++
-		}
-	}
-
-	// Human REPL/console output should be overwhelmingly printable.
-	return printable*100 >= len(buf)*90
-}
-
-// deliverFrame decodes a raw COBS frame and delivers it to the
-// registered waiter if the sequence number matches. Unmatched or corrupt
-// frames are logged and dropped.
-func (d *Daemon) deliverFrame(raw []byte) {
-	decoded, err := protocol.COBSDecode(raw)
-	if err != nil {
-		log.Printf("frame: corrupt COBS (%v)", err)
 		return
 	}
 
 	header, payload, err := protocol.ParseFrame(decoded)
 	if err != nil {
-		log.Printf("frame: bad header (%v)", err)
 		return
 	}
 
-	d.waiterMu.Lock()
-	ch := d.waiterCh
-	waiter := d.waiterID
-	d.waiterMu.Unlock()
-
-	if ch == nil {
-		log.Printf("frame: no waiter, dropping %s (seq=%d)", msgTypeName(header.MessageType), header.Seq)
+	attached, sessionID, activeSeq := d.sessionSnapshot()
+	if attached && header.SessionID != sessionID {
 		return
 	}
 
-	if header.Seq != waiter.seq {
-		log.Printf("frame: stale (got seq=%d, want %d), dropping", header.Seq, waiter.seq)
-		return
-	}
+	switch header.MessageType {
+	case protocol.OutputData:
+		if !attached || activeSeq == 0 || header.Seq != activeSeq {
+			return
+		}
+		data, err := protocol.ParseOutputData(payload)
+		if err != nil {
+			return
+		}
+		d.waiterMu.Lock()
+		owner := d.evalOwner
+		d.waiterMu.Unlock()
+		if owner != nil {
+			owner.sendNotification(EventConsole, &ConsoleEvent{Data: append([]byte(nil), data...)})
+		}
+	case protocol.InputWait:
+		if !attached || activeSeq == 0 || header.Seq != activeSeq {
+			return
+		}
+		reason, err := protocol.ParseInputWait(payload)
+		if err != nil {
+			return
+		}
+		d.waiterMu.Lock()
+		owner := d.evalOwner
+		d.waiterMu.Unlock()
+		if owner != nil {
+			owner.sendNotification(EventInputWait, &InputWaitEvent{
+				Reason: int(reason),
+				Seq:    int(header.Seq),
+			})
+		}
+	case protocol.AttachRes, protocol.DetachRes,
+		protocol.EvalRes, protocol.InfoRes,
+		protocol.ResetRes, protocol.HelloRes, protocol.Error:
+		d.waiterMu.Lock()
+		ch := d.waiterCh
+		waiter := d.waiterID
+		waiterSessionID := d.waiterSessionID
+		d.waiterMu.Unlock()
 
-	// Deliver to the waiting goroutine. Non-blocking because the channel
-	// has capacity 1 and only one waiter exists at a time (reqMu).
-	select {
-	case ch <- frameResponse{header: header, payload: payload}:
+		if ch == nil {
+			log.Printf("frame: no waiter for %s (seq=%d)", msgTypeName(header.MessageType), header.Seq)
+			return
+		}
+
+		if header.Seq != waiter.seq {
+			log.Printf("frame: seq mismatch (got %d, want %d) for %s", header.Seq, waiter.seq, msgTypeName(header.MessageType))
+			return
+		}
+		if waiterSessionID != 0 && header.SessionID != waiterSessionID {
+			log.Printf("frame: session mismatch (got %016x, want %016x) for %s", header.SessionID, waiterSessionID, msgTypeName(header.MessageType))
+			return
+		}
+		if header.MessageType != protocol.Error && header.MessageType != waiter.messageType {
+			log.Printf(
+				"frame: type mismatch (got %s, want %s) for seq=%d",
+				msgTypeName(header.MessageType),
+				msgTypeName(waiter.messageType),
+				header.Seq,
+			)
+			return
+		}
+
+		select {
+		case ch <- frameResponse{header: header, payload: payload}:
+		default:
+			log.Printf("frame: waiter full for %s (seq=%d)", msgTypeName(header.MessageType), header.Seq)
+		}
 	default:
-		log.Printf("frame: waiter channel full, dropping %s (seq=%d)", msgTypeName(header.MessageType), header.Seq)
 	}
 }
 
@@ -746,9 +742,14 @@ func (d *Daemon) handleDisconnect(err error) {
 	d.conn.Close()
 	d.conn = nil
 	d.hello = nil
-	// Signal any blocked waitResponse
+	// Unblock waitResponse before taking reqMu. deviceEval waits with reqMu
+	// held, so this ordering avoids deadlocking the read loop on disconnect.
 	close(d.disconnectCh)
 	d.portMu.Unlock()
+
+	d.reqMu.Lock()
+	d.enterDirectMode()
+	d.reqMu.Unlock()
 
 	log.Printf("device disconnected: %v", err)
 	d.broadcast(EventDisconnected, nil)
@@ -836,6 +837,12 @@ func (d *Daemon) broadcast(event string, params any) {
 }
 
 func (d *Daemon) shutdown() {
+	d.reqMu.Lock()
+	if attached, _, _ := d.sessionSnapshot(); attached {
+		_ = d.detachWithTimeout(shutdownDetachTimeout)
+	}
+	d.reqMu.Unlock()
+
 	d.closeOnce.Do(func() { close(d.done) })
 	d.listener.Close()
 
@@ -858,8 +865,10 @@ func (d *Daemon) shutdown() {
 // --- Device operations ---
 
 // sendFrame acquires writeMu, builds and writes a COBS frame.
-func (d *Daemon) sendFrame(msgType byte, reqID uint16, payload []byte) error {
-	wire, err := protocol.EncodeWireFrame(0, msgType, reqID, payload)
+func (d *Daemon) sendFrame(msgType byte, seq uint16, payload []byte) error {
+	_, sessionID, _ := d.sessionSnapshot()
+
+	wire, err := protocol.EncodeWireFrame(sessionID, msgType, seq, payload)
 	if err != nil {
 		return fmt.Errorf("build frame: %w", err)
 	}
@@ -878,20 +887,213 @@ func (d *Daemon) sendFrame(msgType byte, reqID uint16, payload []byte) error {
 	return conn.Write(wire)
 }
 
+// attach sends ATTACH_REQ and transitions to Live mode.
+// Must be called with reqMu held.
+func (d *Daemon) attach() error {
+	if attached, _, _ := d.sessionSnapshot(); attached {
+		return nil
+	}
+
+	sessionID, err := protocol.GenerateSessionID()
+	if err != nil {
+		return err
+	}
+
+	for attempt := 0; attempt <= maxAttachRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(attachRetryDelay)
+		}
+
+		ch := d.registerWaiter(0, protocol.AttachRes, false)
+		d.setWaiterSessionID(sessionID)
+
+		wire, err := protocol.EncodeWireFrame(sessionID, protocol.AttachReq, 0, nil)
+		if err != nil {
+			d.clearWaiter()
+			return err
+		}
+
+		d.writeMu.Lock()
+		writeErr := func() error {
+			d.portMu.Lock()
+			conn := d.conn
+			d.portMu.Unlock()
+			if conn == nil {
+				return ErrDisconnected
+			}
+			return conn.Write(wire)
+		}()
+		d.writeMu.Unlock()
+		if writeErr != nil {
+			d.clearWaiter()
+			return writeErr
+		}
+
+		deadline := time.Now().Add(attachTimeout)
+
+		var payload []byte
+		for {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				d.clearWaiter()
+				return fmt.Errorf("attach: %w", fmt.Errorf("device response timeout"))
+			}
+
+			respHeader, respPayload, err := d.waitResponseNoClear(ch, remaining)
+			if err != nil {
+				d.clearWaiter()
+				return fmt.Errorf("attach: %w", err)
+			}
+			if respHeader.SessionID != sessionID {
+				log.Printf("attach: discard stale session response (%016x != %016x)", respHeader.SessionID, sessionID)
+				continue
+			}
+
+			payload = respPayload
+			break
+		}
+		d.clearWaiter()
+
+		status, err := protocol.ParseAttachResponse(payload)
+		if err != nil {
+			return fmt.Errorf("attach: %w", err)
+		}
+
+		switch status {
+		case protocol.AttachStatusOK:
+			d.setSessionState(true, sessionID, 0)
+			d.nextSeq = 1
+			d.startKeepalive()
+			log.Printf("session: attached (id=%016x)", sessionID)
+			return nil
+		case protocol.AttachStatusBusy:
+			log.Printf("session: device busy, retry %d/%d", attempt+1, maxAttachRetries+1)
+			continue
+		default:
+			return fmt.Errorf("attach rejected: status %d", status)
+		}
+	}
+
+	return fmt.Errorf("attach: device busy after %d retries", maxAttachRetries+1)
+}
+
+// detach sends DETACH_REQ and transitions back to Direct mode.
+// Must be called with reqMu held.
+func (d *Daemon) detach() error {
+	return d.detachWithTimeout(commandTimeout)
+}
+
+func (d *Daemon) detachWithTimeout(timeout time.Duration) error {
+	if attached, _, _ := d.sessionSnapshot(); !attached {
+		return nil
+	}
+
+	d.stopKeepalive()
+
+	// DETACH uses the current seq without advancing. The session ends here.
+	seq := d.nextSeq
+	ch := d.registerWaiter(seq, protocol.DetachRes, false)
+
+	if err := d.sendFrame(protocol.DetachReq, seq, nil); err != nil {
+		d.clearWaiter()
+		d.enterDirectMode()
+		return fmt.Errorf("detach write: %w", err)
+	}
+
+	_, _, err := d.waitResponse(ch, timeout)
+	d.enterDirectMode()
+	if err != nil {
+		return fmt.Errorf("detach: %w", err)
+	}
+
+	log.Printf("session: detached")
+	return nil
+}
+
+// enterDirectMode clears all Live session state.
+func (d *Daemon) enterDirectMode() {
+	d.stopKeepalive()
+	d.setSessionState(false, 0, 0)
+	d.nextSeq = 0
+}
+
+func (d *Daemon) startKeepalive() {
+	d.stopKeepalive()
+	d.keepaliveTicker = time.NewTicker(keepaliveInterval)
+	d.keepaliveStop = make(chan struct{})
+	go d.keepaliveLoop()
+}
+
+func (d *Daemon) stopKeepalive() {
+	if d.keepaliveTicker != nil {
+		d.keepaliveTicker.Stop()
+		if d.keepaliveStop != nil {
+			select {
+			case <-d.keepaliveStop:
+			default:
+				close(d.keepaliveStop)
+			}
+		}
+		d.keepaliveTicker = nil
+		d.keepaliveStop = nil
+	}
+}
+
+func (d *Daemon) keepaliveLoop() {
+	ticker := d.keepaliveTicker
+	stop := d.keepaliveStop
+	if ticker == nil || stop == nil {
+		return
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			attached, sessionID, _ := d.sessionSnapshot()
+			if !attached {
+				continue
+			}
+			wire, err := protocol.EncodeWireFrame(sessionID, protocol.Keepalive, 0, nil)
+			if err != nil {
+				continue
+			}
+			d.writeMu.Lock()
+			d.portMu.Lock()
+			conn := d.conn
+			d.portMu.Unlock()
+			if conn != nil {
+				_ = conn.Write(wire)
+			}
+			d.writeMu.Unlock()
+		case <-stop:
+			return
+		case <-d.done:
+			return
+		}
+	}
+}
+
 // registerWaiter sets up a per-request delivery channel. The serial
 // reader will deliver matching frames here. Must be called before
 // sending the frame. The caller holds reqMu so only one waiter exists.
 func (d *Daemon) registerWaiter(reqID uint16, messageType byte, interruptible bool) chan frameResponse {
-	ch := make(chan frameResponse, 1)
+	ch := make(chan frameResponse, waiterBufferSize)
 	d.waiterMu.Lock()
 	d.waiterID = interruptibleWaiter{
 		messageType:   messageType,
 		seq:           reqID,
 		interruptible: interruptible,
 	}
+	d.waiterSessionID = 0
 	d.waiterCh = ch
 	d.waiterMu.Unlock()
 	return ch
+}
+
+func (d *Daemon) setWaiterSessionID(sessionID uint64) {
+	d.waiterMu.Lock()
+	d.waiterSessionID = sessionID
+	d.waiterMu.Unlock()
 }
 
 // clearWaiter removes the registered waiter. Called after waitResponse
@@ -899,6 +1101,7 @@ func (d *Daemon) registerWaiter(reqID uint16, messageType byte, interruptible bo
 func (d *Daemon) clearWaiter() {
 	d.waiterMu.Lock()
 	d.waiterID = interruptibleWaiter{}
+	d.waiterSessionID = 0
 	d.waiterCh = nil
 	d.waiterMu.Unlock()
 }
@@ -927,6 +1130,10 @@ func (d *Daemon) cancelInterruptibleWaiter(err error) bool {
 // If timeout == 0, waits indefinitely (for eval — programs can run forever).
 func (d *Daemon) waitResponse(ch chan frameResponse, timeout time.Duration) (*protocol.Header, []byte, error) {
 	defer d.clearWaiter()
+	return d.waitResponseNoClear(ch, timeout)
+}
+
+func (d *Daemon) waitResponseNoClear(ch chan frameResponse, timeout time.Duration) (*protocol.Header, []byte, error) {
 
 	var timeoutCh <-chan time.Time
 	if timeout > 0 {
@@ -950,7 +1157,7 @@ func (d *Daemon) waitResponse(ch chan frameResponse, timeout time.Duration) (*pr
 
 // deviceEval sends source for evaluation. Automatically chunks if needed.
 // Blocks until all chunks complete or an error occurs. No timeout.
-func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
+func (d *Daemon) deviceEval(source string, owner *rpcConn) (*EvalResult, error) {
 	d.portMu.Lock()
 	conn := d.conn
 	d.portMu.Unlock()
@@ -961,6 +1168,10 @@ func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 	d.reqMu.Lock()
 	defer d.reqMu.Unlock()
 
+	if err := d.attach(); err != nil {
+		return nil, fmt.Errorf("eval: %w", err)
+	}
+
 	chunks, err := session.ChunkEvalSource(source)
 	if err != nil {
 		return nil, err
@@ -968,16 +1179,20 @@ func (d *Daemon) deviceEval(source string) (*EvalResult, error) {
 	var lastResult *EvalResult
 
 	for _, chunk := range chunks {
-		reqID := d.allocReqID()
+		seq := d.allocSeq()
+		d.beginActiveEval(seq, owner)
+
 		payload := protocol.BuildEvalPayload(chunk)
 
-		ch := d.registerWaiter(reqID, protocol.EvalReq, true)
-		if err := d.sendFrame(protocol.EvalReq, reqID, payload); err != nil {
+		ch := d.registerWaiter(seq, protocol.EvalRes, true)
+		if err := d.sendFrame(protocol.EvalReq, seq, payload); err != nil {
 			d.clearWaiter()
+			d.endActiveEval()
 			return nil, fmt.Errorf("write: %w", err)
 		}
 
 		header, respPayload, err := d.waitResponse(ch, 0)
+		d.endActiveEval()
 		if err != nil {
 			return nil, err
 		}
@@ -1026,9 +1241,13 @@ func (d *Daemon) deviceInfo() (*InfoResult, error) {
 	d.reqMu.Lock()
 	defer d.reqMu.Unlock()
 
-	reqID := d.allocReqID()
-	ch := d.registerWaiter(reqID, protocol.InfoReq, false)
-	if err := d.sendFrame(protocol.InfoReq, reqID, nil); err != nil {
+	if err := d.attach(); err != nil {
+		return nil, fmt.Errorf("info: %w", err)
+	}
+
+	seq := d.allocSeq()
+	ch := d.registerWaiter(seq, protocol.InfoRes, false)
+	if err := d.sendFrame(protocol.InfoReq, seq, nil); err != nil {
 		d.clearWaiter()
 		return nil, fmt.Errorf("write: %w", err)
 	}
@@ -1036,6 +1255,14 @@ func (d *Daemon) deviceInfo() (*InfoResult, error) {
 	header, respPayload, err := d.waitResponse(ch, commandTimeout)
 	if err != nil {
 		return nil, err
+	}
+
+	if header.MessageType == protocol.Error {
+		errResp, parseErr := protocol.ParseErrorResponse(respPayload)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		return nil, fmt.Errorf("device error (cat %d): %s", errResp.Category, errResp.Detail)
 	}
 
 	if header.MessageType != protocol.InfoRes {
@@ -1069,9 +1296,13 @@ func (d *Daemon) deviceReset() (*ResetResult, error) {
 	d.reqMu.Lock()
 	defer d.reqMu.Unlock()
 
-	reqID := d.allocReqID()
-	ch := d.registerWaiter(reqID, protocol.ResetReq, false)
-	if err := d.sendFrame(protocol.ResetReq, reqID, nil); err != nil {
+	if err := d.attach(); err != nil {
+		return nil, fmt.Errorf("reset: %w", err)
+	}
+
+	seq := d.allocSeq()
+	ch := d.registerWaiter(seq, protocol.ResetRes, false)
+	if err := d.sendFrame(protocol.ResetReq, seq, nil); err != nil {
 		d.clearWaiter()
 		return nil, fmt.Errorf("write: %w", err)
 	}
@@ -1110,32 +1341,101 @@ func (d *Daemon) deviceReset() (*ResetResult, error) {
 	}, nil
 }
 
-// deviceInterrupt sends a raw 0x03 (Ctrl-C) byte to the device.
+// deviceInterrupt sends a framed INTERRUPT_REQ to the device.
 // Uses writeMu (not reqMu) so it can execute while eval is in progress.
 func (d *Daemon) deviceInterrupt() error {
-	d.writeMu.Lock()
-	defer d.writeMu.Unlock()
-
-	d.portMu.Lock()
-	conn := d.conn
-	d.portMu.Unlock()
-
-	if conn == nil {
-		return ErrDisconnected
+	attached, sessionID, activeSeq := d.sessionSnapshot()
+	if !attached {
+		return fmt.Errorf("not attached")
+	}
+	if activeSeq == 0 {
+		return fmt.Errorf("no active eval to interrupt")
 	}
 
-	if err := conn.Write([]byte{0x03}); err != nil {
+	wire, err := protocol.EncodeWireFrame(sessionID, protocol.InterruptReq, activeSeq, nil)
+	if err != nil {
 		return err
 	}
 
-	d.cancelInterruptibleWaiter(ErrEvalInterrupted)
+	d.writeMu.Lock()
+	d.portMu.Lock()
+	conn := d.conn
+	d.portMu.Unlock()
+	if conn == nil {
+		d.writeMu.Unlock()
+		return ErrDisconnected
+	}
+	writeErr := conn.Write(wire)
+	d.writeMu.Unlock()
+	if writeErr != nil {
+		return writeErr
+	}
+
+	d.waiterMu.Lock()
+	cancel := (<-chan struct{})(nil)
+	if d.activeSeq == activeSeq && d.interruptCancel != nil && d.interruptWatchSeq != activeSeq {
+		d.interruptWatchSeq = activeSeq
+		cancel = d.interruptCancel
+	}
+	d.waiterMu.Unlock()
+
+	if cancel == nil {
+		return nil
+	}
+
+	go func(cancel <-chan struct{}) {
+		select {
+		case <-time.After(interruptCancelTimeout):
+			d.cancelInterruptibleWaiter(ErrEvalInterrupted)
+		case <-cancel:
+		case <-d.done:
+		}
+	}(cancel)
+
 	return nil
 }
 
-// allocReqID returns a unique sequence number in the range [1, 0xFFFE].
-func (d *Daemon) allocReqID() uint16 {
-	id := d.reqIDSeq.Add(1)
-	return uint16((id % 0xFFFE) + 1)
+// deviceSendInput sends INPUT_DATA to the active eval sequence.
+func (d *Daemon) deviceSendInput(seq uint16, data []byte) error {
+	attached, sessionID, activeSeq := d.sessionSnapshot()
+	if !attached {
+		return fmt.Errorf("not attached")
+	}
+	if activeSeq == 0 {
+		return fmt.Errorf("no active eval")
+	}
+	if seq != activeSeq {
+		return fmt.Errorf("stale input seq %d (active %d)", seq, activeSeq)
+	}
+
+	payload := protocol.BuildInputDataPayload(data)
+	wire, err := protocol.EncodeWireFrame(sessionID, protocol.InputData, seq, payload)
+	if err != nil {
+		return err
+	}
+
+	d.writeMu.Lock()
+	d.portMu.Lock()
+	conn := d.conn
+	d.portMu.Unlock()
+	if conn == nil {
+		d.writeMu.Unlock()
+		return ErrDisconnected
+	}
+	writeErr := conn.Write(wire)
+	d.writeMu.Unlock()
+	return writeErr
+}
+
+// allocSeq returns the next seq and advances the counter.
+// Must be called with reqMu held.
+func (d *Daemon) allocSeq() uint16 {
+	seq := d.nextSeq
+	d.nextSeq++
+	if d.nextSeq == 0 {
+		d.nextSeq = 1
+	}
+	return seq
 }
 
 func helloToResult(h *protocol.HelloResponse) HelloResult {
@@ -1156,6 +1456,14 @@ func msgTypeName(t byte) string {
 		return "HELLO_REQ"
 	case protocol.HelloRes:
 		return "HELLO_RES"
+	case protocol.AttachReq:
+		return "ATTACH_REQ"
+	case protocol.AttachRes:
+		return "ATTACH_RES"
+	case protocol.DetachReq:
+		return "DETACH_REQ"
+	case protocol.DetachRes:
+		return "DETACH_RES"
 	case protocol.EvalReq:
 		return "EVAL_REQ"
 	case protocol.EvalRes:
@@ -1168,6 +1476,16 @@ func msgTypeName(t byte) string {
 		return "RESET_REQ"
 	case protocol.ResetRes:
 		return "RESET_RES"
+	case protocol.InterruptReq:
+		return "INTERRUPT_REQ"
+	case protocol.Keepalive:
+		return "KEEPALIVE"
+	case protocol.InputData:
+		return "INPUT_DATA"
+	case protocol.InputWait:
+		return "INPUT_WAIT"
+	case protocol.OutputData:
+		return "OUTPUT_DATA"
 	case protocol.Error:
 		return "ERROR"
 	default:

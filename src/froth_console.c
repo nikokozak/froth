@@ -165,7 +165,7 @@ static froth_error_t handle_recognized_frame(froth_vm_t *vm,
       break;
     err = froth_link_send_hello_res(vm, 0, 0);
     recognize_reset(console);
-    return err;
+    return FROTH_OK;
 
   case FROTH_LINK_ATTACH_REQ:
     /* Bad fields -> INVALID. */
@@ -173,20 +173,20 @@ static froth_error_t handle_recognized_frame(froth_vm_t *vm,
         header.payload_length != 0) {
       err = send_attach_res(header.session_id, 0, FROTH_ATTACH_STATUS_INVALID);
       recognize_reset(console);
-      return err;
+      return FROTH_OK;
     }
     /* Not at idle prompt -> BUSY. */
     if (console->mode != FROTH_CONSOLE_DIRECT || console->session_id != 0 ||
         !froth_repl_is_idle()) {
       err = send_attach_res(header.session_id, 0, FROTH_ATTACH_STATUS_BUSY);
       recognize_reset(console);
-      return err;
+      return FROTH_OK;
     }
     /* Send OK first. If that fails, stay Direct. */
     err = send_attach_res(header.session_id, 0, FROTH_ATTACH_STATUS_OK);
     if (err != FROTH_OK) {
       recognize_reset(console);
-      return err;
+      return FROTH_OK;
     }
     console->mode = FROTH_CONSOLE_LIVE;
     console->session_id = header.session_id;
@@ -297,6 +297,8 @@ void froth_console_poll(froth_vm_t *vm) {
   while (platform_key_ready()) {
     uint8_t byte;
     froth_error_t err = platform_key(&byte);
+    if (err == FROTH_ERROR_IO)
+      break;
     if (err != FROTH_OK)
       continue;
 
@@ -324,14 +326,15 @@ void froth_console_poll(froth_vm_t *vm) {
 
       switch (header.message_type) {
       case FROTH_LINK_KEEPALIVE:
-        if (header.seq != 0)
+        if (header.seq != 0 || header.payload_length != 0)
           break;
         g_console.lease_deadline_ms =
             platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
         break;
 
       case FROTH_LINK_INTERRUPT_REQ:
-        if (header.seq != g_console.active_seq || g_console.active_seq == 0)
+        if (header.seq != g_console.active_seq || g_console.active_seq == 0 ||
+            header.payload_length != 0)
           break;
         g_console.lease_deadline_ms =
             platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
@@ -341,11 +344,11 @@ void froth_console_poll(froth_vm_t *vm) {
       case FROTH_LINK_INPUT_DATA:
         if (header.seq != g_console.active_seq || g_console.active_seq == 0)
           break;
-        g_console.lease_deadline_ms =
-            platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
         if (header.payload_length >= 2) {
           uint16_t count = (uint16_t)payload[0] | ((uint16_t)payload[1] << 8);
-          if ((uint16_t)(2 + count) <= header.payload_length) {
+          if ((uint16_t)(2 + count) == header.payload_length) {
+            g_console.lease_deadline_ms =
+                platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
             for (uint16_t i = 0; i < count; i++)
               input_fifo_push(&g_console, payload[2 + i]);
           }
@@ -399,8 +402,13 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
   FROTH_TRY(emit_string(prompt_normal));
 
   while (1) {
-    if (g_console.mode == FROTH_CONSOLE_DIRECT && g_console.recognize_active)
+    if (g_console.mode == FROTH_CONSOLE_DIRECT && g_console.recognize_active) {
       recognize_check_timeout(&g_console);
+      if (!platform_key_ready()) {
+        platform_delay_ms(1);
+        continue;
+      }
+    }
 
     if (g_console.mode == FROTH_CONSOLE_LIVE) {
       if (lease_expired(g_console.lease_deadline_ms)) {
@@ -416,6 +424,13 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
     }
 
     err = platform_key(&byte);
+    if (err == FROTH_ERROR_IO) {
+      if (vm->interrupted) {
+        vm->interrupted = 0;
+        continue;
+      }
+      return FROTH_OK;
+    }
     if (err != FROTH_OK)
       continue;
 
@@ -441,7 +456,7 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
         }
         switch (header.message_type) {
         case FROTH_LINK_KEEPALIVE:
-          if (header.seq != 0) {
+          if (header.seq != 0 || header.payload_length != 0) {
             froth_link_frame_reset();
             continue;
           }
@@ -449,15 +464,23 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
               platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
           break;
         case FROTH_LINK_DETACH_REQ:
-          if (header.seq != g_console.seq) {
+          if (header.seq != g_console.seq || header.payload_length != 0) {
             froth_link_frame_reset();
             continue;
           }
           g_console.lease_deadline_ms =
               platform_uptime_ms() + FROTH_CONSOLE_LIVE_LEASE_MS;
-          froth_console_flush_output();
-          froth_link_send_frame(header.session_id, FROTH_LINK_DETACH_RES,
-                                header.seq, NULL, 0);
+          err = froth_console_flush_output();
+          if (err != FROTH_OK) {
+            froth_link_frame_reset();
+            continue;
+          }
+          err = froth_link_send_frame(header.session_id, FROTH_LINK_DETACH_RES,
+                                      header.seq, NULL, 0);
+          if (err != FROTH_OK) {
+            froth_link_frame_reset();
+            continue;
+          }
           froth_link_frame_reset();
           enter_direct_mode(&g_console);
           in_frame = 0;
@@ -510,6 +533,8 @@ froth_error_t froth_console_start(froth_vm_t *vm) {
 
     /* Recognizer eats 0x00 or any bytes while accumulating. */
     if (byte == 0x00 || g_console.recognize_active) {
+      if (byte == 0x00 && !g_console.recognize_active && !froth_repl_is_idle())
+        continue;
       frame_ready = recognize_feed(&g_console, byte);
       if (frame_ready)
         FROTH_TRY(handle_recognized_frame(vm, &g_console));

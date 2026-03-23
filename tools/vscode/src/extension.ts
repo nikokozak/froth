@@ -11,6 +11,7 @@ import {
   DaemonNotification,
   ConsoleEvent,
   ConnectedEvent,
+  InputWaitEvent,
   EvalResult,
   InfoResult,
   StatusResult,
@@ -116,6 +117,8 @@ class FrothController {
   private stateListeners: StateChangeListener[] = [];
   private selectedTarget: TargetMode = "serial";
   private cliPathCache: string | null = null;
+  private inputPromptActive = false;
+  private pendingInputSeq: number | null = null;
 
   constructor(
     private readonly output: vscode.OutputChannel,
@@ -500,7 +503,14 @@ class FrothController {
       case "console": {
         const params = n.params as ConsoleEvent | undefined;
         if (params) {
-          this.output.append(params.text);
+          this.output.append(this.renderConsoleBytes(Buffer.from(params.data, "base64")));
+        }
+        break;
+      }
+      case "input_wait": {
+        const params = n.params as InputWaitEvent | undefined;
+        if (params) {
+          void this.handleInputWait(params.seq);
         }
         break;
       }
@@ -572,6 +582,168 @@ class FrothController {
     this.logResult(result);
     this.output.show(true);
     await this.refreshDeviceInfo();
+  }
+
+  private async handleInputWait(seq: number): Promise<void> {
+    this.pendingInputSeq = seq;
+    if (this.inputPromptActive) {
+      return;
+    }
+    this.inputPromptActive = true;
+
+    try {
+      while (this.pendingInputSeq !== null) {
+        const currentSeq: number = this.pendingInputSeq;
+        this.pendingInputSeq = null;
+
+        const value = await vscode.window.showInputBox({
+          prompt: "Device is waiting for input (key)",
+          placeHolder: "Text or escapes like \\n, \\r, \\t, \\\\, \\x41",
+          ignoreFocusOut: true,
+        });
+
+        if (value === undefined) {
+          try {
+            this.output.appendLine("[froth] input cancelled, sending interrupt");
+            await this.sendInputInterrupt();
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.output.appendLine(`[froth] input interrupt failed: ${msg}`);
+          }
+          this.pendingInputSeq = null;
+          return;
+        }
+
+        if (value.length === 0) {
+          this.pendingInputSeq = currentSeq;
+          continue;
+        }
+
+        let data: Uint8Array;
+        try {
+          data = this.parseInputBytes(value);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.output.appendLine(`[froth] input parse failed: ${msg}`);
+          this.pendingInputSeq = currentSeq;
+          continue;
+        }
+
+        try {
+          if (!this.client) {
+            throw new Error("daemon client unavailable");
+          }
+          await this.client.sendInput(data, currentSeq);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.output.appendLine(`[froth] input send failed: ${msg}`);
+          this.pendingInputSeq = currentSeq;
+        }
+      }
+    } finally {
+      this.inputPromptActive = false;
+    }
+  }
+
+  private async sendInputInterrupt(): Promise<void> {
+    if (!this.client) {
+      throw new Error("daemon client unavailable");
+    }
+    await this.client.interrupt();
+  }
+
+  private parseInputBytes(value: string): Uint8Array {
+    const bytes: number[] = [];
+    for (let i = 0; i < value.length; i++) {
+      const ch = value[i];
+      if (ch !== "\\") {
+        const encoded = Buffer.from(ch, "utf8");
+        for (const b of encoded) {
+          bytes.push(b);
+        }
+        continue;
+      }
+
+      if (i + 1 >= value.length) {
+        throw new Error("trailing backslash");
+      }
+
+      const esc = value[++i];
+      switch (esc) {
+        case "n":
+          bytes.push(0x0a);
+          break;
+        case "r":
+          bytes.push(0x0d);
+          break;
+        case "t":
+          bytes.push(0x09);
+          break;
+        case "\\":
+          bytes.push(0x5c);
+          break;
+        case "x": {
+          if (i + 2 >= value.length) {
+            throw new Error("short hex escape");
+          }
+          const hex = value.slice(i + 1, i + 3);
+          if (!/^[0-9a-fA-F]{2}$/.test(hex)) {
+            throw new Error(`bad hex escape \\x${hex}`);
+          }
+          bytes.push(parseInt(hex, 16));
+          i += 2;
+          break;
+        }
+        default: {
+          const encoded = Buffer.from(`\\${esc}`, "utf8");
+          for (const b of encoded) {
+            bytes.push(b);
+          }
+          break;
+        }
+      }
+    }
+    return Uint8Array.from(bytes);
+  }
+
+  private renderConsoleBytes(data: Buffer): string {
+    let out = "";
+    const utf8 = new TextDecoder("utf-8", { fatal: true });
+    for (let i = 0; i < data.length; ) {
+      const b = data[i];
+      if (b === 0x0a || b === 0x0d || b === 0x09) {
+        out += String.fromCharCode(b);
+        i++;
+        continue;
+      }
+      if (b >= 0x20 && b <= 0x7e) {
+        out += String.fromCharCode(b);
+        i++;
+        continue;
+      }
+
+      let decoded = false;
+      for (let width = 4; width >= 2; width--) {
+        if (i + width > data.length) {
+          continue;
+        }
+        const slice = data.subarray(i, i + width);
+        try {
+          out += utf8.decode(slice);
+          i += width;
+          decoded = true;
+          break;
+        } catch {
+        }
+      }
+      if (decoded) {
+        continue;
+      }
+
+      out += `\\x${b.toString(16).padStart(2, "0")}`;
+      i++;
+    }
+    return out;
   }
 
   private logResult(result: EvalResult): void {

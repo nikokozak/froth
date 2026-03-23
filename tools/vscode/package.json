@@ -15,6 +15,22 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "languages": [
+      {
+        "id": "froth",
+        "extensions": [
+          ".froth"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "froth",
+        "scopeName": "source.froth",
+        "path": "./syntaxes/froth.tmLanguage.json"
+      }
+    ],
     "commands": [
       {
         "command": "froth.connect",

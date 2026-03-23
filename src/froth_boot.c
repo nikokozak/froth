@@ -36,7 +36,8 @@ static bool poll_for_safe_boot() {
     platform_delay_ms(10);
     while (platform_key_ready()) {
       uint8_t byte;
-      platform_key(&byte);
+      if (platform_key(&byte) != FROTH_OK)
+        break;
       if (byte == 0x03)
         safe_boot = true;
       if (froth_vm.interrupted) {

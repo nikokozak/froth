@@ -23,6 +23,13 @@ froth_error_t froth_console_mux_start(froth_vm_t *vm) {
     reader_state = 0;
 
     froth_error_t err = platform_key(&byte);
+    if (err == FROTH_ERROR_IO) {
+      if (vm->interrupted) {
+        vm->interrupted = 0;
+        continue;
+      }
+      return FROTH_OK;
+    }
     if (err != FROTH_OK)
       continue;
 

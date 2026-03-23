@@ -50,6 +50,7 @@ const (
 	EventConnected    = "connected"
 	EventDisconnected = "disconnected"
 	EventReconnecting = "reconnecting"
+	EventInputWait    = "input_wait"
 )
 
 // Domain types shared between server and client
@@ -107,7 +108,17 @@ type StatusResult struct {
 }
 
 type ConsoleEvent struct {
-	Text string `json:"text"`
+	Data []byte `json:"data"`
+}
+
+type InputWaitEvent struct {
+	Reason int `json:"reason"`
+	Seq    int `json:"seq"`
+}
+
+type InputParams struct {
+	Data []byte `json:"data"`
+	Seq  int    `json:"seq"`
 }
 
 type ConnectedEvent struct {
@@ -183,15 +194,15 @@ func (c *rpcConn) serve() {
 
 func (c *rpcConn) handleRequest(req *rpcRequest) {
 	switch req.Method {
-	// Interrupt bypasses the normal request flow: it writes a raw byte
-	// to the serial port and does not acquire reqMu. This is the ONLY
-	// method that can execute while another request is in progress.
+	// Interrupt and input bypass reqMu so they can run during eval.
 	case "interrupt":
 		go c.handleInterrupt(req)
+	case "input":
+		go c.handleInput(req)
 	case "hello":
 		c.handleHello(req)
 	case "eval":
-		c.handleEval(req)
+		go c.handleEval(req)
 	case "info":
 		c.handleInfo(req)
 	case "status":
@@ -223,7 +234,7 @@ func (c *rpcConn) handleEval(req *rpcRequest) {
 		return
 	}
 
-	result, err := c.daemon.deviceEval(params.Source)
+	result, err := c.daemon.deviceEval(params.Source, c)
 	if err != nil {
 		c.sendError(req.ID, errDeviceError, err.Error())
 		return
@@ -258,6 +269,25 @@ func (c *rpcConn) handleInterrupt(req *rpcRequest) {
 		c.sendError(req.ID, errDeviceError, err.Error())
 		return
 	}
+	c.sendResult(req.ID, struct{}{})
+}
+
+func (c *rpcConn) handleInput(req *rpcRequest) {
+	var params InputParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		c.sendError(req.ID, errInvalidRequest, "invalid params")
+		return
+	}
+	if params.Seq <= 0 || params.Seq > 0xFFFF {
+		c.sendError(req.ID, errInvalidRequest, "invalid input seq")
+		return
+	}
+
+	if err := c.daemon.deviceSendInput(uint16(params.Seq), params.Data); err != nil {
+		c.sendError(req.ID, errDeviceError, err.Error())
+		return
+	}
+
 	c.sendResult(req.ID, struct{}{})
 }
 
@@ -333,6 +363,22 @@ func (c *rpcConn) sendNotification(method string, params interface{}) {
 	case <-c.done:
 		return
 	case c.notifyCh <- n:
+		return
+	default:
+	}
+
+	if method == EventInputWait {
+		select {
+		case <-c.done:
+		case c.notifyCh <- n:
+		}
+		return
+	}
+
+	select {
+	case <-c.done:
+		return
+	case c.notifyCh <- n:
 	default:
 		// Client too slow, drop notification rather than block serial read loop
 		if method == EventConsole {
@@ -366,6 +412,7 @@ func (c *rpcConn) decorateConsoleEvent(params interface{}) interface{} {
 	}
 
 	copyEvt := *evt
-	copyEvt.Text = "[froth] console output dropped\n" + copyEvt.Text
+	prefix := []byte("[froth] console output dropped\n")
+	copyEvt.Data = append(append([]byte(nil), prefix...), copyEvt.Data...)
 	return &copyEvt
 }

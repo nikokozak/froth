@@ -56,6 +56,11 @@ func runConnectSerial() error {
 		defer outputMu.Unlock()
 		fmt.Printf(format, args...)
 	}
+	writeLocked := func(data []byte) {
+		outputMu.Lock()
+		defer outputMu.Unlock()
+		_, _ = os.Stdout.Write(data)
+	}
 
 	disconnectCh := make(chan struct{})
 	var disconnectOnce sync.Once
@@ -66,12 +71,39 @@ func runConnectSerial() error {
 		})
 	}
 
+	lineCh := make(chan string)
+	scanErrCh := make(chan error, 1)
+	go scanConnectInput(lineCh, scanErrCh)
+
 	client.EventHandler = func(method string, params json.RawMessage) {
 		switch method {
 		case daemon.EventConsole:
 			var evt daemon.ConsoleEvent
 			if err := json.Unmarshal(params, &evt); err == nil {
-				printLocked("%s", evt.Text)
+				writeLocked(evt.Data)
+			}
+		case daemon.EventInputWait:
+			var evt daemon.InputWaitEvent
+			if err := json.Unmarshal(params, &evt); err == nil {
+				printLocked("\n[froth] input> ")
+				go func(seq int) {
+					line, ok := <-lineCh
+					if !ok {
+						_ = client.Interrupt()
+						return
+					}
+					if line == "\\ quit" {
+						_ = client.Interrupt()
+						return
+					}
+					data := []byte(line)
+					if line == "" {
+						data = []byte{'\n'}
+					}
+					if err := client.SendInput(data, seq); err != nil {
+						printLocked("\ninput: %v\n", err)
+					}
+				}(evt.Seq)
 			}
 		case daemon.EventDisconnected:
 			signalDisconnect()
@@ -91,10 +123,6 @@ func runConnectSerial() error {
 	sigintCh := make(chan os.Signal, 1)
 	signal.Notify(sigintCh, os.Interrupt)
 	defer signal.Stop(sigintCh)
-
-	lineCh := make(chan string)
-	scanErrCh := make(chan error, 1)
-	go scanConnectInput(lineCh, scanErrCh)
 
 	for {
 		printLocked("froth> ")

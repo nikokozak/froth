@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 )
@@ -61,6 +62,28 @@ func ParseHelloResponse(p []byte) (*HelloResponse, error) {
 	return h, nil
 }
 
+// GenerateSessionID returns a cryptographically random non-zero uint64.
+func GenerateSessionID() (uint64, error) {
+	for {
+		var buf [8]byte
+		if _, err := rand.Read(buf[:]); err != nil {
+			return 0, fmt.Errorf("generate session ID: %w", err)
+		}
+		id := binary.LittleEndian.Uint64(buf[:])
+		if id != 0 {
+			return id, nil
+		}
+	}
+}
+
+// ParseAttachResponse reads ATTACH_RES payload: 1 byte status.
+func ParseAttachResponse(payload []byte) (uint8, error) {
+	if len(payload) != 1 {
+		return 0, fmt.Errorf("attach response wrong size: %d bytes", len(payload))
+	}
+	return payload[0], nil
+}
+
 // --- EVAL ---
 
 // BuildEvalPayload constructs an EVAL_REQ binary payload.
@@ -76,6 +99,34 @@ func BuildEvalPayload(source string) []byte {
 	binary.LittleEndian.PutUint16(buf[1:3], uint16(len(src)))
 	copy(buf[3:], src)
 	return buf
+}
+
+// ParseOutputData reads OUTPUT_DATA payload: u16le byte_count + raw bytes.
+func ParseOutputData(payload []byte) ([]byte, error) {
+	if len(payload) < 2 {
+		return nil, fmt.Errorf("output data too short: %d bytes", len(payload))
+	}
+	count := binary.LittleEndian.Uint16(payload[:2])
+	if int(count) != len(payload)-2 {
+		return nil, fmt.Errorf("output data truncated: want %d, have %d", count, len(payload)-2)
+	}
+	return payload[2 : 2+count], nil
+}
+
+// ParseInputWait reads INPUT_WAIT payload: 1 byte reason.
+func ParseInputWait(payload []byte) (uint8, error) {
+	if len(payload) != 1 {
+		return 0, fmt.Errorf("input wait wrong size: %d bytes", len(payload))
+	}
+	return payload[0], nil
+}
+
+// BuildInputDataPayload builds INPUT_DATA: u16le byte_count + raw bytes.
+func BuildInputDataPayload(data []byte) []byte {
+	payload := make([]byte, 2+len(data))
+	binary.LittleEndian.PutUint16(payload[:2], uint16(len(data)))
+	copy(payload[2:], data)
+	return payload
 }
 
 // EvalResponse holds parsed EVAL_RES payload fields.

@@ -75,7 +75,17 @@ export interface StatusResult {
 }
 
 export interface ConsoleEvent {
-  text: string;
+  data: string;
+}
+
+export interface InputWaitEvent {
+  reason: number;
+  seq: number;
+}
+
+export interface InputParams {
+  data: string;
+  seq: number;
 }
 
 export interface ConnectedEvent {
@@ -200,6 +210,13 @@ export class DaemonClient {
 
   async interrupt(): Promise<void> {
     await this.call("interrupt");
+  }
+
+  async sendInput(data: string | Uint8Array, seq: number): Promise<void> {
+    const bytes =
+      typeof data === "string" ? Buffer.from(data, "utf8") : Buffer.from(data);
+    const params: InputParams = { data: bytes.toString("base64"), seq };
+    await this.call("input", params);
   }
 
   async status(): Promise<StatusResult> {

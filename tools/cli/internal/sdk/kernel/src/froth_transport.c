@@ -114,12 +114,30 @@ static void write_u32(uint8_t *p, uint32_t v) {
   p[3] = (v >> 24) & 0xFF;
 }
 
-/* ── CRC over header[0..7] + payload ─────────────────────────────── */
+static uint64_t read_u64(const uint8_t *p) {
+  return (uint64_t)p[0] | ((uint64_t)p[1] << 8) | ((uint64_t)p[2] << 16) |
+         ((uint64_t)p[3] << 24) | ((uint64_t)p[4] << 32) |
+         ((uint64_t)p[5] << 40) | ((uint64_t)p[6] << 48) |
+         ((uint64_t)p[7] << 56);
+}
+
+static void write_u64(uint8_t *p, uint64_t v) {
+  p[0] = v & 0xFF;
+  p[1] = (v >> 8) & 0xFF;
+  p[2] = (v >> 16) & 0xFF;
+  p[3] = (v >> 24) & 0xFF;
+  p[4] = (v >> 32) & 0xFF;
+  p[5] = (v >> 40) & 0xFF;
+  p[6] = (v >> 48) & 0xFF;
+  p[7] = (v >> 56) & 0xFF;
+}
+
+/* ── CRC over header[0..15] + payload ────────────────────────────── */
 
 static uint32_t link_crc(const uint8_t *header, const uint8_t *payload,
-                          uint16_t payload_len) {
+                         uint16_t payload_len) {
   uint32_t crc = 0xFFFFFFFF;
-  crc = froth_crc32_update(crc, header, 8);
+  crc = froth_crc32_update(crc, header, 16);
   crc = froth_crc32_update(crc, payload, payload_len);
   return crc ^ 0xFFFFFFFF;
 }
@@ -132,21 +150,26 @@ froth_error_t froth_link_header_parse(const uint8_t *frame, uint16_t frame_len,
   if (frame_len < FROTH_LINK_HEADER_SIZE)
     return FROTH_ERROR_LINK_COBS_DECODE;
 
-  if (frame[0] != FROTH_LINK_MAGIC_0 || frame[1] != FROTH_LINK_MAGIC_1)
+  header->magic[0] = frame[0];
+  header->magic[1] = frame[1];
+  if (header->magic[0] != FROTH_LINK_MAGIC_0 ||
+      header->magic[1] != FROTH_LINK_MAGIC_1)
     return FROTH_ERROR_LINK_BAD_MAGIC;
 
-  if (frame[2] != FROTH_LINK_VERSION)
+  header->version = frame[2];
+  if (header->version != FROTH_LINK_VERSION)
     return FROTH_ERROR_LINK_BAD_VERSION;
 
   header->message_type = frame[3];
-  header->request_id = read_u16(frame + 4);
-  header->payload_length = read_u16(frame + 6);
-  header->crc32 = read_u32(frame + 8);
+  header->session_id = read_u64(frame + 4);
+  header->seq = read_u16(frame + 12);
+  header->payload_length = read_u16(frame + 14);
+  header->crc32 = read_u32(frame + 16);
 
   if (header->payload_length > FROTH_LINK_MAX_PAYLOAD)
     return FROTH_ERROR_LINK_TOO_LARGE;
 
-  if ((uint16_t)(FROTH_LINK_HEADER_SIZE + header->payload_length) > frame_len)
+  if ((uint16_t)(FROTH_LINK_HEADER_SIZE + header->payload_length) != frame_len)
     return FROTH_ERROR_LINK_COBS_DECODE;
 
   const uint8_t *pl = frame + FROTH_LINK_HEADER_SIZE;
@@ -161,8 +184,8 @@ froth_error_t froth_link_header_parse(const uint8_t *frame, uint16_t frame_len,
 
 /* ── Header build ────────────────────────────────────────────────── */
 
-froth_error_t froth_link_header_build(uint8_t message_type, uint16_t request_id,
-                                      const uint8_t *payload,
+froth_error_t froth_link_header_build(uint64_t session_id, uint8_t message_type,
+                                      uint16_t seq, const uint8_t *payload,
                                       uint16_t payload_len, uint8_t *out,
                                       uint16_t out_cap, uint16_t *out_len) {
   uint16_t total = FROTH_LINK_HEADER_SIZE + payload_len;
@@ -173,15 +196,15 @@ froth_error_t froth_link_header_build(uint8_t message_type, uint16_t request_id,
   out[1] = FROTH_LINK_MAGIC_1;
   out[2] = FROTH_LINK_VERSION;
   out[3] = message_type;
-  write_u16(out + 4, request_id);
-  write_u16(out + 6, payload_len);
+  write_u64(out + 4, session_id);
+  write_u16(out + 12, seq);
+  write_u16(out + 14, payload_len);
 
   for (uint16_t i = 0; i < payload_len; i++)
     out[FROTH_LINK_HEADER_SIZE + i] = payload[i];
 
-  uint32_t crc =
-      link_crc(out, out + FROTH_LINK_HEADER_SIZE, payload_len);
-  write_u32(out + 8, crc);
+  uint32_t crc = link_crc(out, out + FROTH_LINK_HEADER_SIZE, payload_len);
+  write_u32(out + 16, crc);
 
   *out_len = total;
   return FROTH_OK;
@@ -192,17 +215,17 @@ froth_error_t froth_link_header_build(uint8_t message_type, uint16_t request_id,
 static uint8_t raw_buf[FROTH_LINK_MAX_FRAME];
 static uint8_t cobs_buf[FROTH_LINK_COBS_MAX];
 
-froth_error_t froth_link_send_frame(uint8_t message_type, uint16_t request_id,
-                                    const uint8_t *payload,
+froth_error_t froth_link_send_frame(uint64_t session_id, uint8_t message_type,
+                                    uint16_t seq, const uint8_t *payload,
                                     uint16_t payload_len) {
   uint16_t raw_len, enc_len;
 
-  FROTH_TRY(froth_link_header_build(message_type, request_id, payload,
+  FROTH_TRY(froth_link_header_build(session_id, message_type, seq, payload,
                                     payload_len, raw_buf, sizeof(raw_buf),
                                     &raw_len));
 
   FROTH_TRY(froth_cobs_encode(raw_buf, raw_len, cobs_buf, sizeof(cobs_buf),
-                               &enc_len));
+                              &enc_len));
 
   FROTH_TRY(platform_emit_raw(0x00));
   for (uint16_t i = 0; i < enc_len; i++)
@@ -232,32 +255,41 @@ froth_error_t froth_link_frame_byte(uint8_t byte) {
   return FROTH_OK;
 }
 
-froth_error_t froth_link_frame_complete(froth_vm_t *vm) {
+/* Decode + parse the accumulated frame. Returns FROTH_OK on success,
+ * in which case header and payload are valid. Resets and returns
+ * an error code (silently) on junk frames. */
+froth_error_t froth_link_frame_decode(froth_link_header_t *header,
+                                      const uint8_t **payload) {
   if (rx_overflow || rx_pos == 0) {
     froth_link_frame_reset();
-    return FROTH_OK;
+    return FROTH_ERROR_LINK_COBS_DECODE;
   }
 
-  /* COBS decode in-place */
   uint16_t decoded_len;
-  froth_error_t err =
-      froth_cobs_decode(rx_buf, rx_pos, rx_buf, FROTH_LINK_COBS_MAX,
-                        &decoded_len);
+  froth_error_t err = froth_cobs_decode(rx_buf, rx_pos, rx_buf,
+                                        FROTH_LINK_COBS_MAX, &decoded_len);
   if (err != FROTH_OK) {
     froth_link_frame_reset();
-    return FROTH_OK;
+    return err;
   }
 
-  /* Parse header */
+  err = froth_link_header_parse(rx_buf, decoded_len, header, payload);
+  if (err != FROTH_OK) {
+    froth_link_frame_reset();
+    return err;
+  }
+
+  return FROTH_OK;
+}
+
+/* Decode, parse, and dispatch in one shot. Old all-in-one path. */
+froth_error_t froth_link_frame_complete(froth_vm_t *vm) {
   froth_link_header_t header;
   const uint8_t *payload;
-  err = froth_link_header_parse(rx_buf, decoded_len, &header, &payload);
-  if (err != FROTH_OK) {
-    froth_link_frame_reset();
-    return FROTH_OK;
-  }
+  froth_error_t err = froth_link_frame_decode(&header, &payload);
+  if (err != FROTH_OK)
+    return FROTH_OK; /* junk frame, silently dropped */
 
-  /* Dispatch */
   err = froth_link_dispatch(vm, &header, payload);
   froth_link_frame_reset();
   return err;

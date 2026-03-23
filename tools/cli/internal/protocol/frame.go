@@ -37,6 +37,14 @@ const (
 	Error        = 0xFF
 )
 
+// Attach response status codes (ADR-048 section 3).
+const (
+	AttachStatusOK          = 0
+	AttachStatusBusy        = 1
+	AttachStatusUnsupported = 2
+	AttachStatusInvalid     = 3
+)
+
 // Header represents a parsed FROTH-LINK/2 frame header.
 type Header struct {
 	Magic         [2]byte
@@ -134,8 +142,8 @@ func ParseFrame(frame []byte) (*Header, []byte, error) {
 	}
 
 	total := HeaderSize + int(h.PayloadLength)
-	if len(frame) < total {
-		return nil, nil, fmt.Errorf("frame truncated: need %d, have %d", total, len(frame))
+	if len(frame) != total {
+		return nil, nil, fmt.Errorf("frame size mismatch: need %d, have %d", total, len(frame))
 	}
 
 	payload := frame[HeaderSize:total]

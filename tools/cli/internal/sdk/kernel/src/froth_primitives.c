@@ -1,4 +1,5 @@
 #include "froth_primitives.h"
+#include "froth_console.h"
 #include "froth_executor.h"
 #include "froth_fmt.h"
 #include "froth_heap.h"
@@ -558,7 +559,7 @@ froth_error_t froth_prim_emit(froth_vm_t *froth_vm) {
     return FROTH_ERROR_TYPE_MISMATCH;
   }
 
-  FROTH_TRY(platform_emit(
+  FROTH_TRY(froth_console_emit(
       FROTH_CELL_STRIP_TAG(cell) &
       0xFF)); // Emit the least significant byte of the number as ASCII
 
@@ -567,14 +568,14 @@ froth_error_t froth_prim_emit(froth_vm_t *froth_vm) {
 
 froth_error_t froth_prim_key(froth_vm_t *froth_vm) {
   uint8_t byte;
-  froth_error_t err = platform_key(&byte);
+  froth_error_t err = froth_console_key(froth_vm, &byte);
 
   /* If platform_key failed AND the interrupt flag is set, normalize
      to ERR.INTERRUPT. On POSIX, SIGINT during fgetc sets the flag and
      returns EOF/FROTH_ERROR_IO. On ESP32, platform_key is transparent
      and this branch is not taken (0x03 is handled below). */
   if (err != FROTH_OK) {
-    if (froth_vm->interrupted) {
+    if (err == FROTH_ERROR_PROGRAM_INTERRUPTED || froth_vm->interrupted) {
       froth_vm->interrupted = 0;
       froth_vm->thrown = FROTH_ERROR_PROGRAM_INTERRUPTED;
       return FROTH_ERROR_THROW;
@@ -599,7 +600,7 @@ froth_error_t froth_prim_key(froth_vm_t *froth_vm) {
 }
 
 froth_error_t froth_prim_key_ready(froth_vm_t *froth_vm) {
-  bool ready = platform_key_ready();
+  bool ready = froth_console_key_ready();
 
   froth_cell_t result;
   FROTH_TRY(froth_make_cell(ready ? -1 : 0, FROTH_NUMBER,
@@ -701,9 +702,9 @@ static froth_error_t emit_pattern(froth_cell_t payload, froth_heap_t *heap) {
   emit_string("p[");
   for (uint8_t i = 0; i < len; i++) {
     if (i > 0)
-      platform_emit((uint8_t)' ');
+      froth_console_emit((uint8_t)' ');
     char letter = 'a' + heap->data[payload + 1 + i];
-    platform_emit((uint8_t)letter);
+    froth_console_emit((uint8_t)letter);
   }
   return emit_string("]");
 }
@@ -726,7 +727,7 @@ static froth_error_t emit_cell(froth_cell_t cell, froth_heap_t *heap) {
     emit_string("[");
     for (froth_cell_t i = 0; i < len; i++) {
       if (i > 0)
-        platform_emit((uint8_t)' ');
+        froth_console_emit((uint8_t)' ');
       FROTH_TRY(emit_quote_token(body[1 + i], heap));
     }
     return emit_string("]");
@@ -782,7 +783,7 @@ static froth_error_t emit_cell(froth_cell_t cell, froth_heap_t *heap) {
         snprintf(hex, sizeof(hex), "\\x%02X", b);
         FROTH_TRY(emit_string(hex));
       } else {
-        FROTH_TRY(platform_emit(b));
+        FROTH_TRY(froth_console_emit(b));
       }
     }
     return emit_string("\"");
@@ -803,7 +804,7 @@ static froth_error_t print_stack(froth_stack_t *stack, froth_heap_t *heap) {
 
   for (froth_cell_u_t i = 0; i < depth; i++) {
     if (i > 0) {
-      FROTH_TRY(platform_emit((uint8_t)' '));
+      FROTH_TRY(froth_console_emit((uint8_t)' '));
     }
     FROTH_TRY(emit_cell(stack->data[i], heap));
   }
@@ -913,7 +914,7 @@ froth_error_t froth_prim_bstring_emit(froth_vm_t *vm) {
   const uint8_t *data;
   FROTH_TRY(pop_bstring(vm, &len, &data));
   for (froth_cell_t i = 0; i < len; i++) {
-    FROTH_TRY(platform_emit(data[i]));
+    FROTH_TRY(froth_console_emit(data[i]));
   }
   return FROTH_OK;
 }
@@ -957,6 +958,112 @@ froth_error_t froth_prim_bstring_byteat(froth_vm_t *vm) {
   froth_cell_t result;
   FROTH_TRY(froth_make_cell(data[index], FROTH_NUMBER, &result));
   return froth_stack_push(&vm->ds, result);
+}
+
+/* Shared number-to-string conversion (ADR-046).
+ * Formats payload into buf (right-to-left), returns length of result.
+ * Result starts at buf + (buf_size - returned_length).
+ *
+ * Max output: binary = "0b" + (CELL_BITS-3) digits = CELL_BITS-1 chars.
+ * Decimal = "-" + ceil(log10(2^(CELL_BITS-3))) chars (always < CELL_BITS).
+ * So CELL_BITS is a safe buffer size for all radixes. */
+#define N2S_BUF_SIZE FROTH_CELL_SIZE_BITS
+static const char hex_digits[] = "0123456789ABCDEF";
+
+static int number_to_string(froth_cell_t payload, int radix, const char *prefix,
+                            bool is_signed, char *buf, int buf_size) {
+  int pos = buf_size; /* cursor moves right-to-left */
+  bool negative = false;
+  froth_cell_u_t val;
+
+  if (is_signed && payload < 0) {
+    negative = true;
+    val = (froth_cell_u_t)(-(froth_cell_u_t)payload);
+  } else {
+    /* For unsigned modes, mask to payload width to get raw bit pattern */
+    val = (froth_cell_u_t)payload &
+          (((froth_cell_u_t)1 << (FROTH_CELL_SIZE_BITS - 3)) - 1);
+  }
+
+  /* Emit digits (at least one, so zero produces "0") */
+  do {
+    buf[--pos] = hex_digits[val % radix];
+    val /= radix;
+  } while (val > 0);
+
+  /* Prepend prefix (e.g. "0x", "0b") right-to-left */
+  for (int i = (int)strlen(prefix) - 1; i >= 0; i--) {
+    buf[--pos] = prefix[i];
+  }
+
+  if (negative) {
+    buf[--pos] = '-';
+  }
+
+  return buf_size - pos;
+}
+
+froth_error_t froth_prim_bstring_num_to_string(froth_vm_t *vm) {
+  froth_cell_t cell;
+  FROTH_TRY(froth_stack_pop(&vm->ds, &cell));
+  if (!FROTH_CELL_IS_NUMBER(cell)) {
+    return FROTH_ERROR_TYPE_MISMATCH;
+  }
+  char buf[N2S_BUF_SIZE];
+  froth_cell_t payload = FROTH_CELL_STRIP_TAG(cell);
+  int len = number_to_string(payload, 10, "", true, buf, sizeof(buf));
+  return froth_push_bstring(vm, (const uint8_t *)(buf + sizeof(buf) - len),
+                            (froth_cell_t)len);
+}
+
+froth_error_t froth_prim_bstring_num_to_hexs(froth_vm_t *vm) {
+  froth_cell_t cell;
+  FROTH_TRY(froth_stack_pop(&vm->ds, &cell));
+  if (!FROTH_CELL_IS_NUMBER(cell)) {
+    return FROTH_ERROR_TYPE_MISMATCH;
+  }
+  char buf[N2S_BUF_SIZE];
+  froth_cell_t payload = FROTH_CELL_STRIP_TAG(cell);
+  int len = number_to_string(payload, 16, "0x", false, buf, sizeof(buf));
+  return froth_push_bstring(vm, (const uint8_t *)(buf + sizeof(buf) - len),
+                            (froth_cell_t)len);
+}
+
+froth_error_t froth_prim_bstring_num_to_bins(froth_vm_t *vm) {
+  froth_cell_t cell;
+  FROTH_TRY(froth_stack_pop(&vm->ds, &cell));
+  if (!FROTH_CELL_IS_NUMBER(cell)) {
+    return FROTH_ERROR_TYPE_MISMATCH;
+  }
+  char buf[N2S_BUF_SIZE];
+  froth_cell_t payload = FROTH_CELL_STRIP_TAG(cell);
+  int len = number_to_string(payload, 2, "0b", false, buf, sizeof(buf));
+  return froth_push_bstring(vm, (const uint8_t *)(buf + sizeof(buf) - len),
+                            (froth_cell_t)len);
+}
+
+froth_error_t froth_prim_bstring_concat(froth_vm_t *vm) {
+  froth_cell_t string_cell_a, string_cell_b;
+  FROTH_TRY(froth_stack_pop(&vm->ds, &string_cell_b));
+  if (!FROTH_CELL_IS_BSTRING(string_cell_b))
+    return FROTH_ERROR_TYPE_MISMATCH;
+  FROTH_TRY(froth_stack_pop(&vm->ds, &string_cell_a));
+  if (!FROTH_CELL_IS_BSTRING(string_cell_a))
+    return FROTH_ERROR_TYPE_MISMATCH;
+
+  froth_bstring_view_t s_a, s_b;
+  FROTH_TRY(froth_bstring_resolve(vm, string_cell_a, &s_a));
+  FROTH_TRY(froth_bstring_resolve(vm, string_cell_b, &s_b));
+
+  if (s_a.len + s_b.len > FROTH_STRING_MAX_LEN)
+    return FROTH_ERROR_BSTRING_TOO_LONG;
+
+  char buf[FROTH_STRING_MAX_LEN];
+
+  memcpy(buf, s_a.data, s_a.len);
+  memcpy(buf + s_a.len, s_b.data, s_b.len);
+
+  return froth_push_bstring(vm, (const uint8_t *)buf, s_a.len + s_b.len);
 }
 
 froth_error_t froth_prim_quote_len(froth_vm_t *vm) {
@@ -1165,6 +1272,14 @@ const froth_ffi_entry_t froth_primitives[] = {
     {"s.len", froth_prim_bstring_length, "( s -- n )", "String byte length"},
     {"s@", froth_prim_bstring_byteat, "( s i -- byte )", "Fetch byte at index"},
     {"s.=", froth_prim_bstring_isequal, "( s1 s2 -- flag )", "String equality"},
+    {"n>s", froth_prim_bstring_num_to_string, "( n -- s )",
+     "Number to decimal string"},
+    {"n>hexs", froth_prim_bstring_num_to_hexs, "( n -- s )",
+     "Number to hex string (unsigned, 0x prefix)"},
+    {"n>bins", froth_prim_bstring_num_to_bins, "( n -- s )",
+     "Number to binary string (unsigned, 0b prefix)"},
+    {"s.concat", froth_prim_bstring_concat, "( s1 s2 -- s3 )",
+     "Concatenate two strings"},
 
     /* Quotation introspection */
     {"q.len", froth_prim_quote_len, "( q -- n )", "Quotation body length"},

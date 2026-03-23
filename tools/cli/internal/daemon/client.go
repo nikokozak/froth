@@ -214,6 +214,11 @@ func (c *Client) Interrupt() error {
 	return err
 }
 
+func (c *Client) SendInput(data []byte, seq int) error {
+	_, err := c.Call("input", &InputParams{Data: data, Seq: seq})
+	return err
+}
+
 func (c *Client) Status() (*StatusResult, error) {
 	raw, err := c.Call("status", nil)
 	if err != nil {
