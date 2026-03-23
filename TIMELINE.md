@@ -1,6 +1,6 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-22 (ADR-048 device + host complete, POSIX proven, ESP32 bench + extension remaining)*
+*Last reviewed: 2026-03-22 (ADR-048 complete: device, host, extension. POSIX proven. ESP32 bench remaining.)*
 *Source: Froth Implementation Roadmap v0.5 (Feb 25 → Thesis deadline Apr 20)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
@@ -356,7 +356,7 @@
 - [x] Review pass: shutdown detach timeout, disconnect ordering, waiter type validation, frameBuf cap
 - [x] POSIX EOF spin fix: orphaned runtimes exit cleanly on broken stdin
 - [x] **Proof**: daemon + CLI end-to-end on POSIX (5 tests: info, eval+output, reset+eval, interrupt, key+input)
-- [ ] Extension: console from OUTPUT_DATA, INPUT_WAIT prompt
+- [x] Extension: API version 2, console from OUTPUT_DATA (no change needed), INPUT_WAIT → input box + sendInput (Mar 22)
 
 ### Phase 3a-hw: Hardware Validation + New Bindings (interleave with transport, bench days)
 
