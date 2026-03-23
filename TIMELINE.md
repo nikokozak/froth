@@ -366,19 +366,31 @@
 - [x] `froth connect` Ctrl-C interrupt on ESP32 (async eval + fresh daemon connection)
 - [x] `froth send` async eval + Ctrl-C (daemon path), error(20) suppression
 
-#### Editor/daemon workflow — target Mar 24-25
+#### Editor/daemon workflow + kernel features — target Mar 24-25
 - [ ] VS Code extension Send File → ESP32 (via daemon, Live session)
 - [ ] `froth send` with `\ #use` includes → ESP32 (project system through Live transport)
 - [ ] `froth build` + `froth flash` with froth.toml project on real hardware
 - [ ] User program cold boot on ESP32 (snapshot priority, wipe cycle)
+- [ ] FROTH-Addr (spec section 14): NativeAddr tag, `addr`, `@8`/`@16`/`@32`, `!8`/`!16`/`!32`, `addr+`, `addr.=`, snapshot non-persistability
+- [ ] `words` column formatting (REPL polish for demos)
+- [ ] `millis` binding (both platforms)
 - [ ] Flash workshop boards with user program, test workshop flow
 
-#### Bindings smoke tests — before workshop
-- [ ] LEDC/PWM: LED fade, piezo tone, convenience words
-- [ ] `millis` — uptime counter
-- [ ] I2C: sensor read (if time permits)
-- [ ] ADC: `adc.read` (if time permits)
-- [ ] UART bindings (if time permits)
+#### Before workshop
+- [ ] LEDC/PWM smoke test on ESP32
+- [ ] Example Froth library using `\ #use` include system
+- [ ] Getting started guide
+- [ ] Error location mapping in CLI (file:line from boundary markers)
+
+#### If time permits
+- [ ] I2C sensor read
+- [ ] ADC: `adc.read`
+- [ ] UART bindings
+- [ ] WiFi: `wifi.connect`, `wifi.status`, `wifi.ip`
+
+#### Wishlist (post-workshop, high thesis value)
+- [ ] FROTH-Named (spec section 8): named stack frames compiled to `perm`. Delta-tracking compiler, `arity!`, binding syntax. The distinctive feature.
+- [ ] RP2040 platform port
 
 - [ ] **Workshop (first week of April)**
 

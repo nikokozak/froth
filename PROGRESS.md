@@ -230,21 +230,31 @@
 
 ### What's Left (workshop deadline: first week of April)
 
-#### High priority (next 2 days)
+#### High priority (Mar 24-25)
 - [ ] VS Code extension Send File → ESP32 (via daemon, Live session)
 - [ ] `froth send` with `\ #use` includes → ESP32 (project system through Live transport)
 - [ ] `froth build` + `froth flash` with froth.toml project (manifest-driven toolchain on real hardware)
 - [ ] User program cold boot on ESP32 (snapshot priority, wipe cycle)
+- [ ] FROTH-Addr: NativeAddr tag, `addr`, `@8`/`@16`/`@32`, `!8`/`!16`/`!32`, `addr+`, `addr.=`, snapshot non-persistability. Enables direct register access from Froth without FFI wrappers.
+- [ ] `words` column formatting (asked for multiple times, polishes REPL for demos)
+- [ ] `millis` binding (ESP32: `esp_timer_get_time`, POSIX: `clock_gettime`)
 - [ ] Flash workshop boards with user program, test workshop flow
 
 #### Medium priority (before workshop)
 - [ ] LEDC/PWM smoke test on ESP32 (LED fade, convenience words)
-- [ ] `millis` binding (ESP32: `esp_timer_get_time`, POSIX: `clock_gettime`)
+- [ ] One example Froth library using `\ #use` (e.g., `lib/collections.froth` with map/filter/reduce)
+- [ ] Getting started guide (flash, connect, first program, include a library, deploy)
+- [ ] Error location mapping in CLI (source file + line from boundary markers)
 
 #### Low priority (if time permits)
 - [ ] I2C sensor read (temperature or accelerometer)
 - [ ] ADC: `adc.read ( pin -- value )`
 - [ ] UART bindings: `uart.init`, `uart.write`, `uart.read`
+- [ ] WiFi: `wifi.connect`, `wifi.status`, `wifi.ip` (even without HTTP, connecting + printing IP is a strong demo)
+
+#### Wishlist (post-workshop, high thesis value)
+- [ ] FROTH-Named: named stack frames compiled to `perm` sequences. The distinctive Froth feature for readability. Requires delta-tracking compiler pass, `arity!` primitive, `( x y -- r )` binding syntax. Estimated 1-2 days.
+- [ ] RP2040 platform port (multi-target thesis argument)
 
 ### CLI UX improvements (post-workshop polish)
 - `flash` should default to `esp-idf` or require `--target` with a clear error (not "no flash step for POSIX target")
