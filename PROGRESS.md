@@ -4,9 +4,9 @@
 
 ## Current Status
 
-**Phase**: Thesis push (Phase 3). Workshop first week of April. Thesis deadline Apr 20. CLI/editor/library system complete and tested (~100 tests). ADR-048 exclusive live session transport fully implemented and proven on ESP32 hardware. **Next priorities: editor/daemon workflow polish, `froth send` SIGINT handling, hardware bindings smoke tests, workshop board prep.**
+**Phase**: Thesis push (Phase 3). Workshop first week of April. Thesis deadline Apr 20. CLI/editor/library system complete and tested (~100 tests). ADR-048 exclusive live session transport fully implemented and proven on ESP32 hardware. **Next priorities: editor/daemon workflow polish, hardware bindings smoke tests, workshop board prep.**
 **Blocking issues**: `screen` unusable on macOS (PTY error, not a Froth issue). `minicom` is the working serial monitor.
-**Known limitations**: `froth send` has no Ctrl-C handling during eval (must kill process or use `froth connect` for interruptible sessions). `wipe` and `reset` show error(20) in CLI output (cosmetic, the reset sentinel is not a real error).
+**Known limitations**: direct serial `froth send` still exits locally on Ctrl-C rather than sending a framed interrupt. Daemon-backed send is interruptible.
 
 ## What's Done
 
@@ -161,7 +161,9 @@
 - VS Code extension v2 update (Mar 22): API version bumped to 2, `sendInput` method on daemon client, `input_wait` notification handler opens VS Code input box and sends via separate daemon connection (same pattern as interrupt). Console output works unchanged (same ConsoleEvent shape from OUTPUT_DATA). Auto-interrupt on input cancel so device doesn't hang.
 - Hardening sweep (Mar 22): three review passes across all layers. Fixes: interrupt safety-cancel goroutine tied to `interruptCancel` channel (prevents stale goroutine firing against wrong eval), OUTPUT_DATA/INPUT_WAIT seq validation against activeSeq, ATTACH_RES session_id validation, `evalOwner` check removed from `input` RPC (was incompatible with separate-connection pattern, caused test hang), deterministic interrupt test timing (console output signal instead of 500ms sleep), `t.Errorf` for `SendInput` failures, session keepalive goroutine drain on stop, frameBuf pre-allocation, concurrent input box guard in extension.
 - `froth connect` async eval (Mar 22): eval runs in goroutine so Ctrl-C can send INTERRUPT_REQ via fresh daemon connection while eval is in progress. Fixes complete unresponsiveness during long-running programs.
-- ESP32 bench validation (Mar 23): ADR-048 proven on real hardware. All core protocol paths tested: attach, eval+OUTPUT_DATA, reset+eval, interrupt (via connect), key+INPUT_WAIT+INPUT_DATA, lease expiry (device returns to Direct), persistence (save/restore/wipe), LED blink via Live session. Known issues: `froth send` lacks Ctrl-C handling (deferred), error(20) display on wipe/reset (cosmetic).
+- ESP32 bench validation (Mar 23): ADR-048 proven on real hardware. All core protocol paths tested: attach, eval+OUTPUT_DATA, reset+eval, interrupt (via connect), key+INPUT_WAIT+INPUT_DATA, lease expiry (device returns to Direct), persistence (save/restore/wipe), LED blink via Live session.
+- `froth send` polish (Mar 23): daemon-backed send now mirrors `connect` with async eval plus Ctrl-C interrupt via fresh daemon connection. Direct serial send now exits cleanly with status 130 on Ctrl-C instead of hanging. CLI eval printers (`send`, `connect`) suppress `error(20)` for reset/wipe sentinel results per ADR-037.
+- Live eval reset fix (Mar 23): link-layer eval had been restoring pre-eval DS/RS snapshots on every error, which accidentally undid `dangerous-reset`/`wipe` side effects during Live/direct-session evals. Fixed in both kernel trees: `FROTH_ERROR_RESET` now preserves the reset state. Added integration regression coverage and revalidated on the real ESP32 hardware.
 - ADRs: 043 (transient string buffer), 044 (project system, include resolution, CLI architecture), 045 (catch truth convention), 046 (number-to-string primitives), 047 (unified string length limit), 048 (exclusive live session transport)
 
 ## In Progress
@@ -202,7 +204,7 @@
 13. ~~Feature gating~~ done (`FROTH_HAS_LIVE` CMake define, `FROTH_HAS_LINK` removed, Direct-only build verified)
 - ~~Review pass 1~~: seq validation, strict frame length, error frames, flush ordering (5 issues fixed)
 - ~~Review pass 2~~: non-blocking idle loop, poll seq discipline, helpers extracted, no new issues
-14. ESP32 validation: attach, eval, OUTPUT_DATA, INTERRUPT_REQ, lease expiry, detach — needs bench
+14. ~~ESP32 validation~~ (Mar 23): attach, eval+OUTPUT_DATA, reset+eval, interrupt, key+INPUT_WAIT, lease expiry, persistence, LED blink. All pass.
 
 #### Host side (daemon + CLI) — DONE (Mar 22)
 15. ~~Daemon session lifecycle~~: lazy attach, session_id, sequential seq, KEEPALIVE (2s), frame-only read loop
@@ -226,24 +228,23 @@
 - Dispatch errors send ERROR frame to host (no silent drops)
 - Direct-only build (`FROTH_HAS_LIVE=OFF`) verified: compiles, runs REPL, no Live code linked
 
-#### Host side (daemon + CLI + extension) — NEXT
-15. ~~Protocol package: v2 header, message builders/parsers~~ done
-16. Session lifecycle in daemon: attach/detach, session_id generation, seq tracking
-17. Simplified transport read loop: frame-only after attach, no byte classification
-18. ~~HELLO probe updated for v2~~ done (discover.go)
-19. Console events from OUTPUT_DATA (replaces raw-byte accumulation)
-20. KEEPALIVE timer: fire-and-forget every 2-3s while attached
-21. INTERRUPT_REQ replaces raw 0x03: framed interrupt with eval seq
-22. INPUT_DATA sending: on INPUT_WAIT, relay to extension/CLI
-23. Session failure and recovery: timeout marks session failed, reconnect + reattach
-24. CLI commands updated: send/connect use attach/detach, info uses HELLO
-25. Extension updates: console from OUTPUT_DATA events, INPUT_WAIT prompt
+### What's Left (workshop deadline: first week of April)
 
-### Hardware validation (interleave with ADR-048 on bench days)
-- LEDC/PWM: LED fade, piezo tone, convenience words
-- I2C: sensor read (temperature or accelerometer)
-- User program cold boot on ESP32, snapshot priority, wipe cycle
-- Flash 15 boards, test workshop flow
+#### High priority (next 2 days)
+- [ ] VS Code extension Send File → ESP32 (via daemon, Live session)
+- [ ] `froth send` with `\ #use` includes → ESP32 (project system through Live transport)
+- [ ] `froth build` + `froth flash` with froth.toml project (manifest-driven toolchain on real hardware)
+- [ ] User program cold boot on ESP32 (snapshot priority, wipe cycle)
+- [ ] Flash workshop boards with user program, test workshop flow
+
+#### Medium priority (before workshop)
+- [ ] LEDC/PWM smoke test on ESP32 (LED fade, convenience words)
+- [ ] `millis` binding (ESP32: `esp_timer_get_time`, POSIX: `clock_gettime`)
+
+#### Low priority (if time permits)
+- [ ] I2C sensor read (temperature or accelerometer)
+- [ ] ADC: `adc.read ( pin -- value )`
+- [ ] UART bindings: `uart.init`, `uart.write`, `uart.read`
 
 ### CLI UX improvements (post-workshop polish)
 - `flash` should default to `esp-idf` or require `--target` with a clear error (not "no flash step for POSIX target")

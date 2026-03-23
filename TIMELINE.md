@@ -359,19 +359,27 @@
 - [x] Extension: API version 2, console from OUTPUT_DATA (no change needed), INPUT_WAIT → input box + sendInput (Mar 22)
 - [x] Hardening sweep (3 review passes): interruptCancel lifetime, OUTPUT_DATA/INPUT_WAIT seq validation, ATTACH_RES session_id check, evalOwner removed from input RPC, deterministic interrupt test, keepalive goroutine drain, extension concurrent input guard + auto-interrupt on cancel
 
-### Phase 3a-hw: Hardware Validation + New Bindings (interleave with transport, bench days)
+### Phase 3a-hw: Hardware Validation + New Bindings
 
-Smoke tests on real ESP32 hardware:
+#### Core protocol — DONE (Mar 23, ESP32 bench)
+- [x] ADR-048 Live session on ESP32: attach, eval+OUTPUT_DATA, reset+eval, interrupt, key+INPUT_WAIT+INPUT_DATA, lease expiry, persistence (save/restore/wipe), LED blink
+- [x] `froth connect` Ctrl-C interrupt on ESP32 (async eval + fresh daemon connection)
+- [x] `froth send` async eval + Ctrl-C (daemon path), error(20) suppression
+
+#### Editor/daemon workflow — target Mar 24-25
+- [ ] VS Code extension Send File → ESP32 (via daemon, Live session)
+- [ ] `froth send` with `\ #use` includes → ESP32 (project system through Live transport)
+- [ ] `froth build` + `froth flash` with froth.toml project on real hardware
+- [ ] User program cold boot on ESP32 (snapshot priority, wipe cycle)
+- [ ] Flash workshop boards with user program, test workshop flow
+
+#### Bindings smoke tests — before workshop
 - [ ] LEDC/PWM: LED fade, piezo tone, convenience words
-- [ ] I2C: sensor read (temperature or accelerometer)
-- [ ] UART bindings: `uart.init`, `uart.write`, `uart.read` (new FFI words)
-- [ ] `millis` — uptime counter (ESP32: `esp_timer_get_time`, POSIX: `clock_gettime`)
-- [ ] ADC: `adc.read ( pin -- value )` (new FFI word)
-- [ ] User program cold boot on ESP32, snapshot priority, wipe cycle
-- [ ] CLI `froth send` with includes → ESP32 device (end-to-end, using Live transport)
-- [ ] CLI `froth build` + `froth flash` with froth.toml project
-- [ ] VS Code extension Send File → ESP32 (via Live session)
-- [ ] Flash 15 boards with user program, test workshop flow
+- [ ] `millis` — uptime counter
+- [ ] I2C: sensor read (if time permits)
+- [ ] ADC: `adc.read` (if time permits)
+- [ ] UART bindings (if time permits)
+
 - [ ] **Workshop (first week of April)**
 
 ### Phase 3b: WiFi + HTTP (post-hardware-validation)
