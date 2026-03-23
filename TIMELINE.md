@@ -381,6 +381,7 @@
 - [ ] I2C smoke test on ESP32 (C code exists, needs hardware validation)
 - [ ] ADC: `adc.read ( pin -- value )` (new FFI word)
 - [ ] WiFi: `wifi.connect`, `wifi.status`, `wifi.ip` (new FFI, transient strings for SSID/password)
+- [ ] UART bindings: `uart.init`, `uart.write`, `uart.read` (serial typewriter demo)
 
 #### Polish — before workshop
 - [ ] Example Froth library using `\ #use` include system
@@ -388,7 +389,7 @@
 - [ ] Error location mapping in CLI (file:line from boundary markers)
 
 #### Low priority
-- [ ] UART bindings
+- (all bindings promoted)
 
 #### Wishlist (post-workshop, high thesis value)
 - [ ] FROTH-Named (spec section 8): named stack frames compiled to `perm`. Delta-tracking compiler, `arity!`, binding syntax. The distinctive feature.
