@@ -131,14 +131,8 @@ func runConnectSerial() error {
 		case <-disconnectCh:
 			return nil
 		case <-sigintCh:
+			// Ctrl-C at the prompt (no eval running). Just re-prompt.
 			printLocked("\n")
-			if err := client.Interrupt(); err != nil {
-				if isConnectDisconnectError(err) {
-					signalDisconnect()
-					return nil
-				}
-				printLocked("interrupt: %v\n", err)
-			}
 			continue
 		case line, ok := <-lineCh:
 			if !ok {
@@ -157,17 +151,49 @@ func runConnectSerial() error {
 				return nil
 			}
 
-			result, err := client.Eval(line)
-			if err != nil {
-				if isConnectDisconnectError(err) {
-					signalDisconnect()
+			// Run eval in a goroutine so we can handle Ctrl-C
+			// while the RPC is blocking.
+			type evalOutcome struct {
+				result *daemon.EvalResult
+				err    error
+			}
+			evalCh := make(chan evalOutcome, 1)
+			go func() {
+				r, e := client.Eval(line)
+				evalCh <- evalOutcome{r, e}
+			}()
+
+			var evalDone bool
+			for !evalDone {
+				select {
+				case res := <-evalCh:
+					evalDone = true
+					if res.err != nil {
+						if isConnectDisconnectError(res.err) {
+							signalDisconnect()
+							return nil
+						}
+						printLocked("eval: %v\n", res.err)
+					} else {
+						printConnectEvalResult(res.result, printLocked)
+					}
+				case <-sigintCh:
+					// Interrupt via a fresh connection. The main
+					// client is blocked in Eval on its socket.
+					ic, dialErr := daemon.Dial()
+					if dialErr != nil {
+						printLocked("interrupt: %v\n", dialErr)
+						continue
+					}
+					if intErr := ic.Interrupt(); intErr != nil {
+						printLocked("interrupt: %v\n", intErr)
+					}
+					ic.Close()
+					// Wait for evalCh — the eval should unwind.
+				case <-disconnectCh:
 					return nil
 				}
-				printLocked("eval: %v\n", err)
-				continue
 			}
-
-			printConnectEvalResult(result, printLocked)
 		}
 	}
 }

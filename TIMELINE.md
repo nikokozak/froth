@@ -1,6 +1,6 @@
 # Froth Implementation Timeline
 
-*Last reviewed: 2026-03-22 (ADR-048 complete: device, host, extension. POSIX proven. ESP32 bench remaining.)*
+*Last reviewed: 2026-03-23 (ADR-048 complete and proven on ESP32. Editor/daemon workflow polish next.)*
 *Source: Froth Implementation Roadmap v0.5 (Feb 25 → Thesis deadline Apr 20)*
 
 > Mark items as they complete. Adjust dates when they slip — don't delete the original date.
@@ -338,7 +338,7 @@
 - [x] Review pass 2: non-blocking idle, poll seq discipline, helpers extracted (no new issues)
 - [x] `froth_console_mux.c` replaced, `froth_repl_is_idle()`, `froth_link_send_hello_res()` extracted
 - [x] **Proof**: POSIX round-trip — attach, eval, OUTPUT_DATA, interrupt, key+INPUT_WAIT+INPUT_DATA, detach (5 integration tests, Mar 22). Lease expiry deferred to ESP32 bench.
-- [ ] ESP32 validation: same tests on real hardware
+- [x] ESP32 validation (Mar 23): attach, eval+OUTPUT_DATA, reset+eval, interrupt, key+INPUT_WAIT, lease expiry, persistence (save/restore/wipe), LED blink. All pass.
 
 #### Host side (daemon + CLI + extension) — DONE (Mar 22, hardened)
 - [x] Protocol package: v2 header, new message builders/parsers, GenerateSessionID, ParseAttachResponse, ParseOutputData, ParseInputWait, BuildInputDataPayload

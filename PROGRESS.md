@@ -1,12 +1,12 @@
 # Froth Implementation Progress
 
-*Last updated: 2026-03-22*
+*Last updated: 2026-03-23*
 
 ## Current Status
 
-**Phase**: Thesis push (Phase 3). Workshop first week of April. Thesis deadline Apr 20. CLI/editor/library system complete and tested (~100 tests). Kernel string hardening done. ADR-048 exclusive live session transport implemented (device + host, POSIX round-trip proven). **Next priorities: ESP32 hardware validation, VS Code extension update for v2 protocol, hardware bindings smoke tests.**
+**Phase**: Thesis push (Phase 3). Workshop first week of April. Thesis deadline Apr 20. CLI/editor/library system complete and tested (~100 tests). ADR-048 exclusive live session transport fully implemented and proven on ESP32 hardware. **Next priorities: editor/daemon workflow polish, `froth send` SIGINT handling, hardware bindings smoke tests, workshop board prep.**
 **Blocking issues**: `screen` unusable on macOS (PTY error, not a Froth issue). `minicom` is the working serial monitor.
-**Known limitations**: Async eval model deferred (eval is still blocking RPC; long-running programs work but no start/accept acknowledgment).
+**Known limitations**: `froth send` has no Ctrl-C handling during eval (must kill process or use `froth connect` for interruptible sessions). `wipe` and `reset` show error(20) in CLI output (cosmetic, the reset sentinel is not a real error).
 
 ## What's Done
 
@@ -160,6 +160,8 @@
 - POSIX round-trip proof (Mar 22): 5 integration tests (attach, eval+OUTPUT_DATA, reset+eval, interrupt, key+INPUT_WAIT+INPUT_DATA) all pass against local POSIX binary via daemon. Lease expiry deferred to ESP32 bench.
 - VS Code extension v2 update (Mar 22): API version bumped to 2, `sendInput` method on daemon client, `input_wait` notification handler opens VS Code input box and sends via separate daemon connection (same pattern as interrupt). Console output works unchanged (same ConsoleEvent shape from OUTPUT_DATA). Auto-interrupt on input cancel so device doesn't hang.
 - Hardening sweep (Mar 22): three review passes across all layers. Fixes: interrupt safety-cancel goroutine tied to `interruptCancel` channel (prevents stale goroutine firing against wrong eval), OUTPUT_DATA/INPUT_WAIT seq validation against activeSeq, ATTACH_RES session_id validation, `evalOwner` check removed from `input` RPC (was incompatible with separate-connection pattern, caused test hang), deterministic interrupt test timing (console output signal instead of 500ms sleep), `t.Errorf` for `SendInput` failures, session keepalive goroutine drain on stop, frameBuf pre-allocation, concurrent input box guard in extension.
+- `froth connect` async eval (Mar 22): eval runs in goroutine so Ctrl-C can send INTERRUPT_REQ via fresh daemon connection while eval is in progress. Fixes complete unresponsiveness during long-running programs.
+- ESP32 bench validation (Mar 23): ADR-048 proven on real hardware. All core protocol paths tested: attach, eval+OUTPUT_DATA, reset+eval, interrupt (via connect), key+INPUT_WAIT+INPUT_DATA, lease expiry (device returns to Direct), persistence (save/restore/wipe), LED blink via Live session. Known issues: `froth send` lacks Ctrl-C handling (deferred), error(20) display on wipe/reset (cosmetic).
 - ADRs: 043 (transient string buffer), 044 (project system, include resolution, CLI architecture), 045 (catch truth convention), 046 (number-to-string primitives), 047 (unified string length limit), 048 (exclusive live session transport)
 
 ## In Progress
