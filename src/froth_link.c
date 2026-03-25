@@ -200,8 +200,12 @@ static froth_error_t handle_eval(froth_vm_t *vm,
     FROTH_TRY(pw_str(&pw, fault));
     FROTH_TRY(pw_str(&pw, "")); /* stack_repr (empty on error) */
 
-    vm->ds.pointer = ds_snap;
-    vm->rs.pointer = rs_snap;
+    /* FROTH_ERROR_RESET is a top-level control sentinel. Preserve the
+       reset side effects instead of restoring the pre-eval stacks. */
+    if (eval_err != FROTH_ERROR_RESET) {
+      vm->ds.pointer = ds_snap;
+      vm->rs.pointer = rs_snap;
+    }
   }
 
   FROTH_TRY(froth_console_flush_output());
