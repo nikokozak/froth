@@ -88,10 +88,9 @@ FROTH_FFI(esp32_ledc_channel_config, "ledc.channel-config",
       .timer_sel = timer,
       .gpio_num = gpio_num,
       .duty = duty,
-      .flags = 0,
-      .sleep_mode = LEDC_SLEEP_MODE_NO_ALIVE_NO_PD,
       .hpoint = 0,
-      .deconfigure = false,
+      .sleep_mode = LEDC_SLEEP_MODE_NO_ALIVE_NO_PD,
+      .flags = {.output_invert = 0},
   });
 
   if (err != ESP_OK) {
@@ -252,8 +251,7 @@ FROTH_FFI(esp32_i2c_init, "i2c.init", "( sda scl freq -- bus )",
         .glitch_ignore_cnt = 7,
         .intr_priority = 0,
         .trans_queue_depth = 0,
-        .enable_internal_pullup = true,
-        .allow_pd = false,
+        .flags = {.enable_internal_pullup = 1, .allow_pd = 0},
     };
 
     i2c_master_bus_handle_t handle;
@@ -288,7 +286,7 @@ FROTH_FFI(esp32_i2c_add_device, "i2c.add-device",
         .device_address = addr,
         .scl_speed_hz = speed,
         .scl_wait_us = 0,
-        .disable_ack_check = false,
+        .flags = {.disable_ack_check = 0},
     };
 
     i2c_master_dev_handle_t handle;

@@ -1,7 +1,7 @@
 # ADR-034: Console Multiplexer Architecture
 
 **Date**: 2026-03-15
-**Status**: Proposed
+**Status**: Accepted
 **Spec sections**: Froth_Interactive_Development_v0_5.md (Link Mode), ADR-033 (FROTH-LINK/1)
 
 ## Context

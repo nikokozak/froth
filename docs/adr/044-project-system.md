@@ -1,7 +1,7 @@
 # ADR-044: Project System, Include Resolution, and CLI Architecture
 
 **Date**: 2026-03-20
-**Status**: Proposed
+**Status**: Accepted
 **Spec sections**: Froth_Interactive_Development_v0_5 (deployment model), ADR-037 (host-centric deployment), ADR-043 (transient strings), ADR-035 (daemon architecture), ADR-039 (host tooling UX)
 
 ## Context

@@ -1,7 +1,7 @@
 # ADR-033: Link Transport v1 (COBS binary framing)
 
 **Date**: 2026-03-15
-**Status**: Proposed
+**Status**: Accepted
 **Spec sections**: Froth_Interactive_Development_v0_5.md (Link Mode), FROTH-REPL profile
 
 ## Context
