@@ -273,7 +273,7 @@ func scanConnectInput(lineCh chan<- string, errCh chan<- error) {
 }
 
 func printConnectEvalResult(result *daemon.EvalResult, printLocked func(string, ...interface{})) {
-	if result.Status == 0 {
+	if result.Status == 0 || result.ErrorCode == frothErrorReset {
 		if result.StackRepr != "" {
 			printLocked("%s\n", result.StackRepr)
 		}

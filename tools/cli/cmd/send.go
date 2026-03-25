@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/nikokozak/froth/tools/cli/internal/project"
 	"github.com/nikokozak/froth/tools/cli/internal/session"
 )
+
+const frothErrorReset = 20
 
 type sendPayload struct {
 	source          string
@@ -166,24 +169,51 @@ func sendViaDaemon(payload *sendPayload) error {
 		}
 	}
 
-	result, err := client.Eval(payload.source)
-	if err != nil {
-		return fmt.Errorf("eval: %w", err)
-	}
+	sigintCh := make(chan os.Signal, 1)
+	signal.Notify(sigintCh, os.Interrupt)
+	defer signal.Stop(sigintCh)
 
-	if result.Status == 0 {
-		if result.StackRepr != "" {
-			fmt.Println(result.StackRepr)
-		}
-	} else {
-		msg := fmt.Sprintf("error(%d)", result.ErrorCode)
-		if result.FaultWord != "" {
-			msg += fmt.Sprintf(" in \"%s\"", result.FaultWord)
-		}
-		fmt.Println(msg)
+	type evalOutcome struct {
+		result *daemon.EvalResult
+		err    error
 	}
+	evalCh := make(chan evalOutcome, 1)
+	go func() {
+		result, err := client.Eval(payload.source)
+		evalCh <- evalOutcome{result: result, err: err}
+	}()
 
-	return nil
+	for {
+		select {
+		case outcome := <-evalCh:
+			if outcome.err != nil {
+				return fmt.Errorf("eval: %w", outcome.err)
+			}
+			result := outcome.result
+			if result.Status == 0 || result.ErrorCode == frothErrorReset {
+				if result.StackRepr != "" {
+					fmt.Println(result.StackRepr)
+				}
+			} else {
+				msg := fmt.Sprintf("error(%d)", result.ErrorCode)
+				if result.FaultWord != "" {
+					msg += fmt.Sprintf(" in \"%s\"", result.FaultWord)
+				}
+				fmt.Println(msg)
+			}
+			return nil
+		case <-sigintCh:
+			interruptClient, dialErr := daemon.Dial()
+			if dialErr != nil {
+				fmt.Fprintf(os.Stderr, "interrupt: %v\n", dialErr)
+				continue
+			}
+			if interruptErr := interruptClient.Interrupt(); interruptErr != nil {
+				fmt.Fprintf(os.Stderr, "interrupt: %v\n", interruptErr)
+			}
+			_ = interruptClient.Close()
+		}
+	}
 }
 
 func sendViaSerial(payload *sendPayload) error {
@@ -203,22 +233,59 @@ func sendViaSerial(payload *sendPayload) error {
 		}
 	}
 
-	result, err := sess.Eval(payload.source)
-	if err != nil {
-		return fmt.Errorf("eval: %w", err)
-	}
+	sigintCh := make(chan os.Signal, 1)
+	signal.Notify(sigintCh, os.Interrupt)
+	defer signal.Stop(sigintCh)
 
-	if result.Status == 0 {
-		if result.StackRepr != "" {
-			fmt.Println(result.StackRepr)
-		}
-	} else {
-		msg := fmt.Sprintf("error(%d)", result.ErrorCode)
-		if result.FaultWord != "" {
-			msg += fmt.Sprintf(" in \"%s\"", result.FaultWord)
-		}
-		fmt.Println(msg)
+	type evalOutcome struct {
+		result *sessionEvalResult
+		err    error
 	}
+	evalCh := make(chan evalOutcome, 1)
+	go func() {
+		result, err := sess.Eval(payload.source)
+		outcome := evalOutcome{err: err}
+		if result != nil {
+			outcome.result = &sessionEvalResult{
+				Status:    result.Status,
+				ErrorCode: result.ErrorCode,
+				FaultWord: result.FaultWord,
+				StackRepr: result.StackRepr,
+			}
+		}
+		evalCh <- outcome
+	}()
 
-	return nil
+	for {
+		select {
+		case outcome := <-evalCh:
+			if outcome.err != nil {
+				return fmt.Errorf("eval: %w", outcome.err)
+			}
+			result := outcome.result
+			if result.Status == 0 || result.ErrorCode == frothErrorReset {
+				if result.StackRepr != "" {
+					fmt.Println(result.StackRepr)
+				}
+			} else {
+				msg := fmt.Sprintf("error(%d)", result.ErrorCode)
+				if result.FaultWord != "" {
+					msg += fmt.Sprintf(" in \"%s\"", result.FaultWord)
+				}
+				fmt.Println(msg)
+			}
+			return nil
+		case <-sigintCh:
+			fmt.Fprintln(os.Stderr, "interrupted")
+			_ = sess.Abort()
+			os.Exit(130)
+		}
+	}
+}
+
+type sessionEvalResult struct {
+	Status    uint8
+	ErrorCode uint16
+	FaultWord string
+	StackRepr string
 }

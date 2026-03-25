@@ -233,6 +233,34 @@ func TestLiveResetThenEval(t *testing.T) {
 	}
 }
 
+func TestLiveEvalDangerousResetClearsStack(t *testing.T) {
+	cliPath, home := startConnectedDaemon(t)
+
+	out1, err := runCLI(cliPath, home, "send", "1 2 +", "--daemon")
+	if err != nil {
+		t.Fatalf("seed send failed: %v\n%s", err, out1)
+	}
+	if !strings.Contains(out1, "[3]") {
+		t.Fatalf("unexpected seed eval result:\n%s", out1)
+	}
+
+	resetOut, err := runCLI(cliPath, home, "send", "dangerous-reset", "--daemon")
+	if err != nil {
+		t.Fatalf("dangerous-reset send failed: %v\n%s", err, resetOut)
+	}
+	if strings.Contains(resetOut, "error(20)") {
+		t.Fatalf("dangerous-reset should suppress reset sentinel output:\n%s", resetOut)
+	}
+
+	out2, err := runCLI(cliPath, home, "send", "8 9 +", "--daemon")
+	if err != nil {
+		t.Fatalf("post-reset send failed: %v\n%s", err, out2)
+	}
+	if strings.TrimSpace(out2) != "[17]" {
+		t.Fatalf("unexpected post-reset eval result:\n%s", out2)
+	}
+}
+
 func TestLiveInterruptDuringEval(t *testing.T) {
 	_, home := startConnectedDaemon(t)
 

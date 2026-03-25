@@ -67,6 +67,14 @@ func (s *Session) Close() error {
 	return s.transport.Close()
 }
 
+// Abort closes the transport immediately without sending DETACH. Use
+// this when the session is no longer in a clean state for protocol
+// shutdown, for example if the host is aborting an in-flight eval.
+func (s *Session) Abort() error {
+	s.enterDirectMode()
+	return s.transport.Close()
+}
+
 // DeviceInfo returns the cached HELLO_RES data.
 func (s *Session) DeviceInfo() *protocol.HelloResponse {
 	return s.hello
