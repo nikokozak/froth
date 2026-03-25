@@ -33,7 +33,7 @@ idf_component_register(
     INCLUDE_DIRS
         "${FROTH_ROOT}/src"
         "${FROTH_ROOT}/boards/${FROTH_BOARD}"
-    REQUIRES driver nvs_flash
+    REQUIRES driver esp_timer nvs_flash
 )
 
 # Froth compile-time configuration

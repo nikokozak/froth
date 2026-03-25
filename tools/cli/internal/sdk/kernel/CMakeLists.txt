@@ -29,9 +29,6 @@ target_sources(Froth
     src/froth_snapshot_writer.c
     src/froth_crc32.c
     src/froth_snapshot_prims.c
-    src/froth_console.c
-    src/froth_transport.c
-    src/froth_link.c
     src/froth_tbuf.c
     ${CMAKE_BINARY_DIR}/froth_lib_core.h
     platforms/${FROTH_PLATFORM}/platform.c
@@ -58,7 +55,7 @@ set(FROTH_LINE_BUFFER_SIZE 1024 CACHE STRING "Input line buffer for REPL in numb
 set(FROTH_MAX_PERM_SIZE 8 CACHE STRING "Maximum number of indices in a perm pattern.")
 set(FROTH_VERSION "0.1.0" CACHE STRING "Froth version string")
 set(FROTH_HAS_SNAPSHOTS ON CACHE BOOL "Target supports Froth snapshots")
-set(FROTH_HAS_LIVE ON CACHE BOOL "Enable FROTH-LINK/2 Live transport")
+set(FROTH_HAS_LIVE ON CACHE BOOL "Enable Live session transport (ADR-048)")
 set(FROTH_SNAPSHOT_BLOCK_SIZE "2048" CACHE STRING "Snapshot size in target memory (bytes)")
 set(FROTH_SNAPSHOT_PATH_A "froth_a.snap" CACHE STRING "Snapshot A file path (default froth_a.snap)")
 set(FROTH_SNAPSHOT_PATH_B "froth_b.snap" CACHE STRING "Snapshot B file path (default froth_b.snap)")
@@ -90,9 +87,14 @@ if(FROTH_HAS_SNAPSHOTS)
   target_compile_definitions(Froth PRIVATE FROTH_SNAPSHOT_PATH_A="${FROTH_SNAPSHOT_PATH_A}")
   target_compile_definitions(Froth PRIVATE FROTH_SNAPSHOT_PATH_B="${FROTH_SNAPSHOT_PATH_B}")
 endif()
-# Froth Live protocol - allows Froth to speak to interactive editors
-if(${FROTH_HAS_LIVE})
+# Live session transport (ADR-048): console governor, framed protocol, attach/detach
+if(FROTH_HAS_LIVE)
   target_compile_definitions(Froth PRIVATE FROTH_HAS_LIVE)
+  target_sources(Froth PRIVATE
+    src/froth_console.c
+    src/froth_transport.c
+    src/froth_link.c
+  )
 endif()
 # Compiles a user program into the flash package, to be executed on startup.
 if(FROTH_USER_PROGRAM)
@@ -129,3 +131,4 @@ add_custom_command(
   DEPENDS "${CMAKE_SOURCE_DIR}/src/lib/core.froth"
   COMMENT "Embedding .froth files as C data..."
 )
+

@@ -9,7 +9,7 @@
 
 set -e
 
-ESP_IDF_VERSION="v5.4"
+ESP_IDF_VERSION="v5.5"
 FROTH_SDK_DIR="$HOME/.froth/sdk"
 IDF_INSTALL_DIR="$FROTH_SDK_DIR/esp-idf"
 

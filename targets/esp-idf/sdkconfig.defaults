@@ -2,6 +2,16 @@
 CONFIG_ESP_CONSOLE_UART_DEFAULT=y
 CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200
 
+# Keep UART0 for the REPL/FROTH-LINK path, but suppress ESP-IDF's own
+# routine log traffic. Bench validation through the editor depends on
+# the serial line carrying only Froth console bytes and framed link
+# responses, not INFO-level boot/runtime chatter.
+CONFIG_LOG_DEFAULT_LEVEL_NONE=y
+CONFIG_LOG_DEFAULT_LEVEL=0
+CONFIG_LOG_MAXIMUM_LEVEL=0
+CONFIG_BOOTLOADER_LOG_LEVEL_NONE=y
+CONFIG_BOOTLOADER_LOG_LEVEL=0
+
 # Disable task watchdog. Froth execution loops do not yield to
 # FreeRTOS, so the watchdog would fire during any long-running
 # Froth program. Safe for development; revisit for production.

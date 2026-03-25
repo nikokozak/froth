@@ -18,9 +18,10 @@ set(FROTH_KERNEL_SRCS
     ${FROTH_ROOT}/src/froth_snapshot_writer.c
     ${FROTH_ROOT}/src/froth_crc32.c
     ${FROTH_ROOT}/src/froth_snapshot_prims.c
+    ${FROTH_ROOT}/src/froth_console.c
     ${FROTH_ROOT}/src/froth_transport.c
     ${FROTH_ROOT}/src/froth_link.c
-    ${FROTH_ROOT}/src/froth_console.c
+    ${FROTH_ROOT}/src/froth_tbuf.c
 )
 
 idf_component_register(
@@ -32,7 +33,7 @@ idf_component_register(
     INCLUDE_DIRS
         "${FROTH_ROOT}/src"
         "${FROTH_ROOT}/boards/${FROTH_BOARD}"
-    REQUIRES driver nvs_flash
+    REQUIRES driver esp_timer nvs_flash
 )
 
 # Froth compile-time configuration
