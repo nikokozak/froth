@@ -85,7 +85,7 @@ func runConnectSerial() error {
 		case daemon.EventInputWait:
 			var evt daemon.InputWaitEvent
 			if err := json.Unmarshal(params, &evt); err == nil {
-				printLocked("\n[froth] input> ")
+				printLocked("[froth] input> ")
 				go func(seq int) {
 					line, ok := <-lineCh
 					if !ok {
