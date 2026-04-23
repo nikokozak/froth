@@ -134,9 +134,6 @@ rg -n 'frame-arena ownership revisit|workshop-operational closeout|Workspace_Ima
 require_absent '^## Priority Stack$|^### [0-9]+\.' \
   docs/roadmap/Frothy_Post_v0_1_Priorities_And_Workshop_Prep.md
 rg -n 'The queue below is intentionally movable' TIMELINE.md
-rg -n 'For targeted work|Run the broader read pass when' the repo guide
-rg -n 'Before sign-off on any task in this repo, run at least one proof on a real' \
-  the repo guide
 require_literal_in_each_file 'Frothy_Post_v0_1_Priorities_And_Workshop_Prep.md' \
   README.md \
   docs/roadmap/Frothy_Development_Roadmap_v0_1.md \

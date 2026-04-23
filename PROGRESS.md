@@ -70,8 +70,8 @@ file is wrong.
   power-cycle recovery, and unsettled whole-file sends offer it without replaying
   the file across the fresh session.
 - This control-surface repair tranche is landed: `PROGRESS.md` and
-  `TIMELINE.md` are thin again, `the repo guide` supports targeted work, and the
-  forward queue now lives in one short roadmap note plus Frothy ADR-116.
+  `TIMELINE.md` are thin again, the repo startup guidance is task-scoped, and
+  the forward queue now lives in one short roadmap note plus Frothy ADR-116.
 - The workshop-operational queue now leads: clean-machine validation,
   room-side hardware/recovery prep, and one recorded measured rehearsal pass;
   the evaluator frame-arena ownership revisit is deferred until Frothy

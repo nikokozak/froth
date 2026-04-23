@@ -641,8 +641,8 @@ Why now:
 
 - `PROGRESS.md` and `TIMELINE.md` had drifted from thin control docs into
   narrative status streams
-- `the repo guide` still implied a heavyweight full-session cold-start ritual even
-  for targeted work
+- the repo startup guidance still implied a heavyweight full-session cold-start
+  ritual even for targeted work
 - the repo already had real forward-direction docs in `vNext` and the accepted
   ADR stack, but the post-`v0.1` queue was not surfaced as one truthful
   workshop-facing story
@@ -654,8 +654,8 @@ Approach:
 - keep `PROGRESS.md` as a short operational note rather than a changelog
 - keep `TIMELINE.md` as a movable checkbox ledger rather than a narrative
   slip diary
-- keep `the repo guide` targeted-work-first and require the broader read pass only
-  when the task is broad, stale, or policy/semantics-touching
+- keep the repo startup guidance task-scoped and require the broader read pass
+  only when the task is broad, stale, or policy/semantics-touching
 - surface the post-`v0.1` priority stack and 2026-04-16 workshop gate in one
   short roadmap note instead of scattering them across status prose
 
@@ -663,9 +663,9 @@ Closeout:
 
 - `docs/roadmap/Frothy_Post_v0_1_Priorities_And_Workshop_Prep.md` now carries
   the near-term priority stack and workshop gate
-- Frothy ADR-116 records the thin-control-doc and targeted-session policy
-- `README.md`, `PROGRESS.md`, `TIMELINE.md`, and `the repo guide` now point at the
-  same live story
+- Frothy ADR-116 records the thin-control-doc and task-scoped startup policy
+- `README.md`, `PROGRESS.md`, and `TIMELINE.md` now point at the same live
+  story
 
 Proof:
 
@@ -1157,5 +1157,5 @@ If implementation resumed today, the next steps should be:
   slot-bundle-first ADR plus roadmap note before any helper, editor, manifest,
   or kernel surface widens
 - [x] reset the post-`v0.1` control surface so `PROGRESS.md`, `TIMELINE.md`,
-  `the repo guide`, `README.md`, and one short roadmap note stop carrying separate
-  truths about the live queue
+  `README.md`, and one short roadmap note stop carrying separate truths about
+  the live queue

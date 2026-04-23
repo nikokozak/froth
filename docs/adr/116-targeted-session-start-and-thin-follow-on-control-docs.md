@@ -22,8 +22,8 @@ The repo surface still drifted anyway:
   operational note
 - `TIMELINE.md` became part ledger, part slip diary, and part follow-on
   narrative
-- `the repo guide` still implied a heavyweight full-session cold-start ritual even
-  for targeted work
+- the repo startup guidance still implied a heavyweight full-session cold-start
+  ritual even for targeted work
 - the post-`v0.1` queue existed in pieces, but not as one legible
   workshop-facing stack
 
@@ -46,8 +46,8 @@ Trade-offs:
 ### Option B: Restore thin control docs and task-scoped startup guidance
 
 Keep the roadmap current-state block authoritative, make `PROGRESS.md` short,
-make `TIMELINE.md` a movable checkbox ledger, and let `the repo guide` require only
-task-relevant reads unless the task is broad or stale.
+make `TIMELINE.md` a movable checkbox ledger, and keep repo startup guidance
+task-scoped unless the task is broad or stale.
 
 Trade-offs:
 
@@ -59,8 +59,8 @@ Trade-offs:
 
 ### Option C: Collapse everything back into the roadmap only
 
-Remove most of the information from `PROGRESS.md`, `TIMELINE.md`, and
-`the repo guide`, and keep the roadmap as the only maintained control document.
+Remove most of the information from `PROGRESS.md`, `TIMELINE.md`, and the repo
+startup guide, and keep the roadmap as the only maintained control document.
 
 Trade-offs:
 
@@ -83,8 +83,8 @@ Frothy adopts the following repo-control rules for post-`v0.1` work:
   reorderable post-`v0.1` queue
 - if queue context would be lost, that context belongs in a referenced roadmap
   or ADR note, not in `TIMELINE.md` prose
-- `the repo guide` supports targeted work by default and requires the broader read
-  pass only when the task is broad, stale, or policy/semantics-touching
+- repo startup guidance stays task-scoped by default and requires the broader
+  read pass only when the task is broad, stale, or policy/semantics-touching
 - the post-`v0.1` priority stack and workshop gate live in one short roadmap
   note rather than being scattered across status logs
 
@@ -96,8 +96,8 @@ It does not widen Frothy language or runtime semantics.
 - Frothy regains a short, reviewable live control surface.
 - Deferred discussions keep their context through queue descriptions and
   explicit references.
-- Targeted work can move faster on targeted tasks without guessing at semantics or
-  skipping authority checks.
+- Targeted work can move faster without guessing at semantics or skipping
+  authority checks.
 - Any later attempt to turn `PROGRESS.md` or `TIMELINE.md` back into narrative
   sprawl is now a policy regression, not just a style preference.
 
@@ -107,5 +107,4 @@ It does not widen Frothy language or runtime semantics.
 - `docs/roadmap/Frothy_Post_v0_1_Priorities_And_Workshop_Prep.md`
 - `PROGRESS.md`
 - `TIMELINE.md`
-- `the repo guide`
 - `docs/adr/109-repo-control-surface-and-proof-path.md`

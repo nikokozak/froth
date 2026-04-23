@@ -185,8 +185,8 @@ frothy send src/main.froth
 The original Froth repo at `/Users/niko/Developer/Froth` is reference material
 only. Use it for substrate reuse, boot/persistence/transport background, and
 implementation salvage where explicitly adopted. Do not treat its roadmap,
-language semantics, repo-local startup guidance, or implementation priorities as active
-Frothy policy.
+language semantics, repo-local startup guidance, or implementation priorities
+as active Frothy policy.
 
 See `docs/reference/Froth_Substrate_References.md` and
 `docs/reference/Frothy_Retained_Substrate_Manifest.md` for the curated

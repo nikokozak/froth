@@ -34,8 +34,7 @@ control docs.
 
 Do not treat these as active Frothy policy:
 
-- Froth repo-local startup guidance
-- Froth repo-local compatibility pointers
+- Froth repo-local startup guidance and compatibility pointer files
 - Froth language roadmap and milestone plan
 - Froth stack-visible language semantics
 - Froth ADR-054 / ADR-055 / ADR-056 sequencing as a Frothy implementation plan

@@ -65,8 +65,8 @@ keep each item's description and references so deferral does not erase context.
   `tests/frothy_snapshot_test.c`, and
   `docs/spec/Frothy_Language_Spec_vNext.md`.
 - [x] Control-surface repair and workshop-prep note
-  Deliverable: thin `PROGRESS.md`, movable `TIMELINE.md`, targeted
-  `the repo guide`, and one forward-priority note.
+  Deliverable: thin `PROGRESS.md`, movable `TIMELINE.md`, task-scoped startup
+  guidance, and one forward-priority note.
   References: Frothy ADR-116 and
   `docs/roadmap/Frothy_Post_v0_1_Priorities_And_Workshop_Prep.md`.
 - [x] Workshop install, editor, and recovery surface
