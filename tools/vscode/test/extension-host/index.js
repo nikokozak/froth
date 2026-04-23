@@ -272,6 +272,21 @@ async function run() {
     api.clearOutput();
     await vscode.commands.executeCommand("frothy.connect");
     await api.waitForState("connected", 15000);
+    await vscode.commands.executeCommand("frothy.forceReconnect");
+    await api.waitForState("connected", 15000);
+    trace("force reconnect ok");
+
+    runtimeEditor = await openEditor("line-send.frothy");
+    await replaceDocument(runtimeEditor, "while true { nil }\n");
+    setLineCursor(runtimeEditor, 0);
+    api.clearOutput();
+    const forceReconnectEval = vscode.commands.executeCommand("frothy.sendSelection");
+    await api.waitForState("running", 15000);
+    await vscode.commands.executeCommand("frothy.forceReconnect");
+    await withTimeout(forceReconnectEval, 15000, "force reconnect eval to settle");
+    await api.waitForState("connected", 15000);
+    trace("force reconnect while running ok");
+
     await vscode.commands.executeCommand("frothy.disconnect");
     await api.waitForState("idle", 15000);
     trace("reconnect ok");
@@ -287,7 +302,6 @@ async function run() {
     const reportPath = path.join(os.tmpdir(), "frothy-editor-smoke-report.txt");
     fs.writeFileSync(reportPath, `${report}\n`, "utf8");
     trace("done");
-    await vscode.commands.executeCommand("workbench.action.closeWindow");
   } catch (err) {
     try {
       const extension = vscode.extensions.getExtension(extensionId);

@@ -51,6 +51,41 @@ func TestPackageReleaseScriptIncludesBinaryAndReadme(t *testing.T) {
 	}
 }
 
+func TestUpdateBrewFormulaScriptIncludesStableAssetsAndHeadBuild(t *testing.T) {
+	repoRoot := repoRootForScriptTest(t)
+	outputPath := filepath.Join(t.TempDir(), "frothy.rb")
+	cmd := exec.Command(
+		filepath.Join(repoRoot, "tools", "update-brew-formula.sh"),
+		"0.1.0",
+		strings.Repeat("a", 64),
+		outputPath,
+	)
+	cmd.Dir = repoRoot
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("update-brew-formula.sh: %v\n%s", err, output)
+	}
+
+	formula, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read generated formula: %v", err)
+	}
+	text := string(formula)
+	for _, want := range []string{
+		`url "https://github.com/nikokozak/frothy/archive/refs/tags/v0.1.0.tar.gz"`,
+		`sha256 "` + strings.Repeat("a", 64) + `"`,
+		`head "https://github.com/nikokozak/frothy.git", branch: "main"`,
+		`depends_on "go" => :build`,
+		`system "go", "run", "./internal/sdk/cmd/generate",`,
+		`system "go", "build", "-o", bin/"frothy", "."`,
+		`assert_match "frothy ", output`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("generated formula missing %q\n%s", want, text)
+		}
+	}
+}
+
 func TestPackageFirmwareReleaseScriptIncludesManifestArtifacts(t *testing.T) {
 	repoRoot := repoRootForScriptTest(t)
 	buildDir := t.TempDir()

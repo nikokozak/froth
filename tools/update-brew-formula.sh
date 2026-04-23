@@ -4,58 +4,46 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 . "$ROOT_DIR/tools/release-common.sh"
 
-if [ "$#" -lt 4 ] || [ "$#" -gt 5 ]; then
-  printf 'usage: %s <version> <darwin-arm64-sha> <darwin-amd64-sha> <linux-amd64-sha> [output]\n' "${0##*/}" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  printf 'usage: %s <version> <source-sha> [output]\n' "${0##*/}" >&2
   exit 1
 fi
 
 VERSION=$(normalize_version "$1")
-DARWIN_ARM64_SHA=$2
-DARWIN_AMD64_SHA=$3
-LINUX_AMD64_SHA=$4
-OUTPUT=${5:-Formula/frothy.rb}
-
-DARWIN_ARM64_ASSET=$(cli_asset_name "$VERSION" darwin arm64)
-DARWIN_AMD64_ASSET=$(cli_asset_name "$VERSION" darwin amd64)
-LINUX_AMD64_ASSET=$(cli_asset_name "$VERSION" linux amd64)
+SOURCE_SHA=$2
+OUTPUT=${3:-Formula/frothy.rb}
 
 mkdir -p "$(dirname "$OUTPUT")"
 TMP_FILE=$(mktemp "${TMPDIR:-/tmp}/frothy-formula.XXXXXX")
 trap 'rm -f "$TMP_FILE"' EXIT INT TERM
 
-# Generate a Frothy-branded formula that installs the Frothy-owned CLI
-# executable.
+# Generate a Frothy-branded formula that builds the Frothy-owned CLI executable
+# from the tagged source archive. This keeps `brew install frothy` tied to the
+# public release tag without requiring per-platform URL selection in the formula.
 cat >"$TMP_FILE" <<EOF
 class Frothy < Formula
   desc "Live lexical language for programmable devices"
   homepage "https://github.com/nikokozak/frothy"
-  version "${VERSION}"
+  url "https://github.com/${RELEASE_REPO_SLUG}/archive/refs/tags/v${VERSION}.tar.gz"
+  sha256 "${SOURCE_SHA}"
   license "MIT"
 
-  on_macos do
-    on_arm do
-      url "https://github.com/${RELEASE_REPO_SLUG}/releases/download/v#{version}/${DARWIN_ARM64_ASSET}"
-      sha256 "${DARWIN_ARM64_SHA}"
-    end
-    on_intel do
-      url "https://github.com/${RELEASE_REPO_SLUG}/releases/download/v#{version}/${DARWIN_AMD64_ASSET}"
-      sha256 "${DARWIN_AMD64_SHA}"
-    end
-  end
+  head "https://github.com/${RELEASE_REPO_SLUG}.git", branch: "main"
 
-  on_linux do
-    on_intel do
-      url "https://github.com/${RELEASE_REPO_SLUG}/releases/download/v#{version}/${LINUX_AMD64_ASSET}"
-      sha256 "${LINUX_AMD64_SHA}"
-    end
-  end
+  depends_on "go" => :build
 
   def install
-    bin.install "frothy"
+    cd "tools/cli" do
+      system "go", "run", "./internal/sdk/cmd/generate",
+             "-repo", buildpath.to_s,
+             "-out", "internal/sdk/generated"
+      system "go", "build", "-o", bin/"frothy", "."
+    end
   end
 
   test do
-    assert_match version.to_s, shell_output("#{bin}/frothy --version")
+    output = shell_output("#{bin}/frothy --version")
+    assert_match "frothy ", output
   end
 end
 EOF

@@ -271,6 +271,7 @@ function createController(host, clientOrClients, overrides = {}) {
   const fallbackClient = clients[clients.length - 1];
   return new FrothyController({
     host,
+    sendFileInterruptSettleTimeoutMs: overrides.sendFileInterruptSettleTimeoutMs,
     async resolveCliPath() {
       return "/tmp/froth";
     },
@@ -531,9 +532,8 @@ async function main() {
     firstClient.evalImpl = async () => new Promise((_resolve, reject) => {
       rejectEval = reject;
     });
-    firstClient.disconnect = async function disconnect() {
-      this.disconnectCalls = (this.disconnectCalls || 0) + 1;
-      this.emit({ type: "event", event: "disconnected" });
+    firstClient.dispose = function dispose() {
+      this.disposed = true;
       if (rejectEval) {
         rejectEval(new ControlSessionClientError({
           code: "not_connected",
@@ -552,7 +552,7 @@ async function main() {
 
     const ok = await controller.connectToDevice();
     assertEq(ok, true, "reconnect should succeed");
-    assertEq(firstClient.disconnectCalls, 1, "running client should disconnect");
+    assertEq(firstClient.disposed, true, "running client should be disposed");
     assertEq(secondClient.connectCalls.length, 1, "new helper should connect");
     assertEq(controller.getSnapshot().state, "connected", "controller state");
     assert(
@@ -669,6 +669,79 @@ async function main() {
     assert(controller.getSnapshot().device, "fresh device should remain");
   });
 
+  await test("force reconnect disposes helper from slow regular disconnect", async () => {
+    const host = new FakeHost();
+    const firstClient = new FakeClient();
+    const secondClient = new FakeClient();
+    let markDisconnectStarted = null;
+    const disconnectStarted = new Promise((resolve) => {
+      markDisconnectStarted = resolve;
+    });
+    let releaseDisconnect = null;
+    let releaseExit = null;
+
+    firstClient.disconnect = async function disconnect() {
+      this.disconnectCalls = (this.disconnectCalls || 0) + 1;
+      if (markDisconnectStarted) {
+        markDisconnectStarted();
+      }
+      await new Promise((resolve) => {
+        releaseDisconnect = resolve;
+      });
+      this.emit({ type: "event", event: "disconnected" });
+    };
+    firstClient.waitForExit = async () => new Promise((resolve) => {
+      releaseExit = resolve;
+    });
+
+    const controller = createController(host, [firstClient, secondClient]);
+    await controller.connectToDevice();
+    const disconnecting = controller.disconnect();
+    await disconnectStarted;
+
+    const reconnect = controller.forceReconnect();
+    await waitFor(() => firstClient.disposed, "slow disconnect helper not disposed");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assertEq(
+      (secondClient.connectCalls || []).length,
+      0,
+      "fresh helper should not connect before slow disconnect helper exits",
+    );
+
+    releaseExit();
+    assertEq(await reconnect, true, "force reconnect should succeed");
+    releaseDisconnect();
+    await disconnecting;
+
+    assertEq(secondClient.connectCalls.length, 1, "fresh helper should connect");
+    assertEq(controller.getSnapshot().state, "connected", "fresh state");
+  });
+
+  await test("regular disconnect tears down a stuck helper", async () => {
+    const host = new FakeHost();
+    const client = new FakeClient();
+    let releaseExit = null;
+
+    client.disconnect = async function disconnect() {
+      this.disconnectCalls = (this.disconnectCalls || 0) + 1;
+      return new Promise(() => {});
+    };
+    client.waitForExit = async () => new Promise((resolve) => {
+      releaseExit = resolve;
+    });
+
+    const controller = createController(host, client);
+    await controller.connectToDevice();
+    const disconnecting = controller.disconnect();
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    assertEq(client.disposed, true, "stuck disconnect helper should be disposed");
+    releaseExit();
+    await disconnecting;
+
+    assertEq(client.disconnectCalls, 1, "disconnect should be attempted");
+    assertEq(controller.getSnapshot().state, "idle", "controller state");
+  });
+
   await test("superseded connect rejection does not clear newer connect", async () => {
     const host = new FakeHost();
     const client = new FakeClient();
@@ -715,6 +788,343 @@ async function main() {
       ),
       "stale connect should not warn",
     );
+  });
+
+  await test("superseded helper startup waits for stale helper exit", async () => {
+    const host = new FakeHost();
+    const firstClient = new FakeClient();
+    const secondClient = new FakeClient();
+    let releaseStart = null;
+    let releaseExit = null;
+    let firstConnectDone = false;
+
+    firstClient.start = async () => new Promise((resolve) => {
+      releaseStart = resolve;
+    });
+    firstClient.waitForExit = async () => new Promise((resolve) => {
+      releaseExit = resolve;
+    });
+
+    const controller = createController(host, [firstClient, secondClient]);
+    const firstConnect = controller.connectToDevice().then((value) => {
+      firstConnectDone = true;
+      return value;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assertEq(await controller.forceReconnect(), true, "newer reconnect");
+    releaseStart();
+    await waitFor(() => firstClient.disposed, "stale startup was not disposed");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assertEq(firstConnectDone, false, "stale connect should wait for helper exit");
+
+    releaseExit();
+    assertEq(await firstConnect, true, "stale connect should observe fresh state");
+    assertEq(secondClient.connectCalls.length, 1, "fresh helper should connect");
+    assertEq(controller.getSnapshot().state, "connected", "state");
+  });
+
+  await test("not_connected retires helper before normal reconnect", async () => {
+    const host = new FakeHost();
+    const firstClient = new FakeClient();
+    const secondClient = new FakeClient();
+    let rejectEval = null;
+    let releaseExit = null;
+
+    firstClient.evalImpl = async () => new Promise((_resolve, reject) => {
+      rejectEval = reject;
+    });
+    firstClient.waitForExit = async () => new Promise((resolve) => {
+      releaseExit = resolve;
+    });
+
+    const controller = createController(host, [firstClient, secondClient]);
+    await controller.connectToDevice();
+    const runningEval = controller.sendSelection();
+    await waitFor(
+      () => controller.getSnapshot().state === "running",
+      "controller did not enter running state",
+    );
+
+    rejectEval(new ControlSessionClientError({
+      code: "not_connected",
+      message: "stale session closed",
+    }));
+    await runningEval;
+    assertEq(firstClient.disposed, true, "not_connected helper should retire");
+    assertEq(controller.getSnapshot().state, "disconnected", "state after error");
+
+    const reconnect = controller.connectToDevice();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assertEq(
+      (secondClient.connectCalls || []).length,
+      0,
+      "normal reconnect should wait for retired helper exit",
+    );
+
+    releaseExit();
+    assertEq(await reconnect, true, "normal reconnect should succeed");
+    assertEq(secondClient.connectCalls.length, 1, "fresh helper should connect");
+    assertEq(controller.getSnapshot().state, "connected", "final state");
+  });
+
+  await test("force reconnect restarts stale running session", async () => {
+    const host = new FakeHost();
+    const firstClient = new FakeClient();
+    const secondClient = new FakeClient();
+    let rejectEval = null;
+
+    firstClient.evalImpl = async () => new Promise((_resolve, reject) => {
+      rejectEval = reject;
+    });
+    firstClient.dispose = function dispose() {
+      this.disposed = true;
+      if (rejectEval) {
+        rejectEval(new ControlSessionClientError({
+          code: "not_connected",
+          message: "stale serial session closed",
+        }));
+      }
+    };
+
+    const controller = createController(host, [firstClient, secondClient]);
+    await controller.connectToDevice();
+    const runningEval = controller.sendSelection();
+    await waitFor(
+      () => controller.getSnapshot().state === "running",
+      "controller did not enter running state",
+    );
+
+    const ok = await controller.forceReconnect();
+    await runningEval;
+
+    assertEq(ok, true, "force reconnect should succeed");
+    assertEq(firstClient.disposed, true, "stale helper should be disposed");
+    assertEq(secondClient.connectCalls.length, 1, "fresh helper should connect");
+    assertEq(controller.getSnapshot().state, "connected", "controller state");
+    assert(
+      host.output.buffer.includes("force reconnect requested"),
+      "force reconnect log",
+    );
+  });
+
+  await test("force reconnect waits for old helper exit before reconnecting", async () => {
+    const host = new FakeHost();
+    const firstClient = new FakeClient();
+    const secondClient = new FakeClient();
+    let rejectEval = null;
+    let releaseExit = null;
+
+    firstClient.evalImpl = async () => new Promise((_resolve, reject) => {
+      rejectEval = reject;
+    });
+    firstClient.dispose = function dispose() {
+      this.disposed = true;
+      if (rejectEval) {
+        rejectEval(new ControlSessionClientError({
+          code: "not_connected",
+          message: "stale serial session closed",
+        }));
+      }
+    };
+    firstClient.waitForExit = async () => new Promise((resolve) => {
+      releaseExit = resolve;
+    });
+
+    const controller = createController(host, [firstClient, secondClient]);
+    await controller.connectToDevice();
+    const runningEval = controller.sendSelection();
+    await waitFor(
+      () => controller.getSnapshot().state === "running",
+      "controller did not enter running state",
+    );
+
+    const reconnect = controller.forceReconnect();
+    await waitFor(() => firstClient.disposed, "old helper was not disposed");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assertEq(
+      (secondClient.connectCalls || []).length,
+      0,
+      "fresh helper should not connect before old helper exits",
+    );
+
+    releaseExit();
+    assertEq(await reconnect, true, "force reconnect should succeed");
+    await runningEval;
+
+    assertEq(secondClient.connectCalls.length, 1, "fresh helper should connect");
+    assertEq(controller.getSnapshot().state, "connected", "controller state");
+  });
+
+  await test("older force reconnect does not supersede newer reconnect", async () => {
+    const host = new FakeHost();
+    const firstClient = new FakeClient();
+    const secondClient = new FakeClient();
+    const thirdClient = new FakeClient();
+    let rejectEval = null;
+    let releaseExit = null;
+
+    firstClient.evalImpl = async () => new Promise((_resolve, reject) => {
+      rejectEval = reject;
+    });
+    firstClient.dispose = function dispose() {
+      this.disposed = true;
+      if (rejectEval) {
+        rejectEval(new ControlSessionClientError({
+          code: "not_connected",
+          message: "stale serial session closed",
+        }));
+      }
+    };
+    firstClient.waitForExit = async () => new Promise((resolve) => {
+      releaseExit = resolve;
+    });
+
+    const controller = createController(host, [firstClient, secondClient, thirdClient]);
+    await controller.connectToDevice();
+    const runningEval = controller.sendSelection();
+    await waitFor(
+      () => controller.getSnapshot().state === "running",
+      "controller did not enter running state",
+    );
+
+    const firstReconnect = controller.forceReconnect();
+    await waitFor(() => firstClient.disposed, "old helper was not disposed");
+    const secondReconnect = controller.forceReconnect();
+    assertEq(await secondReconnect, true, "newer reconnect should succeed");
+    releaseExit();
+    assertEq(await firstReconnect, true, "older reconnect should observe fresh state");
+    await runningEval;
+
+    assertEq(secondClient.connectCalls.length, 1, "newer helper should connect");
+    assertEq(
+      (thirdClient.connectCalls || []).length,
+      0,
+      "older reconnect should not create a third helper",
+    );
+    assertEq(controller.getSnapshot().state, "connected", "controller state");
+  });
+
+  await test("disconnect cancels pending force reconnect", async () => {
+    const host = new FakeHost();
+    const firstClient = new FakeClient();
+    const secondClient = new FakeClient();
+    let rejectEval = null;
+    let releaseExit = null;
+
+    firstClient.evalImpl = async () => new Promise((_resolve, reject) => {
+      rejectEval = reject;
+    });
+    firstClient.dispose = function dispose() {
+      this.disposed = true;
+      if (rejectEval) {
+        rejectEval(new ControlSessionClientError({
+          code: "not_connected",
+          message: "stale serial session closed",
+        }));
+      }
+    };
+    firstClient.waitForExit = async () => new Promise((resolve) => {
+      releaseExit = resolve;
+    });
+
+    const controller = createController(host, [firstClient, secondClient]);
+    await controller.connectToDevice();
+    const runningEval = controller.sendSelection();
+    await waitFor(
+      () => controller.getSnapshot().state === "running",
+      "controller did not enter running state",
+    );
+
+    const reconnect = controller.forceReconnect();
+    await waitFor(() => firstClient.disposed, "old helper was not disposed");
+    await controller.disconnect();
+    releaseExit();
+    assertEq(await reconnect, false, "pending reconnect should be canceled");
+    await runningEval;
+
+    assertEq(
+      (secondClient.connectCalls || []).length,
+      0,
+      "canceled reconnect should not connect a fresh helper",
+    );
+    assertEq(controller.getSnapshot().state, "idle", "controller state");
+  });
+
+  await test("late old run completion does not clear fresh running state", async () => {
+    const host = new FakeHost();
+    const firstClient = new FakeClient();
+    const secondClient = new FakeClient();
+    let resolveOldEval = null;
+
+    firstClient.evalImpl = async () => new Promise((resolve) => {
+      resolveOldEval = resolve;
+    });
+    secondClient.evalImpl = async () => new Promise(() => {});
+
+    const controller = createController(host, [firstClient, secondClient]);
+    await controller.connectToDevice();
+    const oldRun = controller.sendSelection();
+    await waitFor(
+      () => controller.getSnapshot().state === "running",
+      "old run did not enter running state",
+    );
+
+    await controller.forceReconnect();
+    const freshRun = controller.sendSelection();
+    await waitFor(
+      () => controller.getSnapshot().state === "running",
+      "fresh run did not enter running state",
+    );
+
+    resolveOldEval({ text: "nil" });
+    await oldRun;
+
+    assertEq(
+      controller.getSnapshot().state,
+      "running",
+      "stale completion should not clear fresh running state",
+    );
+    assert(freshRun, "fresh run should remain pending");
+  });
+
+  await test("late old send-file completion does not clear fresh running state", async () => {
+    const host = new FakeHost();
+    const firstClient = new FakeClient();
+    const secondClient = new FakeClient();
+    let resolveOldEval = null;
+
+    firstClient.evalImpl = async () => new Promise((resolve) => {
+      resolveOldEval = resolve;
+    });
+    secondClient.evalImpl = async () => new Promise(() => {});
+
+    const controller = createController(host, [firstClient, secondClient], {
+      sendSource: "file.value = 1\n",
+    });
+    await controller.connectToDevice();
+    const oldSend = controller.sendFile();
+    await waitFor(
+      () => controller.getSnapshot().state === "running",
+      "old send did not enter running state",
+    );
+
+    await controller.forceReconnect();
+    const freshRun = controller.sendSelection();
+    await waitFor(
+      () => controller.getSnapshot().state === "running",
+      "fresh run did not enter running state",
+    );
+
+    resolveOldEval({ text: "nil" });
+    await oldSend;
+
+    assertEq(
+      controller.getSnapshot().state,
+      "running",
+      "stale send completion should not clear fresh running state",
+    );
+    assert(freshRun, "fresh run should remain pending");
   });
 
   await test("send file interrupts and supersedes a running file send", async () => {
@@ -775,6 +1185,163 @@ async function main() {
       host.output.buffer.includes("send requested while running"),
       "send interrupt log",
     );
+  });
+
+  await test("send file waits for interrupted run to settle", async () => {
+    const host = new FakeHost();
+    const client = new FakeClient();
+    let rejectRunningEval = null;
+
+    client.evalImpl = async (source) => {
+      if (source.includes("while true")) {
+        return new Promise((_resolve, reject) => {
+          rejectRunningEval = reject;
+        });
+      }
+      return new Promise(() => {});
+    };
+    client.interruptImpl = async () => {
+      client.emit({ type: "event", event: "interrupted" });
+    };
+
+    const controller = createController(host, client, {
+      sendSource: "replacement = 2\n",
+    });
+    await controller.connectToDevice();
+    host.editor.lineText = "while true { nil }";
+    host.editor.formText = "while true { nil }";
+    const runningEval = controller.sendSelection();
+    await waitFor(
+      () => controller.getSnapshot().state === "running",
+      "controller did not enter running state",
+    );
+
+    const send = controller.sendFile();
+    await waitFor(
+      () => client.interruptCalls === 1,
+      "send file did not try interrupt",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assertEq(
+      client.evalCalls.length,
+      1,
+      "replacement should wait for old run promise to settle",
+    );
+
+    rejectRunningEval(new ControlSessionClientError({
+      code: "interrupted",
+      message: "control request interrupted",
+    }));
+    await runningEval;
+    await waitFor(
+      () => client.evalCalls.length === 2,
+      "replacement file should be sent after old run settles",
+    );
+    assert(send, "send file should remain pending with replacement eval");
+    assertEq(controller.getSnapshot().state, "running", "replacement state");
+  });
+
+  await test("send file offers force reconnect when interrupt does not settle", async () => {
+    const host = new FakeHost();
+    const firstClient = new FakeClient();
+    const secondClient = new FakeClient();
+    let rejectEval = null;
+
+    firstClient.evalImpl = async () => new Promise((_resolve, reject) => {
+      rejectEval = reject;
+    });
+    firstClient.interruptImpl = async () => {};
+    firstClient.dispose = function dispose() {
+      this.disposed = true;
+      if (rejectEval) {
+        rejectEval(new ControlSessionClientError({
+          code: "not_connected",
+          message: "stale serial session closed",
+        }));
+      }
+    };
+    host.warningResponses.push("Force Reconnect");
+
+    const controller = createController(host, [firstClient, secondClient], {
+      sendFileInterruptSettleTimeoutMs: 1,
+      sendSource: "replacement = 2\n",
+    });
+    await controller.connectToDevice();
+    const runningEval = controller.sendSelection();
+    await waitFor(
+      () => controller.getSnapshot().state === "running",
+      "controller did not enter running state",
+    );
+
+    await controller.sendFile();
+    await runningEval;
+
+    assertEq(firstClient.interruptCalls, 1, "send file should try interrupt");
+    assertEq(firstClient.disposed, true, "force reconnect should dispose stale helper");
+    assertEq(secondClient.connectCalls.length, 1, "fresh helper should connect");
+    assertEq(
+      (secondClient.evalCalls || []).length,
+      0,
+      "replacement should not send after recovery",
+    );
+    assertEq(controller.getSnapshot().state, "connected", "controller state");
+    assert(
+      host.warningMessages.some((entry) =>
+        /Force Reconnect/.test(entry.items.join(" "))
+      ),
+      "force reconnect action should be offered",
+    );
+  });
+
+  await test("send file aborts if force reconnect supersedes interrupt wait", async () => {
+    const host = new FakeHost();
+    const firstClient = new FakeClient();
+    const secondClient = new FakeClient();
+    let rejectEval = null;
+
+    firstClient.evalImpl = async () => new Promise((_resolve, reject) => {
+      rejectEval = reject;
+    });
+    firstClient.interruptImpl = async () => {};
+    firstClient.dispose = function dispose() {
+      this.disposed = true;
+      if (rejectEval) {
+        rejectEval(new ControlSessionClientError({
+          code: "not_connected",
+          message: "stale serial session closed",
+        }));
+      }
+    };
+
+    const controller = createController(host, [firstClient, secondClient], {
+      sendFileInterruptSettleTimeoutMs: 1000,
+      sendSource: "replacement = 2\n",
+    });
+    await controller.connectToDevice();
+    const runningEval = controller.sendSelection();
+    await waitFor(
+      () => controller.getSnapshot().state === "running",
+      "controller did not enter running state",
+    );
+
+    const send = controller.sendFile();
+    await waitFor(
+      () => firstClient.interruptCalls === 1,
+      "send file did not try interrupt",
+    );
+    const reconnect = controller.forceReconnect();
+    await send;
+    await reconnect;
+    await runningEval;
+
+    assertEq(firstClient.disposed, true, "force reconnect should dispose stale helper");
+    assertEq(secondClient.connectCalls.length, 1, "fresh helper should connect");
+    assertEq(
+      (secondClient.evalCalls || []).length,
+      0,
+      "superseded file should not send on the fresh helper",
+    );
+    assertEq(controller.getSnapshot().state, "connected", "controller state");
   });
 
   await test("send file aborts when helper changes during preflight", async () => {

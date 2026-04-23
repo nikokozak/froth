@@ -33,6 +33,7 @@ async function main() {
   const commands = commandIds();
   for (const command of [
     "frothy.connect",
+    "frothy.forceReconnect",
     "frothy.disconnect",
     "frothy.sendSelection",
     "frothy.runBinding",

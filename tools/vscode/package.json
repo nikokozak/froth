@@ -2,7 +2,7 @@
   "name": "frothy",
   "displayName": "Frothy",
   "description": "Live board control for Frothy devices",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "NikolaiKozak",
   "repository": {
     "type": "git",
@@ -62,6 +62,11 @@
         "command": "frothy.connect",
         "title": "Frothy: Connect Device",
         "icon": "$(plug)"
+      },
+      {
+        "command": "frothy.forceReconnect",
+        "title": "Frothy: Force Reconnect",
+        "icon": "$(debug-restart)"
       },
       {
         "command": "frothy.disconnect",
@@ -235,6 +240,11 @@
       "view/title": [
         {
           "command": "frothy.connect",
+          "when": "view == frothyDeviceView",
+          "group": "navigation"
+        },
+        {
+          "command": "frothy.forceReconnect",
           "when": "view == frothyDeviceView",
           "group": "navigation"
         },

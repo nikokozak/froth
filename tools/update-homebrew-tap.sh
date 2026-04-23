@@ -4,8 +4,8 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 . "$ROOT_DIR/tools/release-common.sh"
 
-if [ "$#" -ne 4 ]; then
-  printf 'usage: %s <version> <darwin-arm64-sha> <darwin-amd64-sha> <linux-amd64-sha>\n' "${0##*/}" >&2
+if [ "$#" -ne 2 ]; then
+  printf 'usage: %s <version> <source-sha>\n' "${0##*/}" >&2
   exit 1
 fi
 
@@ -15,9 +15,7 @@ if [ -z "${HOMEBREW_TAP_TOKEN:-}" ]; then
 fi
 
 VERSION=$(normalize_version "$1")
-DARWIN_ARM64_SHA=$2
-DARWIN_AMD64_SHA=$3
-LINUX_AMD64_SHA=$4
+SOURCE_SHA=$2
 
 TAP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/frothy-tap.XXXXXX")
 trap 'rm -rf "$TAP_DIR"' EXIT INT TERM
@@ -27,7 +25,7 @@ git -C "$TAP_DIR" config user.name "github-actions[bot]"
 git -C "$TAP_DIR" config user.email "github-actions[bot]@users.noreply.github.com"
 
 # Keep the tap and formula aligned with the Frothy-owned installed binary.
-"$ROOT_DIR/tools/update-brew-formula.sh" "$VERSION" "$DARWIN_ARM64_SHA" "$DARWIN_AMD64_SHA" "$LINUX_AMD64_SHA" "$TAP_DIR/Formula/frothy.rb"
+"$ROOT_DIR/tools/update-brew-formula.sh" "$VERSION" "$SOURCE_SHA" "$TAP_DIR/Formula/frothy.rb"
 ruby -c "$TAP_DIR/Formula/frothy.rb"
 
 git -C "$TAP_DIR" add Formula/frothy.rb

@@ -61,6 +61,7 @@ export function activate(
 
   const commands: Array<[string, () => Promise<void> | void]> = [
     ["frothy.connect", async () => controller.connectToDevice()],
+    ["frothy.forceReconnect", async () => controller.forceReconnect()],
     ["frothy.disconnect", () => controller.disconnect()],
     ["frothy.sendSelection", () => controller.sendSelection()],
     ["frothy.runBinding", () => controller.runBinding()],
@@ -180,8 +181,8 @@ function updateStatusBar(
     case "running":
       statusItem.text = "$(sync~spin) Frothy: Running";
       statusItem.tooltip =
-        "A Frothy program is running. Use Interrupt to stop it.";
-      statusItem.command = "frothy.disconnect";
+        "A Frothy program is running. Force reconnect if the board was reset.";
+      statusItem.command = "frothy.forceReconnect";
       statusItem.backgroundColor = undefined;
       break;
     case "disconnected":

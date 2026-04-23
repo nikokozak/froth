@@ -16,10 +16,15 @@ tools/vscode/.vscode/
 
 # Local build outputs
 .cache/
+build-diagnose-*/
 build-review/
+build-snapshot-*/
 build-tm1629-*/
+build-v4/
+build-workshop-*/
 compile_commands.json
 dist/
+dist-workshop/
 froth_a.snap
 froth_b.snap
 targets/esp-idf/.cache/

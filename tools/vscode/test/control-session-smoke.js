@@ -170,6 +170,66 @@ async function main() {
     assertEq(disconnected.length, 2, "disconnected event count");
   });
 
+  await test("dispose can wait for helper process exit", async () => {
+    const client = new ControlSessionClient(process.execPath, process.cwd(), [
+      "-e",
+      [
+        "process.on('SIGTERM', () => setTimeout(() => process.exit(0), 75));",
+        "setInterval(() => {}, 1000);",
+      ].join(""),
+    ]);
+
+    await client.start();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const started = Date.now();
+    client.dispose();
+    await client.waitForExit(1000);
+    const elapsed = Date.now() - started;
+    assert(
+      elapsed >= 50,
+      "waitForExit should wait for the child exit event",
+    );
+    assert(elapsed < 500, "waitForExit should not wait for the timeout");
+  });
+
+  await test("waitForExit escalates and waits for process exit", async () => {
+    const client = new ControlSessionClient(process.execPath, process.cwd(), [
+      "-e",
+      [
+        "process.on('SIGTERM', () => {});",
+        "setInterval(() => {}, 1000);",
+      ].join(""),
+    ]);
+
+    await client.start();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const started = Date.now();
+    client.dispose();
+    await client.waitForExit(50);
+    const elapsed = Date.now() - started;
+    assert(elapsed >= 40, "waitForExit should wait until escalation");
+    assert(elapsed < 500, "waitForExit should observe the SIGKILL exit");
+  });
+
+  await test("disposed client rejects requests before process exit", async () => {
+    const client = new ControlSessionClient(process.execPath, process.cwd(), [
+      "-e",
+      [
+        "process.on('SIGTERM', () => {});",
+        "setInterval(() => {}, 1000);",
+      ].join(""),
+    ]);
+
+    await client.start();
+    client.dispose();
+    const err = await assertRejects(client.connect(), "disposed connect");
+    assert(
+      /helper not running/.test(err.message),
+      "disposed client should reject without writing to child",
+    );
+    await client.waitForExit(50);
+  });
+
   await test("CLI discovery prefers frothy and keeps legacy fallback paths", async () => {
     const cwd = path.resolve(__dirname, "..", "..");
     const candidates = cliCandidates(cwd);

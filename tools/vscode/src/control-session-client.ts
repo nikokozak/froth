@@ -101,6 +101,8 @@ export class ControlSessionClient {
   private nextId = 0;
   private readonly pending = new Map<number, PendingRequest>();
   private readonly emitter = new EventEmitter();
+  private exitPromise: Promise<void> = Promise.resolve();
+  private resolveExit: (() => void) | null = null;
   private disposed = false;
 
   constructor(
@@ -135,6 +137,9 @@ export class ControlSessionClient {
       });
 
       let settled = false;
+      this.exitPromise = new Promise<void>((exitResolve) => {
+        this.resolveExit = exitResolve;
+      });
 
       child.on("spawn", () => {
         settled = true;
@@ -233,18 +238,34 @@ export class ControlSessionClient {
 
     if (this.child) {
       this.child.kill();
-      this.child = null;
     }
 
     this.rejectPending(new Error("control session client disposed"));
     this.emitter.removeAllListeners();
   }
 
+  async waitForExit(timeoutMs = 2000): Promise<void> {
+    if (!this.child) {
+      return;
+    }
+    const child = this.child;
+    let killTimer: NodeJS.Timeout | null = null;
+    killTimer = setTimeout(() => {
+      if (this.child === child) {
+        child.kill("SIGKILL");
+      }
+    }, timeoutMs);
+    await this.exitPromise;
+    if (killTimer) {
+      clearTimeout(killTimer);
+    }
+  }
+
   private call(
     command: string,
     payload: Record<string, unknown> = {},
   ): Promise<unknown> {
-    if (!this.child) {
+    if (this.disposed || !this.child) {
       return Promise.reject(new Error("control session helper not running"));
     }
 
@@ -322,6 +343,10 @@ export class ControlSessionClient {
     this.child = null;
     this.rejectPending(error ?? new Error("control session helper exited"));
     this.emitter.emit("exit", error);
+    if (this.resolveExit) {
+      this.resolveExit();
+      this.resolveExit = null;
+    }
   }
 
   private rejectPending(error: Error): void {

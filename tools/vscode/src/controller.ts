@@ -15,6 +15,8 @@ import { splitTopLevelForms } from "./runtime-forms";
 
 const lastPortKey = "frothy.lastPort";
 const runningSettleTimeoutMs = 15000;
+const disconnectGraceTimeoutMs = 1000;
+const forceReconnectAction = "Force Reconnect";
 
 export type ConnectionState =
   | "idle"
@@ -104,10 +106,12 @@ export interface ControlSessionClientLike {
   core(name: string): Promise<TextValue>;
   slotInfo(name: string): Promise<TextValue>;
   dispose(): void;
+  waitForExit?(timeoutMs?: number): Promise<void>;
 }
 
 export interface ControllerDeps {
   host: ControllerHost;
+  sendFileInterruptSettleTimeoutMs?: number;
   resolveCliPath(): Promise<string | null>;
   createClient(cliPath: string, cwd: string): ControlSessionClientLike;
   resolveSendSource(
@@ -119,6 +123,7 @@ export interface ControllerDeps {
 
 export class FrothyController {
   private client: ControlSessionClientLike | null = null;
+  private closingClient: ControlSessionClientLike | null = null;
   private state: ConnectionState = "idle";
   private device: DeviceInfo | null = null;
   private disposed = false;
@@ -173,11 +178,22 @@ export class FrothyController {
   }
 
   async connectToDevice(port?: string): Promise<boolean> {
+    if (this.closingClient) {
+      const generation = await this.disposeClientAndWait();
+      if (!this.isDisposedGenerationCurrent(generation)) {
+        return this.isConnectedState();
+      }
+    }
+
     if (this.state === "running") {
       this.deps.host.output.appendLine(
         "[frothy] reconnect requested while running; restarting control session",
       );
-      await this.disconnect();
+      const generation = await this.disposeClientAndWait();
+      if (!this.isDisposedGenerationCurrent(generation)) {
+        return this.isConnectedState();
+      }
+      this.setState("disconnected");
     }
 
     const attempt = ++this.connectAttempt;
@@ -197,10 +213,11 @@ export class FrothyController {
     this.setState("connecting");
 
     try {
-      await client.connect(preferredPort || undefined);
+      const device = await client.connect(preferredPort || undefined);
       if (!this.isCurrentConnectAttempt(attempt)) {
         return this.state === "connected";
       }
+      this.applyConnectedDevice(device, false);
       return true;
     } catch (err: unknown) {
       if (!this.isCurrentConnectAttempt(attempt)) {
@@ -228,27 +245,79 @@ export class FrothyController {
 
   async disconnect(): Promise<void> {
     if (!this.client) {
+      if (this.closingClient) {
+        const generation = await this.disposeClientAndWait();
+        if (this.isDisposedGenerationCurrent(generation)) {
+          this.setState("idle");
+        }
+        return;
+      }
+      this.clientGeneration += 1;
+      this.connectAttempt += 1;
+      this.clearRunningState();
       this.clearSessionState();
       this.setState("idle");
       return;
     }
 
+    if (this.state === "running") {
+      this.deps.host.output.appendLine(
+        "[frothy] disconnect requested while running; closing control session",
+      );
+      const generation = await this.disposeClientAndWait();
+      if (this.isDisposedGenerationCurrent(generation)) {
+        this.setState("idle");
+      }
+      return;
+    }
+
     const client = this.client;
     this.client = null;
+    this.closingClient = client;
     this.clientGeneration += 1;
     this.connectAttempt += 1;
+    this.clearRunningState();
+    this.setState("idle");
     const disconnectGeneration = this.clientGeneration;
+    const disconnecting = client.disconnect().then(
+      () => true,
+      () => true,
+    );
     try {
-      await client.disconnect();
-    } catch {
-      // Best effort.
+      const disconnected = await Promise.race([
+        disconnecting,
+        new Promise<boolean>((resolve) => {
+          setTimeout(() => resolve(false), disconnectGraceTimeoutMs);
+        }),
+      ]);
+      if (!disconnected) {
+        client.dispose();
+        if (client.waitForExit) {
+          await client.waitForExit();
+        }
+      }
     } finally {
+      if (this.closingClient === client) {
+        this.closingClient = null;
+      }
       client.dispose();
       if (this.client === null && this.clientGeneration === disconnectGeneration) {
         this.clearSessionState();
         this.setState("idle");
       }
     }
+  }
+
+  async forceReconnect(): Promise<boolean> {
+    this.deps.host.output.appendLine(
+      "[frothy] force reconnect requested; restarting control session",
+    );
+    const generation = await this.disposeClientAndWait();
+    if (!this.isDisposedGenerationCurrent(generation)) {
+      return this.isConnectedState();
+    }
+    this.setState("disconnected");
+    return this.connectToDevice();
   }
 
   async sendSelection(): Promise<void> {
@@ -473,16 +542,25 @@ export class FrothyController {
   }
 
   async interrupt(): Promise<void> {
-    if (!this.client) {
+    const client = this.client;
+    const generation = this.clientGeneration;
+    if (!client) {
       await this.deps.host.showWarningMessage("No active Frothy session");
       return;
     }
 
     try {
-      await this.client.interrupt();
+      await client.interrupt();
+      if (!this.isCurrentClient(client, generation)) {
+        return;
+      }
       this.deps.host.output.appendLine("[frothy] interrupt sent");
     } catch (err: unknown) {
+      if (!this.isCurrentClient(client, generation)) {
+        return;
+      }
       this.handleClientError("interrupt", err);
+      return;
     }
   }
 
@@ -728,7 +806,9 @@ export class FrothyController {
       this.handleClientError(label, err);
       return null;
     } finally {
-      this.endRunning();
+      if (this.isCurrentClient(operationClient, operationGeneration)) {
+        this.endRunning();
+      }
     }
   }
 
@@ -778,7 +858,11 @@ export class FrothyController {
       this.handleClientError(label, err);
       return null;
     } finally {
-      if (running) {
+      if (
+        running &&
+        (!operationClient ||
+          this.isCurrentClient(operationClient, operationGeneration))
+      ) {
         this.endRunning();
       }
     }
@@ -792,33 +876,46 @@ export class FrothyController {
       await this.deps.host.showWarningMessage("No active Frothy session");
       return false;
     }
+    const client = this.client;
+    const generation = this.clientGeneration;
 
     this.deps.host.output.appendLine(
       "[frothy] send requested while running; interrupting current program",
     );
     try {
-      await this.client.interrupt();
+      await client.interrupt();
+      if (!this.isCurrentClient(client, generation)) {
+        return false;
+      }
       this.deps.host.output.appendLine("[frothy] interrupt sent");
     } catch (err: unknown) {
+      if (!this.isCurrentClient(client, generation)) {
+        return false;
+      }
       this.handleClientError("interrupt", err);
       return false;
     }
 
-    if (await this.waitForRunningToFinish(runningSettleTimeoutMs)) {
-      return true;
+    if (
+      await this.waitForRunningToFinish(
+        this.deps.sendFileInterruptSettleTimeoutMs ??
+          runningSettleTimeoutMs,
+      )
+    ) {
+      return this.isCurrentClient(client, generation);
     }
 
     this.deps.host.output.appendLine(
-      "[frothy] interrupt did not settle; restarting control session",
+      "[frothy] interrupt did not settle; force reconnect is available",
     );
-    await this.disconnect();
-    if (!(await this.waitForRunningToFinish(3000))) {
-      this.deps.host.showErrorMessage(
-        "Frothy send failed: running program did not stop after interrupt.",
-      );
-      return false;
+    const choice = await this.deps.host.showWarningMessage(
+      "Frothy send failed: the running program did not stop after interrupt. If the board was reset or the editor session is stale, use Force Reconnect.",
+      forceReconnectAction,
+    );
+    if (choice === forceReconnectAction) {
+      await this.forceReconnect();
     }
-    return this.connectToDevice();
+    return false;
   }
 
   private async ensureConnected(): Promise<boolean> {
@@ -855,10 +952,20 @@ export class FrothyController {
 
     try {
       await client.start();
+      if (this.clientGeneration !== generation) {
+        client.dispose();
+        if (client.waitForExit) {
+          await client.waitForExit();
+        }
+        return this.client;
+      }
       this.client = client;
       return client;
     } catch (err: unknown) {
       client.dispose();
+      if (this.clientGeneration !== generation) {
+        return null;
+      }
       this.client = null;
       const message = err instanceof Error ? err.message : String(err);
       this.deps.host.showErrorMessage(
@@ -925,10 +1032,11 @@ export class FrothyController {
       "[frothy] remembered port failed; retrying device discovery",
     );
     try {
-      await client.connect();
+      const device = await client.connect();
       if (!this.isCurrentConnectAttempt(attempt)) {
         return true;
       }
+      this.applyConnectedDevice(device, false);
       return true;
     } catch (retryErr: unknown) {
       if (!this.isCurrentConnectAttempt(attempt)) {
@@ -957,14 +1065,8 @@ export class FrothyController {
     switch (event.event) {
       case "connected":
         if (event.device) {
-          this.device = event.device;
-          this.setDegradedSendFile(false);
-          this.rememberPort(event.device.port);
-          this.deps.host.output.appendLine(
-            `[frothy] connected: ${event.device.board} (${event.device.port})`,
-          );
+          this.applyConnectedDevice(event.device, true);
         }
-        this.setState("connected");
         break;
       case "output":
         if (event.data) {
@@ -980,9 +1082,13 @@ export class FrothyController {
         break;
       case "interrupted":
         this.deps.host.output.appendLine("[frothy] interrupted");
+        if (this.state === "running" && this.runningOperations === 0) {
+          this.setState(this.device ? "connected" : "disconnected");
+        }
         break;
       case "disconnected":
         this.deps.host.output.appendLine("[frothy] disconnected");
+        this.clearRunningState();
         this.clearSessionState();
         this.setState("disconnected");
         break;
@@ -1002,6 +1108,7 @@ export class FrothyController {
     }
 
     this.client = null;
+    this.clearRunningState();
     this.clearSessionState();
     if (error) {
       this.deps.host.output.appendLine(`[frothy] helper exited: ${error.message}`);
@@ -1016,6 +1123,7 @@ export class FrothyController {
         return;
       }
       if (err.code === "not_connected") {
+        this.retireCurrentClient();
         this.clearSessionState();
         this.setState("disconnected");
         void this.deps.host.showWarningMessage("No Frothy device connected.");
@@ -1057,6 +1165,14 @@ export class FrothyController {
 
     if (this.state === "running") {
       this.setState(this.device ? "connected" : "disconnected");
+    }
+  }
+
+  private clearRunningState(): void {
+    this.runningOperations = 0;
+    const waiters = this.runningWaiters.splice(0);
+    for (const waiter of waiters) {
+      waiter();
     }
   }
 
@@ -1141,13 +1257,69 @@ export class FrothyController {
     void this.deps.host.setStoredPort(lastPortKey, port);
   }
 
-  private disposeClient(): void {
-    if (this.client) {
-      this.clientGeneration += 1;
-      this.client.dispose();
-      this.client = null;
+  private retireCurrentClient(): void {
+    const client = this.client;
+    if (!client) {
+      return;
     }
+    this.clientGeneration += 1;
+    this.connectAttempt += 1;
+    this.client = null;
+    this.closingClient = client;
+    client.dispose();
+    this.clearRunningState();
+    if (client.waitForExit) {
+      void client.waitForExit().finally(() => {
+        if (this.closingClient === client) {
+          this.closingClient = null;
+        }
+      });
+    }
+  }
+
+  private disposeClient(): void {
+    this.clientGeneration += 1;
+    this.connectAttempt += 1;
+    const currentClient = this.client;
+    const closingClient = this.closingClient;
+    this.client = null;
+    this.closingClient = null;
+    if (currentClient) {
+      currentClient.dispose();
+    }
+    if (closingClient && closingClient !== currentClient) {
+      closingClient.dispose();
+    }
+    this.clearRunningState();
     this.clearSessionState();
+  }
+
+  private async disposeClientAndWait(): Promise<number> {
+    const clients = [this.client, this.closingClient].filter(
+      (client, index, all): client is ControlSessionClientLike =>
+        client !== null && all.indexOf(client) === index,
+    );
+    this.disposeClient();
+    const generation = this.clientGeneration;
+    for (const client of clients) {
+      if (client.waitForExit) {
+        await client.waitForExit();
+      }
+    }
+    return generation;
+  }
+
+  private applyConnectedDevice(device: DeviceInfo, log: boolean): void {
+    this.device = device;
+    this.setDegradedSendFile(false);
+    this.rememberPort(device.port);
+    this.clearRunningState();
+    if (log) {
+      this.deps.host.output.appendLine(
+        `[frothy] connected: ${device.board} (${device.port})`,
+      );
+    }
+    this.setState("connected");
   }
 
   private isCurrentClient(
@@ -1155,6 +1327,14 @@ export class FrothyController {
     generation: number,
   ): boolean {
     return this.client === client && this.clientGeneration === generation;
+  }
+
+  private isDisposedGenerationCurrent(generation: number): boolean {
+    return this.client === null && this.clientGeneration === generation;
+  }
+
+  private isConnectedState(): boolean {
+    return this.state === "connected";
   }
 
   private isCurrentConnectAttempt(attempt: number): boolean {

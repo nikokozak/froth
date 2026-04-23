@@ -64,6 +64,11 @@ file is wrong.
   explicit editor confirmation. The VS Code board proof now exercises
   interrupt, Send File while running, and disconnect while running through the
   real extension host.
+- The VS Code stale-session escape hatch is now explicit rather than inferred
+  from serial noise: `Frothy: Force Reconnect` hard-restarts the editor helper
+  and reconnects, the running status item points at that command for reset or
+  power-cycle recovery, and unsettled whole-file sends offer it without replaying
+  the file across the fresh session.
 - This control-surface repair tranche is landed: `PROGRESS.md` and
   `TIMELINE.md` are thin again, `the repo guide` supports targeted work, and the
   forward queue now lives in one short roadmap note plus Frothy ADR-116.

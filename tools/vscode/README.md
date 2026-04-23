@@ -36,6 +36,7 @@ Extension-specific expectations:
 ## Maintained Commands
 
 - `Frothy: Connect Device`
+- `Frothy: Force Reconnect`
 - `Frothy: Disconnect`
 - `Frothy: Send Selection / Form`
 - `Frothy: Run Binding`
@@ -81,6 +82,12 @@ platforms.
 
 `Interrupt` is bound to `Cmd+Option+.` on macOS and `Ctrl+Alt+.` on other
 platforms while a program is running.
+
+If you power-cycle or reset the board while VS Code still thinks a program is
+running, use `Frothy: Force Reconnect` from the command palette or the Frothy
+device view. It drops the editor-side helper process immediately and starts a
+fresh connect attempt, so it does not depend on the stale session responding to
+interrupt or disconnect requests.
 
 ## Development
 
