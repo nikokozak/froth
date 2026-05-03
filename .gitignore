@@ -4,6 +4,7 @@
 froth-session
 docs/superpowers/
 docs/perm-tutorial.md
+docs/guide/*.pdf
 build/
 build-*-helper/
 build-v4-*/
@@ -41,6 +42,7 @@ tools/vscode/test/test.froth
 tools/cli/cli
 tools/cli/froth-cli
 tools/cli/frothy-cli
+tools/cli/frothy-m10-device-smoke
 tools/cli/froth-debug
 tools/cli/test-runner
 tools/cli/minicom_capture

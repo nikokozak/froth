@@ -593,7 +593,7 @@ if(FROTHY_BUILD_HOST)
                 "${FROTH_PLATFORM}"
                 "${FROTHY_TEST_MAINTAINED_PROJECT_FFI_CONFIG}")
       set_tests_properties(frothy_project_ffi_config_maintained_smoke
-        PROPERTIES LABELS "frothy" TIMEOUT 60)
+        PROPERTIES LABELS "frothy;frothy_slow" TIMEOUT 60)
     endif()
     if(EXISTS "${FROTHY_PROJECT_FFI_CONFIG_SMOKE}" AND
        EXISTS "${FROTHY_TEST_LEGACY_PROJECT_FFI_CONFIG}")
@@ -605,7 +605,7 @@ if(FROTHY_BUILD_HOST)
                 "${FROTH_PLATFORM}"
                 "${FROTHY_TEST_LEGACY_PROJECT_FFI_CONFIG}")
       set_tests_properties(frothy_project_ffi_config_legacy_smoke
-        PROPERTIES LABELS "frothy" TIMEOUT 60)
+        PROPERTIES LABELS "frothy;frothy_slow" TIMEOUT 60)
     endif()
   endif()
 
@@ -619,7 +619,7 @@ if(FROTHY_BUILD_HOST)
               "esp32-devkit-v4-game-board"
               "posix")
     set_tests_properties(frothy_tm1629_board_smoke
-      PROPERTIES LABELS "frothy" TIMEOUT 60)
+      PROPERTIES LABELS "frothy;frothy_slow" TIMEOUT 60)
   endif()
 
   set(FROTHY_ESP_IDF_BOARD_CONFIG_SMOKE
@@ -637,7 +637,7 @@ if(FROTHY_BUILD_HOST)
                 "${FROTHY_ESP_IDF_BOARD_UNDER_TEST}")
       set_tests_properties(
         "frothy_esp_idf_board_config_${FROTHY_ESP_IDF_BOARD_TEST_ID}_smoke"
-        PROPERTIES LABELS "frothy" TIMEOUT 60)
+        PROPERTIES LABELS "frothy;frothy_slow" TIMEOUT 60)
     endforeach()
   endif()
 

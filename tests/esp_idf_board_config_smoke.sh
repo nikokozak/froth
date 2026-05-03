@@ -225,8 +225,6 @@ expect_definition("FROTHY_IR_NODE_CAPACITY=${EXPECTED_IR_NODE_CAPACITY}"
                   "esp-idf target did not ingest Frothy IR node capacity")
 expect_definition("FROTHY_IR_LINK_CAPACITY=${EXPECTED_IR_LINK_CAPACITY}"
                   "esp-idf target did not ingest Frothy IR link capacity")
-expect_macro("FROTH_HAS_BOARD_PINS"
-             "esp-idf target did not embed board pin assets")
 expect_macro("FROTHY_HAS_BOARD_PINS"
              "esp-idf target did not generate Frothy board pin seed")
 expect_macro("FROTHY_HAS_BOARD_BASE_LIB"
@@ -293,11 +291,6 @@ set(EXPECTED_BASE_CONTENT
 file(READ "${FROTHY_BOARD_BASE_HEADER}" ACTUAL_BASE_CONTENT)
 if(NOT ACTUAL_BASE_CONTENT STREQUAL EXPECTED_BASE_CONTENT)
   message(FATAL_ERROR "frothy_board_base_lib.h does not match board lib/base.frothy")
-endif()
-
-string(MAKE_C_IDENTIFIER "${COMPONENT_LIB}" COMPONENT_LIB_ID)
-if(NOT TARGET "froth_board_pins_${COMPONENT_LIB_ID}")
-  message(FATAL_ERROR "esp-idf target did not register board pin embed target")
 endif()
 
 if(NOT EXISTS "${SOURCE_DIR}/targets/esp-idf/main/CMakeLists.txt")

@@ -21,7 +21,7 @@ func ensureCLI(paths pathSet, env map[string]string, stepName string) error {
 }
 
 func runFast() error {
-	if err := runFrothy(); err != nil {
+	if err := runFrothyCore(); err != nil {
 		return err
 	}
 	return runCLIUnit()
@@ -29,6 +29,12 @@ func runFast() error {
 
 func runAll() error {
 	if err := runFast(); err != nil {
+		return err
+	}
+	if err := runFrothySlowCtests(); err != nil {
+		return err
+	}
+	if err := runFrothyProofs(); err != nil {
 		return err
 	}
 	if err := runCLILocal(); err != nil {
@@ -52,6 +58,16 @@ func runPublishability() error {
 }
 
 func runFrothy() error {
+	if err := runFrothyCore(); err != nil {
+		return err
+	}
+	if err := runFrothySlowCtests(); err != nil {
+		return err
+	}
+	return runFrothyProofs()
+}
+
+func runFrothyCore() error {
 	paths, err := detectPaths()
 	if err != nil {
 		return err
@@ -60,13 +76,32 @@ func runFrothy() error {
 		return err
 	}
 	env := baseTestEnv(paths)
-	if err := ensureCLI(paths, env, "frothy:cli-build"); err != nil {
-		return err
-	}
 	buildDir := profileBuildDir(paths, "host-default")
-	if err := runCommand(paths, "frothy:ctest", env, paths.Root, "ctest", "--test-dir", buildDir, "--output-on-failure", "-L", "frothy"); err != nil {
+	return runCommand(paths, "frothy:ctest", env, paths.Root, "ctest", "--test-dir", buildDir, "--output-on-failure", "-L", "frothy", "-LE", "frothy_slow")
+}
+
+func runFrothySlowCtests() error {
+	paths, err := detectPaths()
+	if err != nil {
 		return err
 	}
+	if err := ensureProfile(paths, "host-default", false); err != nil {
+		return err
+	}
+	env := baseTestEnv(paths)
+	buildDir := profileBuildDir(paths, "host-default")
+	return runCommand(paths, "frothy:ctest-slow", env, paths.Root, "ctest", "--test-dir", buildDir, "--output-on-failure", "-L", "frothy_slow")
+}
+
+func runFrothyProofs() error {
+	paths, err := detectPaths()
+	if err != nil {
+		return err
+	}
+	if err := ensureProfile(paths, "host-default", false); err != nil {
+		return err
+	}
+	env := baseTestEnv(paths)
 	return runCommand(paths, "frothy:proofs", env, paths.Root, "sh", filepath.Join(paths.Root, "tools", "frothy", "proof.sh"), "host")
 }
 
@@ -222,15 +257,15 @@ func runCLIIntegration() error {
 func printList() {
 	fmt.Println("fast")
 	fmt.Println("  core local gate (C, Go, shell)")
-	fmt.Println("  includes: frothy, cli")
+	fmt.Println("  includes: frothy ctest, cli unit")
 	fmt.Println("all")
 	fmt.Println("  extended local gate (C, Go, shell)")
-	fmt.Println("  includes: fast, cli-local, integration")
+	fmt.Println("  includes: fast, slow frothy ctest, frothy host proofs, cli-local, integration")
 	fmt.Println("publishability")
 	fmt.Println("  full shipped-surface local gate")
 	fmt.Println("  includes: all, vscode")
 	fmt.Println("frothy")
-	fmt.Println("  host ctest + core proof.sh host lane")
+	fmt.Println("  host ctest, slow ctest, and proof.sh host lane")
 	fmt.Println("cli")
 	fmt.Println("  CLI unit tests")
 	fmt.Println("cli-local")

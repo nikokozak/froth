@@ -1,6 +1,6 @@
 # Frothy Timeline
 
-*Last updated: 2026-04-15*
+*Last updated: 2026-05-03*
 
 This file is the movable milestone and queue ledger for Frothy.
 The roadmap current-state block in
@@ -55,6 +55,20 @@ If this file and the roadmap disagree, the roadmap wins.
 The queue below is intentionally movable. Reorder it as priorities change, but
 keep each item's description and references so deferral does not erase context.
 
+- [~] Pre-thesis publishability prune and dependency collapse
+  Deliverable: remove low-risk legacy Froth residue, replace remaining Python
+  proof helpers with Go or delete them from the maintained surface, keep
+  generated PDFs out of active source unless rebuilt outside the core dependency
+  budget, keep VS Code/Node explicitly extension-local if retained, and decide
+  the `froth.toml` / `.froth-build` / `.froth` project-format rename through a
+  new Frothy ADR before implementation.
+  Current cut: default local testing is now proportional again. `make test`
+  runs fast host CTest plus CLI unit tests, while slow CTest and host smoke
+  proofs remain in `make test-all` and `make test-frothy`; the CLI SDK payload
+  generator now excludes ignored ESP-IDF build caches.
+  References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
+  `AGENTS.md`, Frothy ADR-120, `tools/frothy/`,
+  `tools/cli/cmd/test-runner/`, and `docs/audit/Frothy_Repo_Audit_2026-04.md`.
 - [x] Prompt-facing record surface matches the landed implementation
   Deliverable: the prompt-facing shell accepts the maintained `record ...`
   forms and keeps record definition, construction, field access, inspection,
@@ -173,7 +187,7 @@ keep each item's description and references so deferral does not erase context.
   References: `tools/frothy/proof_m10_smoke.sh`,
   `docs/archive/proofs/m10_esp32_proof_transcript.txt`, `boards/`, and
   `boards/esp32-devkit-v4-game-board/WORKSHOP.md`.
-- [~] Workshop operational closeout
+- [ ] Workshop operational closeout
   Deliverable: execute and record the remaining clean-machine validation,
   room-side hardware/recovery prep, and one complete real-device rehearsal on
   the maintained workshop path.

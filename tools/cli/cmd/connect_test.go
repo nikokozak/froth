@@ -112,7 +112,7 @@ func makeLocalBuildKernelRoot(t *testing.T) string {
 	root := t.TempDir()
 	mustWriteFile(t, filepath.Join(root, "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.23)\n")
 	mustWriteFile(t, filepath.Join(root, "boards", "posix", "ffi.c"), "/* board */\n")
-	mustWriteFile(t, filepath.Join(root, "cmake", "embed_froth.cmake"), "# embed\n")
+	mustWriteFile(t, filepath.Join(root, "cmake", "froth_board_assets.cmake"), "# board assets\n")
 	mustWriteFile(t, filepath.Join(root, "platforms", "posix", "platform.c"), "/* platform */\n")
 	mustWriteFile(t, filepath.Join(root, "src", "froth_vm.h"), "/* vm */\n")
 	mustWriteFile(t, filepath.Join(root, "src", "frothy_main.c"), "int main(void) { return 0; }\n")

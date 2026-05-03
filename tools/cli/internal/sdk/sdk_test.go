@@ -68,12 +68,11 @@ func TestEnsureSDKExtractsEmbeddedTree(t *testing.T) {
 	fsys := testPayloadFS(t, map[string]string{
 		"CMakeLists.txt":                      "cmake_minimum_required(VERSION 3.23)\nset(FROTH_VERSION \"0.1.0\" CACHE STRING \"Froth version string\")\n",
 		"src/froth_vm.h":                      "/* vm */\n",
-		"src/lib/core.froth":                  ": dup dup ;\n",
 		"boards/posix/ffi.c":                  "/* board */\n",
 		"boards/posix/ffi.h":                  "/* board header */\n",
 		"boards/posix/board.json":             "{\"board\":\"posix\"}\n",
+		"boards/posix/lib/base.frothy":        "answer is 42\n",
 		"platforms/posix/platform.c":          "/* platform */\n",
-		"cmake/embed_froth.cmake":             "# embed\n",
 		"targets/esp-idf/CMakeLists.txt":      "# target\n",
 		"targets/esp-idf/main/main.c":         "/* main */\n",
 		"targets/esp-idf/main/CMakeLists.txt": "# main cmake\n",
@@ -98,11 +97,10 @@ func TestEnsureSDKExtractsEmbeddedTree(t *testing.T) {
 set(FROTH_VERSION "0.1.0" CACHE STRING "Froth version string")
 `)
 	assertFileContents(t, sdkRoot, filepath.Join("src", "froth_vm.h"), "/* vm */\n")
-	assertFileContents(t, sdkRoot, filepath.Join("src", "lib", "core.froth"), ": dup dup ;\n")
 	assertFileContents(t, sdkRoot, filepath.Join("boards", "posix", "ffi.c"), "/* board */\n")
 	assertFileContents(t, sdkRoot, filepath.Join("boards", "posix", "board.json"), "{\"board\":\"posix\"}\n")
+	assertFileContents(t, sdkRoot, filepath.Join("boards", "posix", "lib", "base.frothy"), "answer is 42\n")
 	assertFileContents(t, sdkRoot, filepath.Join("platforms", "posix", "platform.c"), "/* platform */\n")
-	assertFileContents(t, sdkRoot, filepath.Join("cmake", "embed_froth.cmake"), "# embed\n")
 	assertFileContents(t, sdkRoot, "VERSION", version+"\n")
 }
 
@@ -110,12 +108,11 @@ func TestEnsureSDKSkipsExistingVersion(t *testing.T) {
 	fsys := testPayloadFS(t, map[string]string{
 		"CMakeLists.txt":                      "cmake_minimum_required(VERSION 3.23)\nset(FROTH_VERSION \"0.1.0\" CACHE STRING \"Froth version string\")\n",
 		"src/froth_vm.h":                      "/* vm */\n",
-		"src/lib/core.froth":                  ": dup dup ;\n",
 		"boards/posix/ffi.c":                  "/* board */\n",
 		"boards/posix/ffi.h":                  "/* board header */\n",
 		"boards/posix/board.json":             "{\"board\":\"posix\"}\n",
+		"boards/posix/lib/base.frothy":        "answer is 42\n",
 		"platforms/posix/platform.c":          "/* platform */\n",
-		"cmake/embed_froth.cmake":             "# embed\n",
 		"targets/esp-idf/CMakeLists.txt":      "# target\n",
 		"targets/esp-idf/main/main.c":         "/* main */\n",
 		"targets/esp-idf/main/CMakeLists.txt": "# main cmake\n",
@@ -168,12 +165,11 @@ func TestEnsureSDKRefreshesStaleExistingVersion(t *testing.T) {
 	newFS := testPayloadFS(t, map[string]string{
 		"CMakeLists.txt":                      "cmake_minimum_required(VERSION 3.23)\nset(FROTH_VERSION \"0.1.0\" CACHE STRING \"Froth version string\")\n",
 		"src/froth_vm.h":                      "/* vm */\n",
-		"src/lib/core.froth":                  ": dup dup ;\n",
 		"boards/posix/ffi.c":                  "/* board */\n",
 		"boards/posix/ffi.h":                  "/* board header */\n",
 		"boards/posix/board.json":             "{\"board\":\"posix\"}\n",
+		"boards/posix/lib/base.frothy":        "answer is 42\n",
 		"platforms/posix/platform.c":          "/* platform */\n",
-		"cmake/embed_froth.cmake":             "# embed\n",
 		"targets/esp-idf/CMakeLists.txt":      "# target\n",
 		"targets/esp-idf/main/main.c":         "/* main */\n",
 		"targets/esp-idf/main/CMakeLists.txt": "# main cmake\n",

@@ -157,8 +157,10 @@ func shouldSkipPath(entry fs.DirEntry) bool {
 		return true
 	}
 	if entry.IsDir() {
-		_, ok := ignoredDirNames[name]
-		return ok
+		if _, ok := ignoredDirNames[name]; ok {
+			return true
+		}
+		return strings.HasPrefix(name, "build-")
 	}
 	return false
 }

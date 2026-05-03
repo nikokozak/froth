@@ -230,7 +230,6 @@ if(FROTH_BOARD_CONFIG_HAS_SNAPSHOTS)
   )
 endif()
 
-froth_embed_board_assets(${COMPONENT_LIB} ${FROTH_ROOT} ${FROTH_BOARD} ON)
 frothy_generate_board_pin_seed(${COMPONENT_LIB} ${FROTH_ROOT} ${FROTH_BOARD})
 frothy_generate_board_base_lib(${COMPONENT_LIB} ${FROTH_ROOT} ${FROTH_BOARD})
 

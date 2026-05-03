@@ -110,18 +110,19 @@ if [ "$future_queue_block" != "$expected_future_queue_block" ]; then
   exit 1
 fi
 
-rg -n '^Current milestone: `workshop operational closeout`$' \
+rg -n '^Current milestone: `pre-thesis publishability prune`$' \
   docs/roadmap/Frothy_Development_Roadmap_v0_1.md
 rg -n '^Next artifact:' docs/roadmap/Frothy_Development_Roadmap_v0_1.md
-rg -n 'frame-arena ownership revisit' \
+rg -n 'Python-to-Go proof migration|Frothy_Pre_Thesis_Prune_Plan_2026-05' \
   docs/roadmap/Frothy_Development_Roadmap_v0_1.md
-rg -n 'proof\.sh workshop-v4 <PORT>' \
+rg -n 'proof\.sh control <PORT>' \
   docs/roadmap/Frothy_Development_Roadmap_v0_1.md
 
 require_absent '^## Current Control Snapshot$' PROGRESS.md TIMELINE.md
 rg -n '^## Remaining Gates$' PROGRESS.md
 require_literal '`TIMELINE.md` for the live movable queue' PROGRESS.md
-rg -n '^\- \[~\] Workshop operational closeout$' TIMELINE.md
+rg -n '^\- \[~\] Pre-thesis publishability prune and dependency collapse$' TIMELINE.md
+rg -n '^\- \[ \] Workshop operational closeout$' TIMELINE.md
 rg -n '^\- \[ \] Clean-machine validation on promised platforms$' TIMELINE.md
 rg -n '^\- \[ \] Classroom hardware and recovery kit$' TIMELINE.md
 rg -n '^\- \[ \] Deferred workspace/image-flow queue$' TIMELINE.md

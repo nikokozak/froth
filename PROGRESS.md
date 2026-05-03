@@ -1,6 +1,6 @@
 # Frothy Progress
 
-*Last updated: 2026-04-17*
+*Last updated: 2026-05-03*
 
 This file is the thin operational note for Frothy.
 The current-state block in `docs/roadmap/Frothy_Development_Roadmap_v0_1.md`
@@ -199,10 +199,28 @@ file is wrong.
   References:
   `docs/audit/Frothy_Repo_Audit_2026-04.md` and
   `docs/reference/Frothy_Retained_Substrate_Manifest.md`.
+- The pre-thesis prune pass is now active and tracked in
+  `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`: the first low-risk
+  cut removes the tracked Mach-O helper binary, the unused Froth `board.froth`
+  ESP-IDF embed path, and the generated guide PDF plus ReportLab renderer,
+  while the remaining priority is replacing Python hardware-proof holdouts with
+  Go or removing them from the maintained tree.
+- The first test-collapse cut is landed in the working tree: ignored ESP-IDF
+  `build-*` caches no longer enter the embedded CLI SDK payload, local payload
+  generation dropped from about 35 seconds / 62 MB to under 1 second / 130 KB
+  on this checkout, and `make test` now runs the proportional edit-loop gate
+  of fast Frothy CTest plus CLI unit tests instead of slow CMake/config smokes
+  and the full host smoke-proof rehearsal. Current measured local shape:
+  `make test` is about 7.5 seconds; `make test-all` is about 101 seconds.
 
 ## Remaining Gates
 
-- Workshop-operational closeout is now the active gate:
+- Pre-thesis publishability prune is the active gate: Python proof/document
+  helpers, generated PDF policy, the VS Code/Node repo-boundary decision, and
+  any `froth.toml` / `.froth-build` / `.froth` project-format rename need to
+  be resolved or explicitly deferred behind an ADR before the public thesis
+  snapshot is called clean.
+- Workshop-operational closeout remains open behind the thesis-facing prune:
   clean-machine validation and room-side hardware/recovery prep still need to
   be executed, and one complete recorded rehearsal pass still needs to be
   captured; the focused v4 workshop-board hardware smoke is now recorded.

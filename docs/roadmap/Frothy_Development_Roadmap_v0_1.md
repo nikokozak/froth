@@ -23,27 +23,24 @@ It is a sequencing and control document.
 
 This block is the live control surface for repo status.
 
-Current milestone: `workshop operational closeout`
-Today's goal: execute and record the remaining clean-machine validation,
-room-side hardware/recovery prep, and one complete workshop-board rehearsal
-pass while keeping the evaluator frame-arena ownership revisit deferred behind
-the maintained single-runtime path
-Next artifact: refreshed workshop operational closeout across the clean-machine
-checklist, room-side recovery card, and recorded v4 rehearsal note
+Current milestone: `pre-thesis publishability prune`
+Today's goal: finish a current source inventory, land low-risk legacy cuts,
+freeze the remaining cleanup plan, and start the Python-to-Go proof migration
+without weakening the maintained ESP32 path
+Next artifact: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md` plus Go
+replacements for the remaining Python hardware proof paths
 Blocked by: none
-Next proof command: `sh tools/frothy/proof.sh workshop-v4 <PORT>`
-Slip against plan: the explicit evaluator-frame-stack tranche, prompt-facing
-record repair, workshop-operational docs, publishability-reset stack, and
-CLI/install rename tranche are now landed on `main`; the bounded
-frame-arena ownership revisit is deferred until Frothy intentionally grows
-multiple live runtime instances, so the remaining pre-workshop risk is
-operational closeout on clean machines and real devices rather than more
-repo-shape churn
-Cut candidate if slip persists: narrow the promised platform matrix to
-machines that actually pass, keep the workshop queue limited to clean-machine
-validation, room kit prep, and one recorded measured rehearsal, and continue
-to defer both the evaluator frame-arena ownership revisit and broader
-workspace/image-flow growth
+Next proof command: `sh tools/frothy/proof.sh control <PORT>` on
+`esp32-devkit-v1`
+Slip against plan: the workshop-operational closeout remains open, but the
+thesis-facing repo now needs one more publishability pass first: remove
+tracked/generated residue, replace remaining Python proof/documentation
+helpers, and make any project-format naming changes explicit through a new
+Frothy ADR rather than quiet drift from Frothy ADR-120
+Cut candidate if slip persists: do not attempt a broad internal `froth_*` C
+symbol rename this week; remove Python and generated artifacts first, keep VS
+Code explicitly extension-local if it remains in-tree, and defer project-format
+renaming behind a short accepted ADR if implementation time runs out
 
 ## 3. Operating Rules
 
