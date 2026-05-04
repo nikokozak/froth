@@ -113,7 +113,7 @@ fi
 rg -n '^Current milestone: `pre-thesis publishability prune`$' \
   docs/roadmap/Frothy_Development_Roadmap_v0_1.md
 rg -n '^Next artifact:' docs/roadmap/Frothy_Development_Roadmap_v0_1.md
-rg -n 'Python-to-Go proof migration|Frothy_Pre_Thesis_Prune_Plan_2026-05' \
+rg -n 'Frothy ADR-124|make test-all' \
   docs/roadmap/Frothy_Development_Roadmap_v0_1.md
 rg -n 'proof\.sh control <PORT>' \
   docs/roadmap/Frothy_Development_Roadmap_v0_1.md

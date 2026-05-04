@@ -51,7 +51,7 @@ boundary explicit instead of implicitly inheriting every older board primitive.
 |---|---|---|
 | Frothy shim arity, type conversion, bool coercion, nil returns, stack cleanup, and `Cells` rejection | `ctest -R frothy_ffi` | The value-oriented Frothy shim stays narrow, rejects unsupported value classes, and reuses the inherited entrypoints without leaking stack machinery into the user model |
 | Base-image names and host board behavior for `gpio.mode`, `gpio.write`, `ms`, `adc.read`, and `uart.*` | `tools/frothy/proof_m9_ffi_smoke.sh` | The shipped bindings and seeded constants are visible from `words()`, report as base/native/foreign through `slotInfo()`, and exercise the host proof target end-to-end |
-| Exercised ESP32 smoke path for GPIO and one input primitive | `tools/frothy/proof_m9_esp32_ffi_smoke.py --port <PORT>` | The real ESP32 image reaches the Frothy prompt and exercises the same narrow board surface with `gpio.mode(LED_BUILTIN, 1)`, `gpio.write(...)`, `ms(...)`, and `adc.read(A0)` |
+| Exercised ESP32 smoke path for GPIO and one input primitive | Superseded by the maintained Go device lane: `sh tools/frothy/proof.sh m10 <PORT>` | The real ESP32 image reaches the Frothy control surface and exercises the same narrow board surface through GPIO, millisecond delay, and ADC/cell sampling checks |
 
 ## Exit Statement
 

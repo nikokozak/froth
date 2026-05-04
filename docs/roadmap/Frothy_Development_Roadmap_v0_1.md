@@ -24,23 +24,20 @@ It is a sequencing and control document.
 This block is the live control surface for repo status.
 
 Current milestone: `pre-thesis publishability prune`
-Today's goal: finish a current source inventory, land low-risk legacy cuts,
-freeze the remaining cleanup plan, and start the Python-to-Go proof migration
-without weakening the maintained ESP32 path
-Next artifact: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md` plus Go
-replacements for the remaining Python hardware proof paths
+Today's goal: review and land the thesis-prune tranche now that the local and
+real-device closeout gates are green
+Next artifact: commit the thesis-prune tranche
 Blocked by: none
-Next proof command: `sh tools/frothy/proof.sh control <PORT>` on
-`esp32-devkit-v1`
+Next proof command: rerun `make test-all` plus
+`sh tools/frothy/proof.sh control <PORT>` on `esp32-devkit-v1` if the tranche
+changes again before commit
 Slip against plan: the workshop-operational closeout remains open, but the
-thesis-facing repo now needs one more publishability pass first: remove
-tracked/generated residue, replace remaining Python proof/documentation
-helpers, and make any project-format naming changes explicit through a new
-Frothy ADR rather than quiet drift from Frothy ADR-120
+thesis-facing repo now has the publishability-prune decisions and proof gates
+captured in the working tree
 Cut candidate if slip persists: do not attempt a broad internal `froth_*` C
 symbol rename this week; remove Python and generated artifacts first, keep VS
-Code explicitly extension-local if it remains in-tree, and defer project-format
-renaming behind a short accepted ADR if implementation time runs out
+Code explicitly extension-local, and leave project-format names alone under
+Frothy ADR-124
 
 ## 3. Operating Rules
 
@@ -563,7 +560,7 @@ Deliverables:
 - [x] boot persistence program
 - [x] cells-based stateful demo
 - [x] `tools/frothy/proof_m10_smoke.sh`
-- [x] `tools/frothy/proof_m10_esp32_smoke.py`
+- [x] Go-backed `proof-m10-device` test-runner path
 - [x] board instructions or proof transcript
 
 Suggested proofs:

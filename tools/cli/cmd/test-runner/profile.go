@@ -72,6 +72,7 @@ func baseTestEnv(paths pathSet) map[string]string {
 	runnerBin, _ := os.Executable()
 	return map[string]string{
 		"GOCACHE":                    paths.GoCache,
+		"FROTHY_TEST_RUNNER_BIN":     runnerBin,
 		"FROTH_TEST_RUNNER_BIN":      runnerBin,
 		"FROTH_TEST_REPO_ROOT":       paths.Root,
 		"FROTH_TEST_DEFAULT_PROFILE": "host-default",

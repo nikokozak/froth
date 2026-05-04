@@ -53,24 +53,25 @@ Immediate issue already cut in this pass:
 
 Remaining cleanup pressure:
 
-- Python still owns M9/M10 hardware proof logic.
-- `tools/frothy/proof_v4_workshop_surface.sh` embeds Python inline.
-- The project format still teaches `froth.toml`, `.froth-build`, and
-  `src/main.froth`.
-- The VS Code extension keeps Node/TypeScript in the repo.
+- M9/M10/v4 hardware proof orchestration now sits behind Go test-runner
+  commands, with shell wrappers kept as thin entrypoints.
+- The project format intentionally keeps `froth.toml`, `.froth-build`, and
+  `src/main.froth` under Frothy ADR-124.
+- The VS Code extension keeps Node/TypeScript as an explicit extension-local
+  exception under Frothy ADR-124.
 - Retained `src/froth_*` substrate is documented but still interleaved with
   product runtime code and compatibility shims.
 
 ## Authority Tensions
 
 Frothy ADR-120 explicitly says that its identity tranche did not rename
-`froth.toml`, `.froth-build`, or source extensions. The current cleanup goal
-now points at revisiting those names. That should be done with a new Frothy ADR
-instead of a quiet broad rename.
+`froth.toml`, `.froth-build`, or source extensions. Frothy ADR-124 now defers
+that rename for the thesis snapshot instead of treating the current names as
+quiet drift.
 
 The April publishability audit allowed temporary Python only in hardware-only
-lanes. The current thesis-clean target is stricter: replace those paths with
-Go or remove them from the maintained proof surface.
+lanes. The current thesis-clean target is stricter: keep the maintained proof
+surface on Go plus shell wrappers, and do not add Python back as proof glue.
 
 ## Course Of Action
 
@@ -81,10 +82,10 @@ Decide what ships in this repository for the thesis snapshot:
 - core language/runtime: keep
 - CLI: keep
 - ESP32 target and accepted boards: keep
-- VS Code extension: either keep extension-local with Node quarantined, or move
-  it to a sibling repo/package before claiming a `C` plus `Go` source tree
-- historical archives and generated PDFs: archive outside active source or
-  drop from the public snapshot
+- VS Code extension: keep extension-local with Node quarantined under Frothy
+  ADR-124
+- historical archives and generated PDFs: keep generated PDFs outside active
+  source under Frothy ADR-124
 
 Exit proof:
 
@@ -112,7 +113,7 @@ Exit proof:
 Move serial proof orchestration into `tools/cli/cmd/test-runner` or a narrow
 Go helper under `tools/cli/cmd/`.
 
-Replace:
+Replaced in the current tranche:
 
 - `tools/frothy/proof_m9_esp32_ffi_smoke.py`
 - `tools/frothy/proof_m10_esp32_smoke.py`
@@ -120,8 +121,8 @@ Replace:
 
 Preferred shape:
 
-- use the existing Go direct-control session for most board assertions
-- use `frothy build` and `frothy flash` for repo-side device setup
+- use the existing Go direct-control session for board assertions
+- use `frothy flash` for repo-side device setup
 - reserve raw monitor handling only for boot/safe-boot checks that truly need
   it, and implement that in Go without adding a new third-party dependency
 
@@ -130,6 +131,7 @@ Exit proof:
 - `! git ls-files '*.py' | rg .`
 - `! rg -n 'python3|/usr/bin/env python|<<.PY' tools tests .github`
 - `sh tools/frothy/proof.sh control <PORT>`
+- `sh tools/frothy/proof.sh m10 <PORT>`
 - `sh tools/frothy/proof.sh workshop-v4 <PORT>` when the v4 board is the target
 
 ### 3a. Keep Test Gates Proportional
@@ -159,23 +161,24 @@ Next cleanup candidates:
   rather than growing shell transcripts
 - keep workshop rehearsal proofs out of default local gates
 
-### 4. Decide Project-Format Naming
+### 4. Defer Project-Format Naming
 
-Write a new Frothy ADR before changing this surface.
+Frothy ADR-124 closes this as a pre-thesis blocker.
 
-Recommended direction:
+Policy:
 
-- keep backward reads of `froth.toml` for one transition window
-- make new projects emit `frothy.toml`
-- make new source files emit `src/main.frothy`
-- move derived build output from `.froth-build/` to `.frothy-build/`
-- keep compatibility warnings explicit and temporary
+- keep `froth.toml`, `.froth-build`, `.froth`, and `src/main.froth`
+  authoritative for the thesis snapshot
+- do not introduce `frothy.toml`, `.frothy-build`, or `.frothy` source
+  extensions in this tranche
+- reopen project-format naming only through a later identity ADR, especially if
+  the broader product identity returns to Froth
 
 Exit proof:
 
 - `make test-all`
 - `frothy new /tmp/frothy-project-smoke`
-- `rg -n 'src/main\\.froth|froth\\.toml|\\.froth-build' README.md docs/guide tools/cli tools/vscode`
+- `rg -n 'Frothy ADR-124|froth\\.toml|\\.froth-build|src/main\\.froth' README.md docs/guide tools/cli tools/vscode docs/adr docs/roadmap`
 
 ### 5. Tighten The C Runtime Boundary
 
@@ -202,8 +205,8 @@ For a public thesis snapshot:
 - keep `README.md` short and product-facing
 - keep the accepted spec and active ADRs
 - keep one guide path
-- remove generated PDF from active source unless PDF generation is moved to Go
-  or an external release process
+- keep generated PDFs out of active source; if a PDF is needed, produce it as a
+  release or external publication artifact
 - keep old Froth references only in `docs/reference/` or `docs/archive/`
 
 Exit proof:
@@ -215,14 +218,15 @@ Exit proof:
 
 If time is tight, do these before the thesis snapshot:
 
-1. finish the Python removal from hardware proofs
-2. keep generated guide PDFs outside the active repo unless PDF generation is
-   rebuilt in Go or moved to release-only automation
-3. write the project-format ADR even if the rename lands after the thesis
-4. keep VS Code either explicitly extension-local or out of the core public
-   repo claim
-5. run `make test-all` plus one real-device `control` proof on
-   `esp32-devkit-v1`
+1. keep `make test-all` plus one real-device `control` proof on
+   `esp32-devkit-v1` green
+2. keep generated guide PDFs outside active source under Frothy ADR-124
+3. keep VS Code/Node explicitly extension-local under Frothy ADR-124
+
+The Go-backed M10 hardware proof migration has now passed on a real
+`esp32-devkit-v1` through `sh tools/frothy/proof.sh m10 /dev/cu.usbserial-0001`.
+The closeout gate also passed with `make test-all` and
+`sh tools/frothy/proof.sh control /dev/cu.usbserial-0001`.
 
 Do not start a broad internal C symbol rename this week. It is high churn, it
 does not materially improve thesis readability, and it risks the maintained

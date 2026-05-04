@@ -1,6 +1,6 @@
 # Frothy Progress
 
-*Last updated: 2026-05-03*
+*Last updated: 2026-05-04*
 
 This file is the thin operational note for Frothy.
 The current-state block in `docs/roadmap/Frothy_Development_Roadmap_v0_1.md`
@@ -194,17 +194,18 @@ file is wrong.
   release CI uses the maintained VS Code host-smoke lane, firmware manifest
   parsing/ordering/validation and artifact path checks are centralized under
   the maintained Go surface, the default proof surface is back to `C` + `Go`
-  + `Shell` with explicit `Node` and hardware-only `Python` exceptions, and
-  the retained Froth substrate boundary is explicit in code and docs.
+  + `Shell` with Node kept extension-local, and the retained Froth substrate
+  boundary is explicit in code and docs.
   References:
   `docs/audit/Frothy_Repo_Audit_2026-04.md` and
   `docs/reference/Frothy_Retained_Substrate_Manifest.md`.
 - The pre-thesis prune pass is now active and tracked in
   `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`: the first low-risk
   cut removes the tracked Mach-O helper binary, the unused Froth `board.froth`
-  ESP-IDF embed path, and the generated guide PDF plus ReportLab renderer,
-  while the remaining priority is replacing Python hardware-proof holdouts with
-  Go or removing them from the maintained tree.
+  ESP-IDF embed path, and the generated guide PDF plus ReportLab renderer;
+  Python hardware-proof holdouts are now replaced by Go-backed proof commands,
+  and Frothy ADR-124 defers project-format renaming, keeps generated PDFs out
+  of active source, and keeps Node as a VS Code-only exception.
 - The first test-collapse cut is landed in the working tree: ignored ESP-IDF
   `build-*` caches no longer enter the embedded CLI SDK payload, local payload
   generation dropped from about 35 seconds / 62 MB to under 1 second / 130 KB
@@ -212,14 +213,25 @@ file is wrong.
   of fast Frothy CTest plus CLI unit tests instead of slow CMake/config smokes
   and the full host smoke-proof rehearsal. Current measured local shape:
   `make test` is about 7.5 seconds; `make test-all` is about 101 seconds.
+- The Python hardware-proof holdouts are removed from the maintained tree:
+  `proof_m10_smoke.sh` now delegates its ESP32 lane to the Go test-runner
+  `proof-m10-device` command, `proof_v4_workshop_surface.sh` delegates to
+  `proof-workshop-v4`, and the old M9/M10 Python serial proof scripts are
+  deleted. The maintained M10 lane has passed on a real `esp32-devkit-v1`
+  target at `/dev/cu.usbserial-0001`. The v1 board slot budget is now 192 so
+  the maintained base FFI surface still leaves enough live user-slot headroom
+  for the direct-control smoke; `make test-all` and
+  `sh tools/frothy/proof.sh control /dev/cu.usbserial-0001` are green in this
+  working tree. The flashed v1 image still has 0x96180 bytes free in the app
+  partition; the current ELF reports `.dram0.data=115008` and
+  `.dram0.bss=43104`.
 
 ## Remaining Gates
 
-- Pre-thesis publishability prune is the active gate: Python proof/document
-  helpers, generated PDF policy, the VS Code/Node repo-boundary decision, and
-  any `froth.toml` / `.froth-build` / `.froth` project-format rename need to
-  be resolved or explicitly deferred behind an ADR before the public thesis
-  snapshot is called clean.
+- Pre-thesis publishability prune is the active gate: the project-format,
+  generated-PDF, and VS Code/Node policy decisions are now captured by Frothy
+  ADR-124, and the local closeout gate is green in this working tree. The
+  remaining step is review/stage/commit.
 - Workshop-operational closeout remains open behind the thesis-facing prune:
   clean-machine validation and room-side hardware/recovery prep still need to
   be executed, and one complete recorded rehearsal pass still needs to be

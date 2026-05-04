@@ -3,7 +3,7 @@ set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
-TEST_RUNNER_BIN=${FROTH_TEST_RUNNER_BIN:-}
+TEST_RUNNER_BIN=${FROTHY_TEST_RUNNER_BIN:-${FROTH_TEST_RUNNER_BIN:-}}
 
 run_test_runner() {
   if [ -n "${TEST_RUNNER_BIN:-}" ] && [ -x "$TEST_RUNNER_BIN" ]; then

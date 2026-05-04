@@ -4,6 +4,7 @@ set -eu
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 BINARY="${FROTHY_BINARY:-$ROOT_DIR/build/Frothy}"
 CLI_BIN="${FROTHY_CLI_BINARY:-$ROOT_DIR/tools/cli/frothy-cli}"
+TEST_RUNNER_BIN=${FROTHY_TEST_RUNNER_BIN:-${FROTH_TEST_RUNNER_BIN:-}}
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/frothy-m10.XXXXXX")"
 HOST_ONLY=0
 ASSUME_BLINK=0
@@ -81,17 +82,11 @@ if [ ! -x "$BINARY" ]; then
   exit 1
 fi
 
-if [ ! -x "$CLI_BIN" ]; then
-  echo "error: $CLI_BIN is missing; run make build" >&2
-  exit 1
-fi
-
 for proof_file in \
   "$ROOT_DIR/tools/frothy/proof_m10_blink.frothy" \
   "$ROOT_DIR/tools/frothy/proof_m10_boot_persist.frothy" \
   "$ROOT_DIR/tools/frothy/proof_m10_cells_adc.frothy" \
-  "$ROOT_DIR/tools/frothy/proof_m10_workshop_surface.frothy" \
-  "$ROOT_DIR/tools/frothy/proof_m10_esp32_smoke.py"
+  "$ROOT_DIR/tools/frothy/proof_m10_workshop_surface.frothy"
 do
   if [ ! -f "$proof_file" ]; then
     echo "error: missing required proof artifact: $proof_file" >&2
@@ -276,54 +271,35 @@ if [ "$HOST_ONLY" -eq 1 ]; then
   exit 0
 fi
 
+if [ ! -x "$CLI_BIN" ]; then
+  echo "error: $CLI_BIN is missing; run make build" >&2
+  exit 1
+fi
+
 if [ ! -e "$PORT" ]; then
   echo "error: serial port is missing: $PORT" >&2
   exit 1
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "error: python3 is required for the ESP32 proof path" >&2
-  exit 1
-fi
-
-FROTHY_HOME_DIR="${FROTHY_HOME:-${FROTH_HOME:-$HOME/.frothy}}"
-if [ ! -f "$FROTHY_HOME_DIR/sdk/esp-idf/export.sh" ]; then
-  echo "error: missing ESP-IDF export script at $FROTHY_HOME_DIR/sdk/esp-idf/export.sh" >&2
-  exit 1
-fi
-
-set -- --port "$PORT"
+set -- proof-m10-device --port "$PORT" --cli "$CLI_BIN"
 if [ "$ASSUME_BLINK" -eq 1 ]; then
-  set -- --assume-blink-confirmed "$@"
+  set -- "$@" --assume-blink-confirmed
 fi
 if [ -n "$TRANSCRIPT_OUT" ]; then
-  set -- --transcript-out "$TRANSCRIPT_OUT" "$@"
+  set -- "$@" --transcript-out "$TRANSCRIPT_OUT"
 fi
 
-is_retryable_serial_failure() {
-  path=$1
-  grep -E \
-    'Could not exclusively lock port|device disconnected or multiple access on port|device reports readiness to read but returned no data|Waiting for the device to reconnect|port is busy or doesn'\''t exist' \
-    "$path" >/dev/null
-}
+if [ -n "${TEST_RUNNER_BIN:-}" ] && [ -x "$TEST_RUNNER_BIN" ]; then
+  "$TEST_RUNNER_BIN" "$@"
+  exit $?
+fi
 
-attempt=1
-max_attempts=${FROTHY_M10_DEVICE_ATTEMPTS:-4}
-while [ "$attempt" -le "$max_attempts" ]; do
-  err_file="$WORK_DIR/device-proof.$attempt.stderr"
-  if python3 "$ROOT_DIR/tools/frothy/proof_m10_esp32_smoke.py" "$@" 2>"$err_file"; then
-    rm -f "$err_file"
-    exit 0
-  fi
-
-  if [ "$attempt" -lt "$max_attempts" ] && is_retryable_serial_failure "$err_file"; then
-    printf 'retry: device proof attempt %s/%s hit serial contention, retrying\n' \
-      "$attempt" "$max_attempts" >&2
-    attempt=$((attempt + 1))
-    sleep "$attempt"
-    continue
-  fi
-
-  cat "$err_file" >&2
+if ! command -v go >/dev/null 2>&1; then
+  echo "error: go is required for Frothy proof helpers" >&2
   exit 1
-done
+fi
+
+GOCACHE_DIR=${GOCACHE:-$ROOT_DIR/.cache/go-build}
+mkdir -p "$GOCACHE_DIR"
+cd "$ROOT_DIR/tools/cli"
+env GOCACHE="$GOCACHE_DIR" go run ./cmd/test-runner "$@"

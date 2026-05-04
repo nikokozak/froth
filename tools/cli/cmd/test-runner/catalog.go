@@ -36,7 +36,6 @@ type streamProcess struct {
 	stdin      io.WriteCloser
 	waitDone   chan struct{}
 	waitErr    error
-	pending    []byte
 	outputMu   sync.Mutex
 	outputCond *sync.Cond
 	output     []byte

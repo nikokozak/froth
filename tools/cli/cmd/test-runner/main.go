@@ -10,20 +10,22 @@ import (
 type commandFunc func(args []string) error
 
 var commands = map[string]commandFunc{
-	"fast":             commandFast,
-	"all":              commandAll,
-	"publishability":   commandPublishability,
-	"frothy":           commandFrothy,
-	"cli":              commandCLIUnit,
-	"cli-local":        commandCLILocal,
-	"vscode":           commandVSCode,
-	"vscode-board":     commandVSCodeBoard,
-	"integration":      commandCLIIntegration,
-	"list":             commandList,
-	"ensure-profile":   commandEnsureProfile,
-	"corrupt-snapshot": commandCorruptSnapshot,
-	"proof-ctrlc":      commandProofCtrlC,
-	"proof-safeboot":   commandProofSafeBoot,
+	"fast":              commandFast,
+	"all":               commandAll,
+	"publishability":    commandPublishability,
+	"frothy":            commandFrothy,
+	"cli":               commandCLIUnit,
+	"cli-local":         commandCLILocal,
+	"vscode":            commandVSCode,
+	"vscode-board":      commandVSCodeBoard,
+	"integration":       commandCLIIntegration,
+	"list":              commandList,
+	"ensure-profile":    commandEnsureProfile,
+	"corrupt-snapshot":  commandCorruptSnapshot,
+	"proof-ctrlc":       commandProofCtrlC,
+	"proof-safeboot":    commandProofSafeBoot,
+	"proof-workshop-v4": commandProofWorkshopV4,
+	"proof-m10-device":  commandProofM10Device,
 }
 
 func main() {

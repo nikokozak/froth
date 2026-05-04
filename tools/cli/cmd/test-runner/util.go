@@ -35,7 +35,8 @@ func (b *tailBuffer) Bytes() []byte {
 }
 
 func normalizeNewlines(data []byte) string {
-	return strings.ReplaceAll(string(data), "\r\n", "\n")
+	text := strings.ReplaceAll(string(data), "\r\n", "\n")
+	return strings.ReplaceAll(text, "\r", "")
 }
 
 func requireContains(text string, needle string) {

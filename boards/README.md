@@ -126,6 +126,10 @@ comfortably use the defaults. Smaller chips (ESP32-C3, RP2040) may
 need lower values depending on how much RAM your application needs
 for other purposes.
 
+The maintained `esp32-devkit-v1` board intentionally overrides the default
+`slot_count` to leave user-word headroom after its GPIO/ADC/I2C/UART base
+surface is installed.
+
 ### peripherals
 
 A list of peripheral module names. The build system uses this list to

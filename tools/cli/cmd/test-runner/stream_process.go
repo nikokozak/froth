@@ -10,12 +10,16 @@ import (
 )
 
 func startStreamProcess(binaryPath string, cwd string) (*streamProcess, error) {
+	cmd := exec.Command(binaryPath)
+	cmd.Dir = cwd
+	return startCommandStream(cmd)
+}
+
+func startCommandStream(cmd *exec.Cmd) (*streamProcess, error) {
 	reader, writer, err := os.Pipe()
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(binaryPath)
-	cmd.Dir = cwd
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		reader.Close()
@@ -72,10 +76,6 @@ func (p *streamProcess) waitFor(match func([]byte) bool, timeout time.Duration) 
 	deadline := time.Now().Add(timeout)
 	p.outputMu.Lock()
 	defer p.outputMu.Unlock()
-	if len(p.pending) > 0 {
-		p.output = append(p.pending, p.output...)
-		p.pending = nil
-	}
 	for {
 		data := append([]byte(nil), p.output...)
 		if match(data) {

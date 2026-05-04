@@ -149,6 +149,8 @@ The maintained test contract is:
 - `make test-list`: list maintained suites and profiles
 - `sh tools/frothy/proof_workshop_ops_docs.sh`: workshop front-door and ops
   docs sanity
+- `sh tools/frothy/proof.sh m10 <PORT>`: generic `esp32-devkit-v1`
+  real-device proof for blink, boot persistence, cells/ADC, and board surface
 - `sh tools/frothy/proof.sh workshop-v4 <PORT>`: focused non-interactive
   real-device `esp32-devkit-v4-game-board` workshop proof
 - `sh tools/frothy/proof.sh workshop-v4 --live-controls <PORT>`: optional

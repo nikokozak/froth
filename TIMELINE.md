@@ -59,15 +59,16 @@ keep each item's description and references so deferral does not erase context.
   Deliverable: remove low-risk legacy Froth residue, replace remaining Python
   proof helpers with Go or delete them from the maintained surface, keep
   generated PDFs out of active source unless rebuilt outside the core dependency
-  budget, keep VS Code/Node explicitly extension-local if retained, and decide
-  the `froth.toml` / `.froth-build` / `.froth` project-format rename through a
-  new Frothy ADR before implementation.
-  Current cut: default local testing is now proportional again. `make test`
-  runs fast host CTest plus CLI unit tests, while slow CTest and host smoke
-  proofs remain in `make test-all` and `make test-frothy`; the CLI SDK payload
-  generator now excludes ignored ESP-IDF build caches.
+  budget, keep VS Code/Node explicitly extension-local, and defer
+  `froth.toml` / `.froth-build` / `.froth` project-format renaming under
+  Frothy ADR-124.
+  Current cut: default local testing is now proportional again, the CLI SDK
+  payload generator excludes ignored ESP-IDF build caches, maintained M10 and
+  v4 hardware proof wrappers now delegate to Go test-runner commands instead
+  of Python, the v1 board has enough slot headroom for the control smoke, and
+  `make test-all` plus the real `esp32-devkit-v1` control proof are green.
   References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
-  `AGENTS.md`, Frothy ADR-120, `tools/frothy/`,
+  `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, `tools/frothy/`,
   `tools/cli/cmd/test-runner/`, and `docs/audit/Frothy_Repo_Audit_2026-04.md`.
 - [x] Prompt-facing record surface matches the landed implementation
   Deliverable: the prompt-facing shell accepts the maintained `record ...`
@@ -215,7 +216,7 @@ keep each item's description and references so deferral does not erase context.
 - [x] Publishability reset tranche 3: proof and dependency collapse
   Deliverable: reduce proofs to core local, extended local, hardware-only, and
   release-only tiers; keep Node extension-only; remove Python from release glue
-  first; and quarantine any remaining hardware-only Python.
+  first, then finish the hardware proof migration in the pre-thesis prune.
   References: `docs/audit/Frothy_Repo_Audit_2026-04.md`, `Makefile`,
   `tools/frothy/proof.sh`, and `tools/package-firmware-release.sh`.
 - [x] Publishability reset tranche 4: runtime boundary tightening
