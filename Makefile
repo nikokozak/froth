@@ -7,7 +7,7 @@ TEST_RUNNER_SOURCES := $(shell find tools/cli/cmd/test-runner -type f -name '*.g
 
 .PHONY: help \
 	build build-kernel build-cli release run clean clean-kernel clean-cli \
-	test test-all test-publishability test-frothy test-cli test-cli-local test-vscode test-vscode-board test-integration test-list test-runner-bin workshop-export-check sdk-payload version version-bump version-check \
+	test test-all test-publishability test-frothy test-cli test-cli-local test-vscode test-vscode-board test-integration test-workshop test-list test-runner-bin sdk-payload version version-bump version-check \
 	check-cmake check-make check-go
 
 help:
@@ -57,9 +57,6 @@ test-all: version-check test-runner-bin ## Run the exhaustive local test gate (C
 test-publishability: version-check test-runner-bin ## Run the full shipped-surface local gate (adds VS Code host smoke)
 	@FROTHY_EDITOR_SMOKE_PORT="$(PORT)" $(TEST_RUNNER) publishability
 
-workshop-export-check: ## Verify workshop/starter.frothy matches the canonical starter export
-	@sh tools/frothy/export_workshop_repo.sh check
-
 test-frothy: version-check test-runner-bin ## Run Frothy host ctests and proofs
 	@$(TEST_RUNNER) frothy
 
@@ -77,6 +74,9 @@ test-vscode-board: version-check test-runner-bin ## Run VS Code board editor smo
 
 test-integration: version-check test-runner-bin ## Run CLI project integration tests
 	@$(TEST_RUNNER) integration
+
+test-workshop: version-check test-runner-bin ## Run deferred workshop-only local checks
+	@$(TEST_RUNNER) workshop
 
 test-list: version-check test-runner-bin ## List maintained test suites and profiles
 	@$(TEST_RUNNER) list

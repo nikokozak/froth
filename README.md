@@ -128,11 +128,12 @@ make test-all
 make test-publishability
 ```
 
-Optional extension lanes:
+Optional deferred or extension lanes:
 
 ```sh
 make test-vscode
 make test-vscode-board PORT=/dev/...
+make test-workshop
 ```
 
 The host build produces:
@@ -146,9 +147,8 @@ The maintained test contract is:
 - `make test-publishability`: full shipped-surface local gate (`make test-all` plus `make test-vscode`)
 - `make test-vscode`: explicit extension-local `Node` lane
 - `make test-vscode-board PORT=/dev/...`: explicit real-device extension lane
+- `make test-workshop`: deferred workshop-only local checks
 - `make test-list`: list maintained suites and profiles
-- `sh tools/frothy/proof_workshop_ops_docs.sh`: workshop front-door and ops
-  docs sanity
 - `sh tools/frothy/proof.sh m10 <PORT>`: generic `esp32-devkit-v1`
   real-device proof for blink, boot persistence, cells/ADC, and board surface
 - `sh tools/frothy/proof.sh workshop-v4 <PORT>`: focused non-interactive

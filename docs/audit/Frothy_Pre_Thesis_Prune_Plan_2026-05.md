@@ -149,6 +149,8 @@ Policy:
   tests
 - `make test-all` should stay the extended local gate: fast gate plus slow
   CTest, host smoke proofs, local-runtime tests, and integration tests
+- deferred workshop docs/export checks should stay out of the default
+  non-workshop gates and remain explicit through `make test-workshop`
 - real-device proofs should remain explicit and named, not hidden inside local
   gates
 - new smoke proofs must justify why focused C or Go unit coverage is not enough
@@ -159,7 +161,7 @@ Next cleanup candidates:
   from ordinary command behavior
 - move long host prompt/proof scripts toward focused Go tests where possible
   rather than growing shell transcripts
-- keep workshop rehearsal proofs out of default local gates
+- keep workshop rehearsal and docs/export proofs out of default local gates
 
 ### 4. Defer Project-Format Naming
 

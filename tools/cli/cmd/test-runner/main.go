@@ -19,6 +19,7 @@ var commands = map[string]commandFunc{
 	"vscode":            commandVSCode,
 	"vscode-board":      commandVSCodeBoard,
 	"integration":       commandCLIIntegration,
+	"workshop":          commandWorkshop,
 	"list":              commandList,
 	"ensure-profile":    commandEnsureProfile,
 	"corrupt-snapshot":  commandCorruptSnapshot,
@@ -84,6 +85,10 @@ func commandVSCodeBoard(args []string) error {
 
 func commandCLIIntegration(_ []string) error {
 	return runCLIIntegration()
+}
+
+func commandWorkshop(_ []string) error {
+	return runWorkshop()
 }
 
 func commandList(_ []string) error {

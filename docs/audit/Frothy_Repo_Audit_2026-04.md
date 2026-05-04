@@ -282,6 +282,7 @@ Proof:
 | Core local gate | Fast default proof for normal Frothy work | `make test` | `C`, `Go`, minimal `Shell` | Must not require `Node` or `Python` |
 | Extended local gate | Full host and CLI regression pass | `make test-all` | `C`, `Go`, minimal `Shell` | Must not require `Node` or `Python` |
 | Full shipped-surface gate | Extended local gate plus VS Code host smoke and package smoke | `make test-publishability` | `C`, `Go`, `Shell`, extension-local `Node` | Must stay local-only; real-device editor proof remains a separate explicit lane |
+| Deferred workshop local gate | Workshop export and docs sanity only when workshop work is active | `make test-workshop` | `Go`, `Shell` | Must not be hidden inside thesis-facing default gates |
 | Hardware-only gate | Device-specific proof for sanctioned board paths | `sh tools/frothy/proof.sh m10 <PORT>` or its later replacement | `C`, `Go`, `Shell` | Explicit real-device lane; not part of default local publishability gate |
 | Release-only gate | Build shipped artifacts and packaging proofs | `.github/workflows/release.yml` lanes or local equivalents | `Go`, `Shell`, `Node` | `Node` is justified only here and in extension-local development |
 

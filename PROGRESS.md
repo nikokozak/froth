@@ -233,6 +233,10 @@ file is wrong.
   this working tree. The VS Code host-smoke portion of `make
   test-publishability` needs normal desktop permissions rather than the sandbox
   used for most shell commands.
+- The default non-workshop test gates no longer carry deferred workshop checks:
+  `proof.sh host` stops before `workshop-docs`, and `make test-publishability`
+  no longer runs the workshop export check. Those checks are still available
+  explicitly through `make test-workshop`.
 
 ## Remaining Gates
 

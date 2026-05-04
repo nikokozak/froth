@@ -69,7 +69,8 @@ keep each item's description and references so deferral does not erase context.
   `make test-all`, `make test-publishability`, and the real
   `esp32-devkit-v1` control proof are green. The front-door docs now treat
   workshop work as deferred while the thesis-facing public-surface validation
-  stays active.
+  stays active, and deferred workshop docs/export checks now live behind
+  `make test-workshop` instead of the default non-workshop gates.
   References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
   `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, `tools/frothy/`,
   `tools/cli/cmd/test-runner/`, and `docs/audit/Frothy_Repo_Audit_2026-04.md`.

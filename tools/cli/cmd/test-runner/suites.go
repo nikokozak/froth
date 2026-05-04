@@ -47,13 +47,6 @@ func runPublishability() error {
 	if err := runAll(); err != nil {
 		return err
 	}
-	paths, err := detectPaths()
-	if err != nil {
-		return err
-	}
-	if err := runCommand(paths, "publishability:workshop-export", baseTestEnv(paths), paths.Root, "sh", filepath.Join(paths.Root, "tools", "frothy", "export_workshop_repo.sh"), "check"); err != nil {
-		return err
-	}
 	return runVSCode()
 }
 
@@ -254,6 +247,18 @@ func runCLIIntegration() error {
 	return runCommand(paths, "cli:integration", baseTestEnv(paths), paths.Root, "make", "--no-print-directory", "-C", filepath.Join(paths.Root, "tools", "cli"), "test-integration")
 }
 
+func runWorkshop() error {
+	paths, err := detectPaths()
+	if err != nil {
+		return err
+	}
+	env := baseTestEnv(paths)
+	if err := runCommand(paths, "workshop:export", env, paths.Root, "sh", filepath.Join(paths.Root, "tools", "frothy", "export_workshop_repo.sh"), "check"); err != nil {
+		return err
+	}
+	return runCommand(paths, "workshop:docs", env, paths.Root, "sh", filepath.Join(paths.Root, "tools", "frothy", "proof.sh"), "workshop-docs")
+}
+
 func printList() {
 	fmt.Println("fast")
 	fmt.Println("  core local gate (C, Go, shell)")
@@ -272,6 +277,9 @@ func printList() {
 	fmt.Println("  CLI local-runtime tests")
 	fmt.Println("integration")
 	fmt.Println("  CLI integration tests")
+	fmt.Println("workshop")
+	fmt.Println("  deferred workshop-only local checks")
+	fmt.Println("  includes: workshop export, workshop docs")
 	fmt.Println("vscode")
 	fmt.Println("  extension-local Node lane: npm test, npm run test:package, host editor smoke")
 	fmt.Println("vscode-board --port <PORT>")
