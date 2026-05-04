@@ -93,10 +93,23 @@ static froth_error_t emit_trace_prefix(const char *prefix, froth_cell_t handle) 
   return FROTH_OK;
 }
 
-FROTH_FFI_ARITY(prim_gpio_mode, "gpio.mode", "( pin mode -- )", 2, 0,
-                "Set pin mode (1=output)") {
-  FROTH_POP(mode);
-  FROTH_POP(pin);
+#define POSIX_UNUSED_CALLBACK_CONTEXT()                                        \
+  do {                                                                         \
+    (void)runtime;                                                             \
+    (void)context;                                                             \
+    (void)arg_count;                                                           \
+  } while (0)
+
+static froth_error_t prim_gpio_mode(frothy_runtime_t *runtime,
+                                    const void *context,
+                                    const frothy_value_t *args,
+                                    size_t arg_count, frothy_value_t *out) {
+  int32_t pin = 0;
+  int32_t mode = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &pin));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &mode));
 
   if (!posix_gpio_pin_valid(pin)) {
     return FROTH_ERROR_BOUNDS;
@@ -106,13 +119,19 @@ FROTH_FFI_ARITY(prim_gpio_mode, "gpio.mode", "( pin mode -- )", 2, 0,
   emit_string("[gpio] pin ");
   emit_string(format_number(pin));
   emit_string(mode == 1 ? " -> OUTPUT\n" : " -> INPUT\n");
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(prim_gpio_write, "gpio.write", "( pin value -- )", 2, 0,
-                "Write digital output") {
-  FROTH_POP(value);
-  FROTH_POP(pin);
+static froth_error_t prim_gpio_write(frothy_runtime_t *runtime,
+                                     const void *context,
+                                     const frothy_value_t *args,
+                                     size_t arg_count, frothy_value_t *out) {
+  int32_t pin = 0;
+  int32_t value = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &pin));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &value));
 
   if (!posix_gpio_pin_valid(pin)) {
     return FROTH_ERROR_BOUNDS;
@@ -123,12 +142,17 @@ FROTH_FFI_ARITY(prim_gpio_write, "gpio.write", "( pin value -- )", 2, 0,
   emit_string("[gpio] pin ");
   emit_string(format_number(pin));
   emit_string(value ? " = HIGH\n" : " = LOW\n");
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(prim_gpio_read, "gpio.read", "( pin -- value )", 1, 1,
-                "Read the last written GPIO level on POSIX.") {
-  FROTH_POP(pin);
+static froth_error_t prim_gpio_read(frothy_runtime_t *runtime,
+                                    const void *context,
+                                    const frothy_value_t *args,
+                                    size_t arg_count, frothy_value_t *out) {
+  int32_t pin = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &pin));
 
   if (!posix_gpio_pin_valid(pin)) {
     return FROTH_ERROR_BOUNDS;
@@ -139,86 +163,117 @@ FROTH_FFI_ARITY(prim_gpio_read, "gpio.read", "( pin -- value )", 1, 1,
     posix_gpio_levels[pin] = 0;
   }
 
-  FROTH_PUSH(posix_gpio_levels[pin]);
-  return FROTH_OK;
+  return frothy_ffi_return_int((int32_t)posix_gpio_levels[pin], out);
 }
 
-FROTH_FFI_ARITY(prim_ms, "ms", "( n -- )", 1, 0, "Delay n milliseconds") {
-  FROTH_POP(ms);
+static froth_error_t prim_ms(frothy_runtime_t *runtime, const void *context,
+                             const frothy_value_t *args, size_t arg_count,
+                             frothy_value_t *out) {
+  int32_t ms = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &ms));
 
   if (ms <= 0) {
-    return FROTH_OK;
+    return frothy_ffi_return_nil(out);
   }
   while (ms > 0) {
-    froth_cell_t chunk = ms > 10 ? 10 : ms;
+    int32_t chunk = ms > 10 ? 10 : ms;
 
     usleep((useconds_t)chunk * 1000);
     ms -= chunk;
     FROTH_TRY(posix_poll_interruptible_wait());
   }
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(prim_millis, "millis", "( -- n )", 0, 1,
-                "Return wrapped monotonic uptime in milliseconds.") {
-  FROTH_PUSH(frothy_ffi_wrap_uptime_ms(platform_uptime_ms()));
-  return FROTH_OK;
+static froth_error_t prim_millis(frothy_runtime_t *runtime, const void *context,
+                                 const frothy_value_t *args, size_t arg_count,
+                                 frothy_value_t *out) {
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  (void)args;
+  return frothy_ffi_return_int(
+      (int32_t)frothy_ffi_wrap_uptime_ms(platform_uptime_ms()), out);
 }
 
-FROTH_FFI_ARITY(prim_adc_read, "adc.read", "( pin -- value )", 1, 1,
-                "Deterministic ADC stub on POSIX") {
-  FROTH_POP(pin);
+static froth_error_t prim_adc_read(frothy_runtime_t *runtime,
+                                   const void *context,
+                                   const frothy_value_t *args,
+                                   size_t arg_count, frothy_value_t *out) {
+  int32_t pin = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &pin));
 
   if (!posix_adc_pin_valid(pin)) {
     return FROTH_ERROR_BOUNDS;
   }
 
-  FROTH_PUSH(2048 + (pin & 0xff));
-  return FROTH_OK;
+  return frothy_ffi_return_int(2048 + (pin & 0xff), out);
 }
 
-FROTH_FFI_ARITY(prim_random_seed, "random.seed!", "( seed -- )", 1, 0,
-                "Seed the board pseudo-random generator.") {
-  FROTH_POP(seed);
+static froth_error_t prim_random_seed(frothy_runtime_t *runtime,
+                                      const void *context,
+                                      const frothy_value_t *args,
+                                      size_t arg_count, frothy_value_t *out) {
+  int32_t seed = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &seed));
   posix_random_state = frothy_ffi_random_seed((uint32_t)seed);
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(prim_random_seed_from_millis, "random.seedFromMillis!", "( -- )",
-                0, 0, "Seed the board pseudo-random generator from millis.") {
+static froth_error_t prim_random_seed_from_millis(
+    frothy_runtime_t *runtime, const void *context, const frothy_value_t *args,
+    size_t arg_count, frothy_value_t *out) {
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  (void)args;
   posix_random_state = frothy_ffi_random_seed(platform_uptime_ms());
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(prim_random_next, "random.next", "( -- n )", 0, 1,
-                "Return the next non-negative pseudo-random integer.") {
-  FROTH_PUSH(frothy_ffi_random_next_int(&posix_random_state));
-  return FROTH_OK;
+static froth_error_t prim_random_next(frothy_runtime_t *runtime,
+                                      const void *context,
+                                      const frothy_value_t *args,
+                                      size_t arg_count, frothy_value_t *out) {
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  (void)args;
+  return frothy_ffi_return_int(frothy_ffi_random_next_int(&posix_random_state),
+                               out);
 }
 
-FROTH_FFI_ARITY(prim_random_below, "random.below", "( limit -- n )", 1, 1,
-                "Return a pseudo-random integer in [0, limit).") {
+static froth_error_t prim_random_below(frothy_runtime_t *runtime,
+                                       const void *context,
+                                       const frothy_value_t *args,
+                                       size_t arg_count, frothy_value_t *out) {
+  int32_t limit = 0;
   uint32_t value = 0;
 
-  FROTH_POP(limit);
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &limit));
   if (limit <= 0) {
     return FROTH_ERROR_BOUNDS;
   }
   FROTH_TRY(frothy_ffi_random_below(&posix_random_state, (uint32_t)limit,
                                     &value));
-  FROTH_PUSH((froth_cell_t)value);
-  return FROTH_OK;
+  return frothy_ffi_return_int((int32_t)value, out);
 }
 
-FROTH_FFI_ARITY(prim_random_range, "random.range", "( lo hi -- n )", 2, 1,
-                "Return a pseudo-random integer between lo and hi inclusive.") {
+static froth_error_t prim_random_range(frothy_runtime_t *runtime,
+                                       const void *context,
+                                       const frothy_value_t *args,
+                                       size_t arg_count, frothy_value_t *out) {
+  int32_t lo = 0;
+  int32_t hi = 0;
   uint32_t offset = 0;
   int64_t span = 0;
 
-  FROTH_POP(hi);
-  FROTH_POP(lo);
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &lo));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &hi));
   if (lo > hi) {
-    froth_cell_t tmp = lo;
+    int32_t tmp = lo;
     lo = hi;
     hi = tmp;
   }
@@ -229,15 +284,21 @@ FROTH_FFI_ARITY(prim_random_range, "random.range", "( lo hi -- n )", 2, 1,
   }
   FROTH_TRY(
       frothy_ffi_random_below(&posix_random_state, (uint32_t)span, &offset));
-  FROTH_PUSH((froth_cell_t)((int64_t)lo + (int64_t)offset));
-  return FROTH_OK;
+  return frothy_ffi_return_int((int32_t)((int64_t)lo + (int64_t)offset), out);
 }
 
-FROTH_FFI_ARITY(prim_i2c_init, "i2c.init", "( sda scl freq -- bus )", 3, 1,
-                "Stub I2C bus init on POSIX") {
-  FROTH_POP(freq);
-  FROTH_POP(scl);
-  FROTH_POP(sda);
+static froth_error_t prim_i2c_init(frothy_runtime_t *runtime,
+                                   const void *context,
+                                   const frothy_value_t *args,
+                                   size_t arg_count, frothy_value_t *out) {
+  int32_t sda = 0;
+  int32_t scl = 0;
+  int32_t freq = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &sda));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &scl));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &freq));
 
   for (int i = 0; i < POSIX_I2C_MAX_BUSES; i++) {
     if (posix_i2c_buses[i].in_use) {
@@ -245,18 +306,25 @@ FROTH_FFI_ARITY(prim_i2c_init, "i2c.init", "( sda scl freq -- bus )", 3, 1,
     }
     posix_i2c_buses[i] =
         (posix_i2c_bus_t){.in_use = 1, .sda = sda, .scl = scl, .freq = freq};
-    FROTH_PUSH(i);
-    return FROTH_OK;
+    return frothy_ffi_return_int(i, out);
   }
 
   return FROTH_ERROR_BOUNDS;
 }
 
-FROTH_FFI_ARITY(prim_i2c_add_device, "i2c.add-device", "( bus addr speed -- device )",
-                3, 1, "Stub I2C device add on POSIX") {
-  FROTH_POP(speed);
-  FROTH_POP(addr);
-  FROTH_POP(bus);
+static froth_error_t prim_i2c_add_device(frothy_runtime_t *runtime,
+                                         const void *context,
+                                         const frothy_value_t *args,
+                                         size_t arg_count,
+                                         frothy_value_t *out) {
+  int32_t bus = 0;
+  int32_t addr = 0;
+  int32_t speed = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &bus));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &addr));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &speed));
 
   if (bus < 0 || bus >= POSIX_I2C_MAX_BUSES || !posix_i2c_buses[bus].in_use) {
     return FROTH_ERROR_BOUNDS;
@@ -268,49 +336,70 @@ FROTH_FFI_ARITY(prim_i2c_add_device, "i2c.add-device", "( bus addr speed -- devi
     }
     posix_i2c_devices[i] = (posix_i2c_device_t){
         .in_use = 1, .bus = bus, .addr = addr, .speed = speed};
-    FROTH_PUSH(i);
-    return FROTH_OK;
+    return frothy_ffi_return_int(i, out);
   }
 
   return FROTH_ERROR_BOUNDS;
 }
 
-FROTH_FFI_ARITY(prim_i2c_rm_device, "i2c.rm-device", "( device -- )", 1, 0,
-                "Stub I2C device remove on POSIX") {
-  FROTH_POP(device);
+static froth_error_t prim_i2c_rm_device(frothy_runtime_t *runtime,
+                                        const void *context,
+                                        const frothy_value_t *args,
+                                        size_t arg_count, frothy_value_t *out) {
+  int32_t device = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &device));
   if (device < 0 || device >= POSIX_I2C_MAX_DEVICES ||
       !posix_i2c_devices[device].in_use) {
     return FROTH_ERROR_BOUNDS;
   }
   posix_i2c_devices[device] = (posix_i2c_device_t){0};
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(prim_i2c_del_bus, "i2c.del-bus", "( bus -- )", 1, 0,
-                "Stub I2C bus delete on POSIX") {
-  FROTH_POP(bus);
+static froth_error_t prim_i2c_del_bus(frothy_runtime_t *runtime,
+                                      const void *context,
+                                      const frothy_value_t *args,
+                                      size_t arg_count, frothy_value_t *out) {
+  int32_t bus = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &bus));
   if (bus < 0 || bus >= POSIX_I2C_MAX_BUSES || !posix_i2c_buses[bus].in_use) {
     return FROTH_ERROR_BOUNDS;
   }
   posix_i2c_buses[bus] = (posix_i2c_bus_t){0};
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(prim_i2c_probe, "i2c.probe", "( bus addr -- flag )", 2, 1,
-                "Stub I2C probe on POSIX") {
-  FROTH_POP(addr);
-  FROTH_POP(bus);
+static froth_error_t prim_i2c_probe(frothy_runtime_t *runtime,
+                                    const void *context,
+                                    const frothy_value_t *args,
+                                    size_t arg_count, frothy_value_t *out) {
+  int32_t bus = 0;
+  int32_t addr = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &bus));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &addr));
   if (bus < 0 || bus >= POSIX_I2C_MAX_BUSES || !posix_i2c_buses[bus].in_use) {
     return FROTH_ERROR_BOUNDS;
   }
-  FROTH_PUSH((addr >= 0 && addr <= 0x7f) ? -1 : 0);
-  return FROTH_OK;
+  return frothy_ffi_return_int((addr >= 0 && addr <= 0x7f) ? -1 : 0, out);
 }
 
-FROTH_FFI_ARITY(prim_i2c_write_byte, "i2c.write-byte", "( device byte -- )", 2, 0,
-                "Stub I2C write byte on POSIX") {
-  FROTH_POP(byte);
-  FROTH_POP(device);
+static froth_error_t prim_i2c_write_byte(frothy_runtime_t *runtime,
+                                         const void *context,
+                                         const frothy_value_t *args,
+                                         size_t arg_count,
+                                         frothy_value_t *out) {
+  int32_t device = 0;
+  int32_t byte = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &device));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &byte));
   if (device < 0 || device >= POSIX_I2C_MAX_DEVICES ||
       !posix_i2c_devices[device].in_use) {
     return FROTH_ERROR_BOUNDS;
@@ -319,25 +408,37 @@ FROTH_FFI_ARITY(prim_i2c_write_byte, "i2c.write-byte", "( device byte -- )", 2, 
   emit_string("write-byte ");
   emit_string(format_number(byte));
   emit_string("\n");
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(prim_i2c_read_byte, "i2c.read-byte", "( device -- byte )", 1, 1,
-                "Stub I2C read byte on POSIX") {
-  FROTH_POP(device);
+static froth_error_t prim_i2c_read_byte(frothy_runtime_t *runtime,
+                                        const void *context,
+                                        const frothy_value_t *args,
+                                        size_t arg_count, frothy_value_t *out) {
+  int32_t device = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &device));
   if (device < 0 || device >= POSIX_I2C_MAX_DEVICES ||
       !posix_i2c_devices[device].in_use) {
     return FROTH_ERROR_BOUNDS;
   }
-  FROTH_PUSH(posix_i2c_devices[device].addr & 0xff);
-  return FROTH_OK;
+  return frothy_ffi_return_int((int32_t)(posix_i2c_devices[device].addr & 0xff),
+                               out);
 }
 
-FROTH_FFI_ARITY(prim_i2c_write_reg, "i2c.write-reg", "( byte device reg -- )", 3,
-                0, "Stub I2C write register on POSIX") {
-  FROTH_POP(reg);
-  FROTH_POP(device);
-  FROTH_POP(byte);
+static froth_error_t prim_i2c_write_reg(frothy_runtime_t *runtime,
+                                        const void *context,
+                                        const frothy_value_t *args,
+                                        size_t arg_count, frothy_value_t *out) {
+  int32_t byte = 0;
+  int32_t device = 0;
+  int32_t reg = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &byte));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &device));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &reg));
   if (device < 0 || device >= POSIX_I2C_MAX_DEVICES ||
       !posix_i2c_devices[device].in_use) {
     return FROTH_ERROR_BOUNDS;
@@ -348,38 +449,60 @@ FROTH_FFI_ARITY(prim_i2c_write_reg, "i2c.write-reg", "( byte device reg -- )", 3
   emit_string(" <- ");
   emit_string(format_number(byte));
   emit_string("\n");
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(prim_i2c_read_reg, "i2c.read-reg", "( device reg -- byte )", 2, 1,
-                "Stub I2C read register on POSIX") {
-  FROTH_POP(reg);
-  FROTH_POP(device);
+static froth_error_t prim_i2c_read_reg(frothy_runtime_t *runtime,
+                                       const void *context,
+                                       const frothy_value_t *args,
+                                       size_t arg_count, frothy_value_t *out) {
+  int32_t device = 0;
+  int32_t reg = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &device));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &reg));
   if (device < 0 || device >= POSIX_I2C_MAX_DEVICES ||
       !posix_i2c_devices[device].in_use) {
     return FROTH_ERROR_BOUNDS;
   }
-  FROTH_PUSH((posix_i2c_devices[device].addr + reg) & 0xff);
-  return FROTH_OK;
+  return frothy_ffi_return_int(
+      (int32_t)((posix_i2c_devices[device].addr + reg) & 0xff), out);
 }
 
-FROTH_FFI_ARITY(prim_i2c_read_reg16, "i2c.read-reg16", "( device reg -- word )", 2,
-                1, "Stub I2C read 16-bit register on POSIX") {
-  FROTH_POP(reg);
-  FROTH_POP(device);
+static froth_error_t prim_i2c_read_reg16(frothy_runtime_t *runtime,
+                                         const void *context,
+                                         const frothy_value_t *args,
+                                         size_t arg_count,
+                                         frothy_value_t *out) {
+  int32_t device = 0;
+  int32_t reg = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &device));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &reg));
   if (device < 0 || device >= POSIX_I2C_MAX_DEVICES ||
       !posix_i2c_devices[device].in_use) {
     return FROTH_ERROR_BOUNDS;
   }
-  FROTH_PUSH(((posix_i2c_devices[device].addr & 0xff) << 8) | (reg & 0xff));
-  return FROTH_OK;
+  return frothy_ffi_return_int(
+      (int32_t)(((posix_i2c_devices[device].addr & 0xff) << 8) |
+                (reg & 0xff)),
+      out);
 }
 
-FROTH_FFI_ARITY(prim_uart_init, "uart.init", "( tx rx baud -- uart )", 3, 1,
-                "Stub UART init on POSIX") {
-  FROTH_POP(baud);
-  FROTH_POP(rx);
-  FROTH_POP(tx);
+static froth_error_t prim_uart_init(frothy_runtime_t *runtime,
+                                    const void *context,
+                                    const frothy_value_t *args,
+                                    size_t arg_count, frothy_value_t *out) {
+  int32_t tx = 0;
+  int32_t rx = 0;
+  int32_t baud = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &tx));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &rx));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &baud));
 
   for (int i = 0; i < POSIX_UART_MAX_PORTS; i++) {
     if (posix_uarts[i].in_use) {
@@ -387,28 +510,39 @@ FROTH_FFI_ARITY(prim_uart_init, "uart.init", "( tx rx baud -- uart )", 3, 1,
     }
     posix_uarts[i] = (posix_uart_t){
         .in_use = 1, .tx = tx, .rx = rx, .baud = baud, .read_index = 0};
-    FROTH_PUSH(i);
-    return FROTH_OK;
+    return frothy_ffi_return_int(i, out);
   }
 
   return FROTH_ERROR_BOUNDS;
 }
 
-FROTH_FFI_ARITY(prim_uart_write, "uart.write", "( byte uart -- )", 2, 0,
-                "Stub UART write byte on POSIX") {
-  FROTH_POP(uart);
-  FROTH_POP(byte);
+static froth_error_t prim_uart_write(frothy_runtime_t *runtime,
+                                     const void *context,
+                                     const frothy_value_t *args,
+                                     size_t arg_count, frothy_value_t *out) {
+  int32_t byte = 0;
+  int32_t uart = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &byte));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &uart));
 
   if (uart < 0 || uart >= POSIX_UART_MAX_PORTS || !posix_uarts[uart].in_use) {
     return FROTH_ERROR_BOUNDS;
   }
 
-  return platform_emit((uint8_t)(byte & 0xff));
+  FROTH_TRY(platform_emit((uint8_t)(byte & 0xff)));
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(prim_uart_read, "uart.read", "( uart -- byte )", 1, 1,
-                "Stub UART read byte on POSIX") {
-  FROTH_POP(uart);
+static froth_error_t prim_uart_read(frothy_runtime_t *runtime,
+                                    const void *context,
+                                    const frothy_value_t *args,
+                                    size_t arg_count, frothy_value_t *out) {
+  int32_t uart = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &uart));
 
   if (uart < 0 || uart >= POSIX_UART_MAX_PORTS || !posix_uarts[uart].in_use) {
     return FROTH_ERROR_BOUNDS;
@@ -418,34 +552,228 @@ FROTH_FFI_ARITY(prim_uart_read, "uart.read", "( uart -- byte )", 1, 1,
       posix_uart_readback[posix_uarts[uart].read_index %
                           (uint8_t)sizeof(posix_uart_readback)];
   posix_uarts[uart].read_index++;
-  FROTH_PUSH(byte);
-  return FROTH_OK;
+  return frothy_ffi_return_int(byte, out);
 }
 
-FROTH_FFI_ARITY(prim_uart_available, "uart.key?", "( uart -- flag )", 1, 1,
-                "Stub UART key? on POSIX (always true)") {
-  FROTH_POP(uart);
+static froth_error_t prim_uart_available(frothy_runtime_t *runtime,
+                                         const void *context,
+                                         const frothy_value_t *args,
+                                         size_t arg_count,
+                                         frothy_value_t *out) {
+  int32_t uart = 0;
+
+  POSIX_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &uart));
 
   if (uart < 0 || uart >= POSIX_UART_MAX_PORTS || !posix_uarts[uart].in_use) {
     return FROTH_ERROR_BOUNDS;
   }
 
-  FROTH_PUSH(-1);
-  return FROTH_OK;
+  return frothy_ffi_return_int(-1, out);
 }
 
-FROTH_BOARD_BEGIN(froth_board_bindings)
-FROTH_BIND(prim_gpio_mode), FROTH_BIND(prim_gpio_write),
-    FROTH_BIND(prim_gpio_read), FROTH_BIND(prim_ms),
-    FROTH_BIND(prim_millis), FROTH_BIND(prim_adc_read),
-    FROTH_BIND(prim_random_seed), FROTH_BIND(prim_random_seed_from_millis),
-    FROTH_BIND(prim_random_next), FROTH_BIND(prim_random_below),
-    FROTH_BIND(prim_random_range),
-    FROTH_BIND(prim_i2c_init),
-    FROTH_BIND(prim_i2c_add_device), FROTH_BIND(prim_i2c_rm_device),
-    FROTH_BIND(prim_i2c_del_bus), FROTH_BIND(prim_i2c_probe),
-    FROTH_BIND(prim_i2c_write_byte), FROTH_BIND(prim_i2c_read_byte),
-    FROTH_BIND(prim_i2c_write_reg), FROTH_BIND(prim_i2c_read_reg),
-    FROTH_BIND(prim_i2c_read_reg16), FROTH_BIND(prim_uart_init),
-    FROTH_BIND(prim_uart_write), FROTH_BIND(prim_uart_read),
-    FROTH_BIND(prim_uart_available), FROTH_BOARD_END
+static const frothy_ffi_param_t posix_pin_mode_params[] = {
+    FROTHY_FFI_PARAM_INT("pin"),
+    FROTHY_FFI_PARAM_INT("mode"),
+};
+
+static const frothy_ffi_param_t posix_pin_level_params[] = {
+    FROTHY_FFI_PARAM_INT("pin"),
+    FROTHY_FFI_PARAM_INT("level"),
+};
+
+static const frothy_ffi_param_t posix_pin_params[] = {
+    FROTHY_FFI_PARAM_INT("pin"),
+};
+
+static const frothy_ffi_param_t posix_delay_params[] = {
+    FROTHY_FFI_PARAM_INT("ms"),
+};
+
+static const frothy_ffi_param_t posix_random_seed_params[] = {
+    FROTHY_FFI_PARAM_INT("seed"),
+};
+
+static const frothy_ffi_param_t posix_random_below_params[] = {
+    FROTHY_FFI_PARAM_INT("limit"),
+};
+
+static const frothy_ffi_param_t posix_random_range_params[] = {
+    FROTHY_FFI_PARAM_INT("lo"),
+    FROTHY_FFI_PARAM_INT("hi"),
+};
+
+static const frothy_ffi_param_t posix_i2c_init_params[] = {
+    FROTHY_FFI_PARAM_INT("sda"),
+    FROTHY_FFI_PARAM_INT("scl"),
+    FROTHY_FFI_PARAM_INT("freq"),
+};
+
+static const frothy_ffi_param_t posix_i2c_add_device_params[] = {
+    FROTHY_FFI_PARAM_INT("bus"),
+    FROTHY_FFI_PARAM_INT("addr"),
+    FROTHY_FFI_PARAM_INT("speed"),
+};
+
+static const frothy_ffi_param_t posix_i2c_device_params[] = {
+    FROTHY_FFI_PARAM_INT("device"),
+};
+
+static const frothy_ffi_param_t posix_i2c_bus_params[] = {
+    FROTHY_FFI_PARAM_INT("bus"),
+};
+
+static const frothy_ffi_param_t posix_i2c_probe_params[] = {
+    FROTHY_FFI_PARAM_INT("bus"),
+    FROTHY_FFI_PARAM_INT("addr"),
+};
+
+static const frothy_ffi_param_t posix_i2c_write_byte_params[] = {
+    FROTHY_FFI_PARAM_INT("device"),
+    FROTHY_FFI_PARAM_INT("byte"),
+};
+
+static const frothy_ffi_param_t posix_i2c_write_reg_params[] = {
+    FROTHY_FFI_PARAM_INT("byte"),
+    FROTHY_FFI_PARAM_INT("device"),
+    FROTHY_FFI_PARAM_INT("reg"),
+};
+
+static const frothy_ffi_param_t posix_i2c_read_reg_params[] = {
+    FROTHY_FFI_PARAM_INT("device"),
+    FROTHY_FFI_PARAM_INT("reg"),
+};
+
+static const frothy_ffi_param_t posix_uart_init_params[] = {
+    FROTHY_FFI_PARAM_INT("tx"),
+    FROTHY_FFI_PARAM_INT("rx"),
+    FROTHY_FFI_PARAM_INT("baud"),
+};
+
+static const frothy_ffi_param_t posix_uart_write_params[] = {
+    FROTHY_FFI_PARAM_INT("byte"),
+    FROTHY_FFI_PARAM_INT("uart"),
+};
+
+static const frothy_ffi_param_t posix_uart_params[] = {
+    FROTHY_FFI_PARAM_INT("uart"),
+};
+
+#define POSIX_ENTRY(name_text, params_value, arity_value, result_value,        \
+                    help_text, callback_value, effect_text)                   \
+  {                                                                            \
+      .name = name_text,                                                       \
+      .params = params_value,                                                  \
+      .param_count = arity_value,                                              \
+      .arity = arity_value,                                                    \
+      .result_type = result_value,                                             \
+      .help = help_text,                                                       \
+      .flags = FROTHY_FFI_FLAG_NONE,                                           \
+      .callback = callback_value,                                              \
+      .context = NULL,                                                         \
+      .stack_effect = effect_text,                                             \
+  }
+
+const frothy_ffi_entry_t frothy_board_bindings[] = {
+    POSIX_ENTRY("gpio.mode", posix_pin_mode_params,
+                FROTHY_FFI_PARAM_COUNT(posix_pin_mode_params),
+                FROTHY_FFI_VALUE_NIL, "Set pin mode (1=output)",
+                prim_gpio_mode, "( pin mode -- )"),
+    POSIX_ENTRY("gpio.write", posix_pin_level_params,
+                FROTHY_FFI_PARAM_COUNT(posix_pin_level_params),
+                FROTHY_FFI_VALUE_NIL, "Write digital output",
+                prim_gpio_write, "( pin level -- )"),
+    POSIX_ENTRY("gpio.read", posix_pin_params,
+                FROTHY_FFI_PARAM_COUNT(posix_pin_params), FROTHY_FFI_VALUE_INT,
+                "Read the last written GPIO level on POSIX.", prim_gpio_read,
+                "( pin -- value )"),
+    POSIX_ENTRY("ms", posix_delay_params,
+                FROTHY_FFI_PARAM_COUNT(posix_delay_params),
+                FROTHY_FFI_VALUE_NIL, "Delay n milliseconds", prim_ms,
+                "( ms -- )"),
+    POSIX_ENTRY("millis", NULL, 0, FROTHY_FFI_VALUE_INT,
+                "Return wrapped monotonic uptime in milliseconds.",
+                prim_millis, "( -- n )"),
+    POSIX_ENTRY("adc.read", posix_pin_params,
+                FROTHY_FFI_PARAM_COUNT(posix_pin_params), FROTHY_FFI_VALUE_INT,
+                "Deterministic ADC stub on POSIX", prim_adc_read,
+                "( pin -- value )"),
+    POSIX_ENTRY("random.seed!", posix_random_seed_params,
+                FROTHY_FFI_PARAM_COUNT(posix_random_seed_params),
+                FROTHY_FFI_VALUE_NIL,
+                "Seed the board pseudo-random generator.", prim_random_seed,
+                "( seed -- )"),
+    POSIX_ENTRY("random.seedFromMillis!", NULL, 0, FROTHY_FFI_VALUE_NIL,
+                "Seed the board pseudo-random generator from millis.",
+                prim_random_seed_from_millis, "( -- )"),
+    POSIX_ENTRY("random.next", NULL, 0, FROTHY_FFI_VALUE_INT,
+                "Return the next non-negative pseudo-random integer.",
+                prim_random_next, "( -- n )"),
+    POSIX_ENTRY("random.below", posix_random_below_params,
+                FROTHY_FFI_PARAM_COUNT(posix_random_below_params),
+                FROTHY_FFI_VALUE_INT,
+                "Return a pseudo-random integer in [0, limit).",
+                prim_random_below, "( limit -- n )"),
+    POSIX_ENTRY("random.range", posix_random_range_params,
+                FROTHY_FFI_PARAM_COUNT(posix_random_range_params),
+                FROTHY_FFI_VALUE_INT,
+                "Return a pseudo-random integer between lo and hi inclusive.",
+                prim_random_range, "( lo hi -- n )"),
+    POSIX_ENTRY("i2c.init", posix_i2c_init_params,
+                FROTHY_FFI_PARAM_COUNT(posix_i2c_init_params),
+                FROTHY_FFI_VALUE_INT, "Stub I2C bus init on POSIX",
+                prim_i2c_init, "( sda scl freq -- bus )"),
+    POSIX_ENTRY("i2c.add-device", posix_i2c_add_device_params,
+                FROTHY_FFI_PARAM_COUNT(posix_i2c_add_device_params),
+                FROTHY_FFI_VALUE_INT, "Stub I2C device add on POSIX",
+                prim_i2c_add_device, "( bus addr speed -- device )"),
+    POSIX_ENTRY("i2c.rm-device", posix_i2c_device_params,
+                FROTHY_FFI_PARAM_COUNT(posix_i2c_device_params),
+                FROTHY_FFI_VALUE_NIL, "Stub I2C device remove on POSIX",
+                prim_i2c_rm_device, "( device -- )"),
+    POSIX_ENTRY("i2c.del-bus", posix_i2c_bus_params,
+                FROTHY_FFI_PARAM_COUNT(posix_i2c_bus_params),
+                FROTHY_FFI_VALUE_NIL, "Stub I2C bus delete on POSIX",
+                prim_i2c_del_bus, "( bus -- )"),
+    POSIX_ENTRY("i2c.probe", posix_i2c_probe_params,
+                FROTHY_FFI_PARAM_COUNT(posix_i2c_probe_params),
+                FROTHY_FFI_VALUE_INT, "Stub I2C probe on POSIX",
+                prim_i2c_probe, "( bus addr -- flag )"),
+    POSIX_ENTRY("i2c.write-byte", posix_i2c_write_byte_params,
+                FROTHY_FFI_PARAM_COUNT(posix_i2c_write_byte_params),
+                FROTHY_FFI_VALUE_NIL, "Stub I2C write byte on POSIX",
+                prim_i2c_write_byte, "( device byte -- )"),
+    POSIX_ENTRY("i2c.read-byte", posix_i2c_device_params,
+                FROTHY_FFI_PARAM_COUNT(posix_i2c_device_params),
+                FROTHY_FFI_VALUE_INT, "Stub I2C read byte on POSIX",
+                prim_i2c_read_byte, "( device -- byte )"),
+    POSIX_ENTRY("i2c.write-reg", posix_i2c_write_reg_params,
+                FROTHY_FFI_PARAM_COUNT(posix_i2c_write_reg_params),
+                FROTHY_FFI_VALUE_NIL, "Stub I2C write register on POSIX",
+                prim_i2c_write_reg, "( byte device reg -- )"),
+    POSIX_ENTRY("i2c.read-reg", posix_i2c_read_reg_params,
+                FROTHY_FFI_PARAM_COUNT(posix_i2c_read_reg_params),
+                FROTHY_FFI_VALUE_INT, "Stub I2C read register on POSIX",
+                prim_i2c_read_reg, "( device reg -- byte )"),
+    POSIX_ENTRY("i2c.read-reg16", posix_i2c_read_reg_params,
+                FROTHY_FFI_PARAM_COUNT(posix_i2c_read_reg_params),
+                FROTHY_FFI_VALUE_INT, "Stub I2C read 16-bit register on POSIX",
+                prim_i2c_read_reg16, "( device reg -- word )"),
+    POSIX_ENTRY("uart.init", posix_uart_init_params,
+                FROTHY_FFI_PARAM_COUNT(posix_uart_init_params),
+                FROTHY_FFI_VALUE_INT, "Stub UART init on POSIX",
+                prim_uart_init, "( tx rx baud -- uart )"),
+    POSIX_ENTRY("uart.write", posix_uart_write_params,
+                FROTHY_FFI_PARAM_COUNT(posix_uart_write_params),
+                FROTHY_FFI_VALUE_NIL, "Stub UART write byte on POSIX",
+                prim_uart_write, "( byte uart -- )"),
+    POSIX_ENTRY("uart.read", posix_uart_params,
+                FROTHY_FFI_PARAM_COUNT(posix_uart_params), FROTHY_FFI_VALUE_INT,
+                "Stub UART read byte on POSIX", prim_uart_read,
+                "( uart -- byte )"),
+    POSIX_ENTRY("uart.key?", posix_uart_params,
+                FROTHY_FFI_PARAM_COUNT(posix_uart_params), FROTHY_FFI_VALUE_INT,
+                "Stub UART key? on POSIX (always true)",
+                prim_uart_available, "( uart -- flag )"),
+    {0},
+};

@@ -69,10 +69,13 @@ keep each item's description and references so deferral does not erase context.
   `make test-all`, `make test-publishability`, and the real
   `esp32-devkit-v1` control proof are green. The front-door docs now treat
   workshop work as deferred while the thesis-facing public-surface validation
-  stays active, and deferred workshop docs/export checks now live behind
-  `make test-workshop` instead of the default non-workshop gates.
+  stays active, deferred workshop docs/export checks now live behind
+  `make test-workshop` instead of the default non-workshop gates, and the
+  legacy board/project FFI export path is retired under Frothy ADR-125 with
+  active boards and project FFI tests on `frothy_ffi_entry_t`.
   References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
-  `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, `tools/frothy/`,
+  `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, Frothy ADR-125,
+  `tools/frothy/`,
   `tools/cli/cmd/test-runner/`, and `docs/audit/Frothy_Repo_Audit_2026-04.md`.
 - [x] Prompt-facing record surface matches the landed implementation
   Deliverable: the prompt-facing shell accepts the maintained `record ...`
@@ -231,10 +234,9 @@ keep each item's description and references so deferral does not erase context.
   files without starting a speculative rewrite.
   References: `docs/audit/Frothy_Repo_Audit_2026-04.md`,
   `docs/reference/Froth_Substrate_References.md`, and `CMakeLists.txt`.
-  Include: migrate the remaining board/project FFI seams off the legacy
-  `froth_ffi_entry_t` / `froth_project_bindings` compatibility path, then
-  delete the legacy dispatch/install surface once the maintained
-  `frothy_ffi_entry_t` path is the only live ABI.
+  Include: the board/project FFI compatibility path is closed by Frothy
+  ADR-125; the maintained `frothy_ffi_entry_t` path is the only live
+  board/project ABI.
 - [x] Publishability reset tranche 5: docs front door and archive pass
   Deliverable: keep one front door, shorten extension docs to extension-owned
   behavior, and archive historical proof evidence and duplicated release prose

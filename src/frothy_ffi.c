@@ -64,10 +64,8 @@ typedef struct {
  * without forcing a definition on targets that do not supply them.
  */
 const frothy_ffi_entry_t frothy_board_bindings[] FROTHY_WEAK_DEF = {{0}};
-const froth_ffi_entry_t froth_board_bindings[] FROTHY_WEAK_DEF = {{0}};
 #ifdef FROTH_HAS_PROJECT_FFI
 const frothy_ffi_entry_t frothy_project_bindings[] FROTHY_WEAK_DEF = {{0}};
-const froth_ffi_entry_t froth_project_bindings[] FROTHY_WEAK_DEF = {{0}};
 #endif
 #endif
 
@@ -122,10 +120,6 @@ froth_error_t frothy_ffi_random_below(uint32_t *state, uint32_t limit,
 }
 
 static bool frothy_ffi_table_present(const frothy_ffi_entry_t *table) {
-  return table != NULL && table[0].name != NULL;
-}
-
-static bool frothy_ffi_legacy_table_present(const froth_ffi_entry_t *table) {
   return table != NULL && table[0].name != NULL;
 }
 
@@ -382,52 +376,6 @@ static froth_error_t frothy_ffi_validate_result(frothy_runtime_t *runtime,
   return FROTH_ERROR_SIGNATURE;
 }
 
-static froth_error_t frothy_ffi_push_legacy_value(frothy_runtime_t *runtime,
-                                                  frothy_value_t value) {
-  frothy_value_class_t value_class;
-  const char *text = NULL;
-  size_t length = 0;
-
-  FROTH_TRY(frothy_value_class(runtime, value, &value_class));
-  switch (value_class) {
-  case FROTHY_VALUE_CLASS_INT:
-    return froth_push(&froth_vm, frothy_value_as_int(value));
-  case FROTHY_VALUE_CLASS_BOOL:
-    return froth_push(&froth_vm, frothy_value_as_bool(value) ? -1 : 0);
-  case FROTHY_VALUE_CLASS_NIL:
-    return froth_push(&froth_vm, 0);
-  case FROTHY_VALUE_CLASS_TEXT:
-    FROTH_TRY(frothy_runtime_get_text(runtime, value, &text, &length));
-    return froth_push_bstring(&froth_vm, (const uint8_t *)text,
-                              (froth_cell_t)length);
-  case FROTHY_VALUE_CLASS_CELLS:
-  case FROTHY_VALUE_CLASS_CODE:
-  case FROTHY_VALUE_CLASS_NATIVE:
-  case FROTHY_VALUE_CLASS_RECORD_DEF:
-  case FROTHY_VALUE_CLASS_RECORD:
-    return FROTH_ERROR_TYPE_MISMATCH;
-  }
-
-  return FROTH_ERROR_TYPE_MISMATCH;
-}
-
-static froth_error_t frothy_ffi_make_legacy_output_value(frothy_runtime_t *runtime,
-                                                         froth_cell_t cell,
-                                                         frothy_value_t *out) {
-  froth_bstring_view_t text;
-
-  if (FROTH_CELL_IS_NUMBER(cell)) {
-    return frothy_value_make_int((int32_t)FROTH_CELL_STRIP_TAG(cell), out);
-  }
-  if (FROTH_CELL_IS_BSTRING(cell)) {
-    FROTH_TRY(froth_bstring_resolve(&froth_vm, cell, &text));
-    return frothy_runtime_alloc_text(runtime, (const char *)text.data,
-                                     (size_t)text.len, out);
-  }
-
-  return FROTH_ERROR_TYPE_MISMATCH;
-}
-
 static froth_error_t frothy_ffi_dispatch_entry_common(frothy_runtime_t *runtime,
                                                       const void *context,
                                                       const frothy_value_t *args,
@@ -494,111 +442,21 @@ frothy_ffi_dispatch_entry_project(frothy_runtime_t *runtime, const void *context
                                           out);
 }
 
-static froth_error_t frothy_ffi_dispatch_legacy_common(frothy_runtime_t *runtime,
-                                                       const void *context,
-                                                       const frothy_value_t *args,
-                                                       size_t arg_count,
-                                                       frothy_value_t *out) {
-  const froth_ffi_entry_t *entry = (const froth_ffi_entry_t *)context;
-  froth_cell_u_t start_depth = froth_vm.ds.pointer;
-  froth_cell_t start_thrown = froth_vm.thrown;
-  froth_cell_t result_cell = 0;
-  froth_error_t err = FROTH_OK;
-  size_t i;
-
-  if (out == NULL || entry == NULL || entry->word == NULL) {
-    return FROTH_ERROR_BOUNDS;
-  }
-
-  frothy_ffi_clear_last_error(runtime);
-  *out = frothy_value_make_nil();
-  if (entry->in_arity == FROTH_FFI_ARITY_UNKNOWN ||
-      entry->out_arity == FROTH_FFI_ARITY_UNKNOWN) {
-    return FROTH_ERROR_SIGNATURE;
-  }
-  if (arg_count != entry->in_arity) {
-    return FROTH_ERROR_SIGNATURE;
-  }
-
-  for (i = 0; i < arg_count; i++) {
-    err = frothy_ffi_push_legacy_value(runtime, args[i]);
-    if (err != FROTH_OK) {
-      goto cleanup;
-    }
-  }
-
-  err = entry->word(&froth_vm);
-  if (err == FROTH_ERROR_THROW) {
-    err = (froth_error_t)froth_vm.thrown;
-  }
-  if (err != FROTH_OK) {
-    goto cleanup;
-  }
-
-  if (entry->out_arity == 0) {
-    *out = frothy_value_make_nil();
-    goto cleanup;
-  }
-  if (entry->out_arity != 1) {
-    err = FROTH_ERROR_SIGNATURE;
-    goto cleanup;
-  }
-
-  err = froth_stack_pop(&froth_vm.ds, &result_cell);
-  if (err != FROTH_OK) {
-    goto cleanup;
-  }
-  err = frothy_ffi_make_legacy_output_value(runtime, result_cell, out);
-
-cleanup:
-  froth_vm.ds.pointer = start_depth;
-  froth_vm.thrown = start_thrown;
-  return err;
-}
-
-static froth_error_t frothy_ffi_dispatch_legacy(frothy_runtime_t *runtime,
-                                                const void *context,
-                                                const frothy_value_t *args,
-                                                size_t arg_count,
-                                                frothy_value_t *out) {
-  return frothy_ffi_dispatch_legacy_common(runtime, context, args, arg_count,
-                                           out);
-}
-
-static froth_error_t frothy_ffi_dispatch_legacy_board(
-    frothy_runtime_t *runtime, const void *context, const frothy_value_t *args,
-    size_t arg_count, frothy_value_t *out) {
-  return frothy_ffi_dispatch_legacy_common(runtime, context, args, arg_count,
-                                           out);
-}
-
-static froth_error_t frothy_ffi_dispatch_legacy_project(
-    frothy_runtime_t *runtime, const void *context, const frothy_value_t *args,
-    size_t arg_count, frothy_value_t *out) {
-  return frothy_ffi_dispatch_legacy_common(runtime, context, args, arg_count,
-                                           out);
-}
-
 bool frothy_ffi_native_is_foreign(frothy_native_fn_t fn, const void *context) {
   (void)context;
 
   return fn == frothy_ffi_dispatch_entry ||
          fn == frothy_ffi_dispatch_entry_board ||
-         fn == frothy_ffi_dispatch_entry_project ||
-         fn == frothy_ffi_dispatch_legacy ||
-         fn == frothy_ffi_dispatch_legacy_board ||
-         fn == frothy_ffi_dispatch_legacy_project;
+         fn == frothy_ffi_dispatch_entry_project;
 }
 
 const char *frothy_ffi_native_owner(frothy_native_fn_t fn, const void *context) {
   (void)context;
 
-  if (fn == frothy_ffi_dispatch_entry_board ||
-      fn == frothy_ffi_dispatch_legacy_board) {
+  if (fn == frothy_ffi_dispatch_entry_board) {
     return "board ffi";
   }
-  if (fn == frothy_ffi_dispatch_entry_project ||
-      fn == frothy_ffi_dispatch_legacy_project) {
+  if (fn == frothy_ffi_dispatch_entry_project) {
     return "project ffi";
   }
   if (frothy_ffi_native_is_foreign(fn, context)) {
@@ -620,21 +478,6 @@ const char *frothy_ffi_native_effect(frothy_native_fn_t fn, const void *context)
 
     return entry->stack_effect;
   }
-  if (fn != frothy_ffi_dispatch_legacy && fn != frothy_ffi_dispatch_legacy_board &&
-      fn != frothy_ffi_dispatch_legacy_project) {
-    return NULL;
-  }
-  {
-    const froth_ffi_entry_t *legacy_entry = (const froth_ffi_entry_t *)context;
-
-    if (legacy_entry == NULL || legacy_entry->stack_effect == NULL ||
-        legacy_entry->stack_effect[0] == '\0') {
-      return NULL;
-    }
-
-    return legacy_entry->stack_effect;
-  }
-
   return NULL;
 }
 
@@ -649,19 +492,6 @@ const char *frothy_ffi_native_help(frothy_native_fn_t fn, const void *context) {
 
     return entry->help;
   }
-  if (fn == frothy_ffi_dispatch_legacy ||
-      fn == frothy_ffi_dispatch_legacy_board ||
-      fn == frothy_ffi_dispatch_legacy_project) {
-    const froth_ffi_entry_t *legacy_entry = (const froth_ffi_entry_t *)context;
-
-    if (legacy_entry == NULL || legacy_entry->help == NULL ||
-        legacy_entry->help[0] == '\0') {
-      return NULL;
-    }
-
-    return legacy_entry->help;
-  }
-
   return NULL;
 }
 
@@ -821,58 +651,6 @@ frothy_ffi_dispatch_for_source(frothy_ffi_source_t source) {
   return NULL;
 }
 
-static frothy_native_fn_t
-frothy_ffi_legacy_dispatch_for_source(frothy_ffi_source_t source) {
-  switch (source) {
-  case FROTHY_FFI_SOURCE_BOARD:
-    return frothy_ffi_dispatch_legacy_board;
-  case FROTHY_FFI_SOURCE_PROJECT:
-    return frothy_ffi_dispatch_legacy_project;
-  case FROTHY_FFI_SOURCE_FOREIGN:
-    return frothy_ffi_dispatch_legacy;
-  }
-
-  return NULL;
-}
-
-static froth_error_t frothy_ffi_bind_entry(const frothy_ffi_entry_t *entry,
-                                           frothy_ffi_source_t source) {
-  frothy_value_t value = frothy_value_make_nil();
-  froth_cell_u_t slot_index = 0;
-  frothy_native_fn_t dispatch = frothy_ffi_dispatch_for_source(source);
-
-  FROTH_TRY(frothy_ffi_validate_entry_shape(entry));
-  if (dispatch == NULL) {
-    return FROTH_ERROR_SIGNATURE;
-  }
-  FROTH_TRY(frothy_ffi_find_slot_for_binding(entry->name, &slot_index));
-  FROTH_TRY(frothy_runtime_alloc_native(&froth_vm.frothy_runtime, dispatch,
-                                        entry->name, entry->arity, entry,
-                                        &value));
-  return frothy_ffi_replace_slot_impl(slot_index, value, 0, entry->arity, 1);
-}
-
-static froth_error_t
-frothy_ffi_bind_legacy_entry(const froth_ffi_entry_t *entry,
-                             frothy_ffi_source_t source) {
-  frothy_value_t value = frothy_value_make_nil();
-  froth_cell_u_t slot_index = 0;
-  frothy_native_fn_t dispatch = frothy_ffi_legacy_dispatch_for_source(source);
-
-  if (entry == NULL || entry->name == NULL || entry->name[0] == '\0' ||
-      entry->word == NULL) {
-    return FROTH_ERROR_SIGNATURE;
-  }
-  if (dispatch == NULL) {
-    return FROTH_ERROR_SIGNATURE;
-  }
-  FROTH_TRY(frothy_ffi_find_slot_for_binding(entry->name, &slot_index));
-  FROTH_TRY(frothy_runtime_alloc_native(&froth_vm.frothy_runtime, dispatch,
-                                        entry->name, entry->in_arity, entry,
-                                        &value));
-  return frothy_ffi_replace_slot_impl(slot_index, value, 0, entry->in_arity, 1);
-}
-
 static froth_error_t frothy_ffi_bind_pin(const frothy_board_pin_t *pin) {
   frothy_value_t value = frothy_value_make_nil();
   froth_cell_u_t slot_index = 0;
@@ -885,9 +663,8 @@ static froth_error_t frothy_ffi_bind_pin(const frothy_board_pin_t *pin) {
 }
 
 static froth_error_t
-frothy_ffi_install_table_filtered(const frothy_ffi_entry_t *table,
-                                  bool filter_board_surface,
-                                  frothy_ffi_source_t source) {
+frothy_ffi_install_table_for_source(const frothy_ffi_entry_t *table,
+                                    frothy_ffi_source_t source) {
   frothy_ffi_pending_slot_impl_t *pending = NULL;
   frothy_native_fn_t dispatch = frothy_ffi_dispatch_for_source(source);
   size_t applicable_count = 0;
@@ -901,7 +678,6 @@ frothy_ffi_install_table_filtered(const frothy_ffi_entry_t *table,
   if (dispatch == NULL) {
     return FROTH_ERROR_SIGNATURE;
   }
-  (void)filter_board_surface;
 
   for (i = 0; table[i].name != NULL; i++) {
     FROTH_TRY(frothy_ffi_validate_entry_shape(&table[i]));
@@ -967,113 +743,12 @@ cleanup:
 }
 
 static froth_error_t
-frothy_ffi_install_legacy_binding_table_filtered(const froth_ffi_entry_t *table,
-                                                 bool filter_board_surface,
-                                                 frothy_ffi_source_t source) {
-  frothy_ffi_pending_slot_impl_t *pending = NULL;
-  frothy_native_fn_t dispatch = frothy_ffi_legacy_dispatch_for_source(source);
-  size_t applicable_count = 0;
-  size_t staged_count = 0;
-  size_t i;
-  froth_error_t err = FROTH_OK;
-
-  if (table == NULL) {
-    return FROTH_OK;
-  }
-  if (dispatch == NULL) {
-    return FROTH_ERROR_SIGNATURE;
-  }
-  (void)filter_board_surface;
-
-  for (i = 0; table[i].name != NULL; i++) {
-    if (table[i].word == NULL) {
-      return FROTH_ERROR_SIGNATURE;
-    }
-    if (table[i].in_arity == FROTH_FFI_ARITY_UNKNOWN ||
-        table[i].out_arity == FROTH_FFI_ARITY_UNKNOWN) {
-      continue;
-    }
-    if (table[i].out_arity > 1) {
-      continue;
-    }
-    applicable_count++;
-  }
-
-  if (applicable_count == 0) {
-    return FROTH_OK;
-  }
-  if (applicable_count > SIZE_MAX / sizeof(*pending)) {
-    return FROTH_ERROR_HEAP_OUT_OF_MEMORY;
-  }
-
-  pending = (frothy_ffi_pending_slot_impl_t *)calloc(applicable_count,
-                                                     sizeof(*pending));
-  if (pending == NULL) {
-    return FROTH_ERROR_HEAP_OUT_OF_MEMORY;
-  }
-
-  for (i = 0; table[i].name != NULL; i++) {
-    if (table[i].in_arity == FROTH_FFI_ARITY_UNKNOWN ||
-        table[i].out_arity == FROTH_FFI_ARITY_UNKNOWN) {
-      continue;
-    }
-    if (table[i].out_arity > 1) {
-      continue;
-    }
-
-    pending[staged_count].value = frothy_value_make_nil();
-    pending[staged_count].in_arity = table[i].in_arity;
-    pending[staged_count].out_arity = 1;
-    err = frothy_ffi_find_slot_for_binding(table[i].name,
-                                           &pending[staged_count].slot_index);
-    if (err != FROTH_OK) {
-      goto cleanup;
-    }
-    err = frothy_ffi_capture_slot_state(pending[staged_count].slot_index,
-                                        &pending[staged_count].saved_state);
-    if (err != FROTH_OK) {
-      goto cleanup;
-    }
-    err = frothy_runtime_alloc_native(&froth_vm.frothy_runtime, dispatch,
-                                      table[i].name, table[i].in_arity,
-                                      &table[i], &pending[staged_count].value);
-    if (err != FROTH_OK) {
-      goto cleanup;
-    }
-    staged_count++;
-  }
-
-  for (i = 0; i < staged_count; i++) {
-    err = frothy_ffi_replace_slot_impl(pending[i].slot_index, pending[i].value, 0,
-                                       pending[i].in_arity,
-                                       pending[i].out_arity);
-    if (err != FROTH_OK) {
-      froth_error_t rollback_err =
-          frothy_ffi_rollback_pending_slot_impls(pending, i);
-
-      free(pending);
-      return rollback_err != FROTH_OK ? rollback_err : err;
-    }
-  }
-
-  free(pending);
-  return FROTH_OK;
-
-cleanup:
-  frothy_ffi_release_pending_slot_impls(pending, staged_count);
-  free(pending);
-  return err;
-}
-
-static froth_error_t
-frothy_ffi_install_pin_table_filtered(const frothy_board_pin_t *pins,
-                                      bool filter_board_surface) {
+frothy_ffi_install_pin_table_entries(const frothy_board_pin_t *pins) {
   size_t i;
 
   if (pins == NULL) {
     return FROTH_OK;
   }
-  (void)filter_board_surface;
 
   for (i = 0; pins[i].name != NULL; i++) {
     FROTH_TRY(frothy_ffi_bind_pin(&pins[i]));
@@ -1083,44 +758,28 @@ frothy_ffi_install_pin_table_filtered(const frothy_board_pin_t *pins,
 }
 
 froth_error_t frothy_ffi_install_table(const frothy_ffi_entry_t *table) {
-  return frothy_ffi_install_table_filtered(table, false,
-                                           FROTHY_FFI_SOURCE_FOREIGN);
-}
-
-froth_error_t frothy_ffi_install_binding_table(const froth_ffi_entry_t *table) {
-  return frothy_ffi_install_legacy_binding_table_filtered(
-      table, false, FROTHY_FFI_SOURCE_FOREIGN);
+  return frothy_ffi_install_table_for_source(table, FROTHY_FFI_SOURCE_FOREIGN);
 }
 
 froth_error_t frothy_ffi_install_pin_table(const frothy_board_pin_t *pins) {
-  return frothy_ffi_install_pin_table_filtered(pins, false);
+  return frothy_ffi_install_pin_table_entries(pins);
 }
 
 static froth_error_t frothy_ffi_install_project_bindings(void) {
 #ifdef FROTH_HAS_PROJECT_FFI
 #if FROTHY_HAS_WEAK_SYMBOLS
   if (frothy_ffi_table_present(frothy_project_bindings)) {
-    return frothy_ffi_install_table_filtered(frothy_project_bindings, false,
-                                             FROTHY_FFI_SOURCE_PROJECT);
-  }
-  if (frothy_ffi_legacy_table_present(froth_project_bindings)) {
-    return frothy_ffi_install_legacy_binding_table_filtered(
-        froth_project_bindings, false, FROTHY_FFI_SOURCE_PROJECT);
+    return frothy_ffi_install_table_for_source(frothy_project_bindings,
+                                               FROTHY_FFI_SOURCE_PROJECT);
   }
 
   return frothy_ffi_raise(&froth_vm.frothy_runtime, FROTH_ERROR_UNDEFINED_WORD,
                           "project-ffi", "frothy_project_bindings",
                           "missing project FFI export");
 #else
-#ifdef FROTHY_PROJECT_FFI_USE_LEGACY_EXPORT
-  extern const froth_ffi_entry_t froth_project_bindings[];
-  return frothy_ffi_install_legacy_binding_table_filtered(
-      froth_project_bindings, false, FROTHY_FFI_SOURCE_PROJECT);
-#else
   extern const frothy_ffi_entry_t frothy_project_bindings[];
-  return frothy_ffi_install_table_filtered(frothy_project_bindings, false,
-                                           FROTHY_FFI_SOURCE_PROJECT);
-#endif
+  return frothy_ffi_install_table_for_source(frothy_project_bindings,
+                                             FROTHY_FFI_SOURCE_PROJECT);
 #endif
 #else
   return FROTH_OK;
@@ -1129,29 +788,17 @@ static froth_error_t frothy_ffi_install_project_bindings(void) {
 
 froth_error_t frothy_ffi_install_board_base_slots(void) {
 #ifdef FROTHY_HAS_BOARD_PINS
-  FROTH_TRY(
-      frothy_ffi_install_pin_table_filtered(frothy_generated_board_pins, true));
+  FROTH_TRY(frothy_ffi_install_pin_table_entries(frothy_generated_board_pins));
 #endif
 #if FROTHY_HAS_WEAK_SYMBOLS
   if (frothy_ffi_table_present(frothy_board_bindings)) {
-    FROTH_TRY(frothy_ffi_install_table_filtered(
-        frothy_board_bindings, true, FROTHY_FFI_SOURCE_BOARD));
-  } else {
-    FROTH_TRY(
-        frothy_ffi_install_legacy_binding_table_filtered(
-            froth_board_bindings, true, FROTHY_FFI_SOURCE_BOARD));
+    FROTH_TRY(frothy_ffi_install_table_for_source(frothy_board_bindings,
+                                                  FROTHY_FFI_SOURCE_BOARD));
   }
 #else
-#ifdef FROTHY_BOARD_FFI_USE_LEGACY_EXPORT
-  extern const froth_ffi_entry_t froth_board_bindings[];
-  FROTH_TRY(
-      frothy_ffi_install_legacy_binding_table_filtered(
-          froth_board_bindings, true, FROTHY_FFI_SOURCE_BOARD));
-#else
   extern const frothy_ffi_entry_t frothy_board_bindings[];
-  FROTH_TRY(frothy_ffi_install_table_filtered(
-      frothy_board_bindings, true, FROTHY_FFI_SOURCE_BOARD));
-#endif
+  FROTH_TRY(frothy_ffi_install_table_for_source(frothy_board_bindings,
+                                                FROTHY_FFI_SOURCE_BOARD));
 #endif
   return frothy_ffi_install_project_bindings();
 }

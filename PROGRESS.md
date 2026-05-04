@@ -237,15 +237,20 @@ file is wrong.
   `proof.sh host` stops before `workshop-docs`, and `make test-publishability`
   no longer runs the workshop export check. Those checks are still available
   explicitly through `make test-workshop`.
+- The FFI-boundary prune is now the current C-runtime cut: Frothy ADR-125
+  retires legacy board/project FFI exports, the POSIX and
+  `esp32-devkit-v1` board tables are on `frothy_ffi_entry_t`, the public
+  legacy installer and legacy project-FFI smoke fixture are removed, and
+  remaining `froth_ffi.*` work is scoped to internal retained substrate.
 
 ## Remaining Gates
 
 - Pre-thesis publishability prune is the active non-workshop gate: the
   project-format, generated-PDF, and VS Code/Node policy decisions are captured
   by Frothy ADR-124; the old Python hardware-proof holdouts are gone; and the
-  local shipped-surface validation is green. The remaining work is any next
-  small prune tranche that still materially simplifies the repo before
-  publication.
+  legacy board/project FFI export path is retired under Frothy ADR-125. The
+  remaining work is any next small prune tranche that still materially
+  simplifies the repo before publication.
 - Workshop-operational closeout is explicitly deferred behind the thesis-facing
   prune:
   clean-machine validation and room-side hardware/recovery prep still need to

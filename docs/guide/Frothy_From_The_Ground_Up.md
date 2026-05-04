@@ -773,7 +773,7 @@ The core pieces are:
 - **Code**: non-capturing executable values.
 - **Overlay image**: the mutable live layer on top of the base image.
 - **Base image**: the built-in world the runtime seeds at boot, including
-  `save`, `restore`, `dangerous.wipe`, inspection words, and filtered board
+  `save`, `restore`, `dangerous.wipe`, inspection words, and curated board
   bindings.
 
 Old Froth let the visible stack model dominate how users thought about the
@@ -788,7 +788,7 @@ Here is the picture that pays rent:
                  |         Base Image          |
                  | save restore dangerous.wipe |
                  | words ...                   |
-                 | filtered board slots        |
+                 | curated board slots         |
                  +--------------+--------------+
                                 |
                                 v
@@ -2324,7 +2324,7 @@ What each line tells you:
 
 - "Why does `see` sometimes print `to ...` even if I used `fn`?" Because it
   renders the canonical binding view, not your original source spellings.
-- "Why does `words` list board names?" Because filtered board bindings are
+- "Why does `words` list board names?" Because curated board bindings are
   installed into the base image like any other base slot.
 
 ### Invariants
@@ -2550,23 +2550,22 @@ base integer slots.
 
 ### Code Walk
 
-Read `frothy_ffi_dispatch()` in `src/frothy_ffi.c`.
+Read `frothy_ffi_dispatch_entry_common()` in `src/frothy_ffi.c`.
 
-That function is the translator between Frothy's value model and the inherited
-Froth substrate FFI. It:
+That function is the translator between Frothy's value model and a native
+callback. It:
 
 1. validates argument count against the binding metadata
-2. pushes Frothy values onto the Froth substrate stack in the expected form
-3. calls the native word
-4. converts zero or one result back into a Frothy value
-5. restores the substrate stack depth even on failure
+2. passes the checked Frothy values to the maintained native callback
+3. verifies that the callback returned the declared result shape
+4. returns zero or one Frothy value to the evaluator
 
-This is careful bridge code. It is not glamorous, but it is exactly where
+This is careful boundary code. It is not glamorous, but it is exactly where
 runtime corruption would begin if you got lazy.
 
-Also notice the filtered name lists at the top of `src/frothy_ffi.c`. Frothy
-does not automatically expose every board binding that exists in board C code.
-The language surface is intentionally curated.
+The board's exported `frothy_board_bindings[]` table is the curated public
+board surface. If a helper does not belong in the Frothy base image, do not put
+it in that table.
 
 ### Worked Example
 
@@ -2593,20 +2592,21 @@ On hardware:
 
 - FFI is value-oriented at the surface.
 - Native values are not persistable.
-- Board surface is filtered on purpose.
-- Frothy reuses the older substrate here, but it does not inherit the old
-  user-facing stack model.
+- Board surface is curated in the exported binding table.
+- Frothy retains some older substrate internally, but it does not inherit the
+  old user-facing stack model.
 
 ### Common confusions
 
-- "If the board C file implements more names, why do I not see them?" Because
-  Frothy exposes a filtered subset as base slots.
+- "If the board C file implements more helpers, why do I not see them?" Because
+  only entries exported through `frothy_board_bindings[]` become base slots.
 - "Can I save a native binding or native handle?" No. Native values are marked
   non-persistable.
 
 ### Invariants
 
-- FFI dispatch must restore substrate stack depth on success and failure.
+- FFI dispatch must reject arity and result-shape mismatches before returning
+  to the evaluator.
 - Surface FFI conversions must reject unsupported value classes.
 - Base board names must be installed as base slots, not overlay slots.
 
@@ -2719,9 +2719,9 @@ The build plumbing and runtime auto-install path for
 project-local name such as `project.magic` should appear in `words()` once the
 project FFI table is compiled into the selected build.
 
-The retained legacy `froth_project_bindings` export is still accepted as a
-compatibility bridge, but new code should start on the maintained
-`frothy_ffi_entry_t` path instead.
+Frothy ADR-125 retires the legacy `froth_project_bindings` export. Project FFI
+code should export `frothy_project_bindings` with `frothy_ffi_entry_t`
+entries.
 
 ### What to remember
 
@@ -2752,11 +2752,10 @@ A maintainer adding a new board-level capability goes through this flow:
 1. add or adjust the native binding in `boards/<board>/ffi.c`
 2. export it in the board's binding table
 3. decide whether it belongs in the Frothy base-image surface
-4. if yes, add its public name to the Frothy filter list in `src/frothy_ffi.c`
-5. rebuild and check `words` plus a real call on POSIX or hardware
+4. rebuild and check `words` plus a real call on POSIX or hardware
 
-The filter step matters. Frothy deliberately ships a narrower board surface than
-the raw board substrate can expose.
+The export step matters. Frothy deliberately ships only the board surface that
+the board table names.
 
 ### Code Walk
 
@@ -2766,22 +2765,19 @@ Read three places together:
 - `boards/posix/ffi.c`
 - `src/frothy_ffi.c`
 
-The board files define many substrate-level bindings. Frothy then filters that
-set through `frothy_board_binding_names[]` and `frothy_board_pin_names[]` before
-installing names into the base image.
+The board files define their public Frothy surface directly in
+`frothy_board_bindings[]`. Frothy installs that table into the base image, and
+it installs generated pin constants from `board.json`.
 
-That means "implemented in board C" and "public in Frothy" are intentionally
-different stages.
-
-This is a good maintainer pattern. It lets you keep extra board helpers or
-bring-up code around without accidentally widening the public language every
-time a board author adds a native word.
+That means "implemented as a C helper" and "public in Frothy" are intentionally
+different stages. Keep private helpers as ordinary static C functions; put only
+the public names in the exported table.
 
 ### What can go wrong
 
-- Adding a binding only in `boards/<board>/ffi.c` is not enough if you expect it
-  to become a Frothy base slot.
-- Adding too much to the public filter list widens the language surface and the
+- Adding a C helper without exporting it in `frothy_board_bindings[]` is not
+  enough if you expect it to become a Frothy base slot.
+- Adding too much to the exported table widens the language surface and the
   persistence/inspection/testing burden that comes with it.
 - Forgetting seeded pins in `board.json` makes board libraries and examples
   harder to read.
@@ -2789,7 +2785,7 @@ time a board author adds a native word.
 ### What to remember
 
 - Board FFI is the landed extension path into the base image.
-- Public surface is filtered on purpose.
+- Public surface is curated in `frothy_board_bindings[]`.
 - Seeded board constants are first-class readability tools, not mere metadata.
 
 ## Tests, Proofs, and Validation Surface: What Is Actually Proved
@@ -2896,7 +2892,7 @@ your head.
 - REPL, safe boot, shell sugar, and `.control` mode
 - records, prefix groups, `cond`, `case`, and `@` designators on the current
   live surface
-- filtered board FFI surface, including GPIO, ADC, UART, and current board
+- curated board FFI surface, including GPIO, ADC, UART, and current board
   extras such as I2C where the profile exposes them
 - project scaffolding, build, flash, doctor, and workshop editing workflows
 

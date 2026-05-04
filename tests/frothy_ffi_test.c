@@ -1,9 +1,8 @@
-#include "froth_ffi.h"
 #include "froth_slot_table.h"
+#include "froth_stack.h"
 #include "froth_tbuf.h"
 #include "froth_vm.h"
 #include "frothy_eval.h"
-#include "frothy_ffi.h"
 #include "frothy_ffi.h"
 #include "frothy_parser.h"
 #include "frothy_value.h"
@@ -208,54 +207,6 @@ static int expect_native_call(const char *name, const frothy_value_t *args,
   return 1;
 }
 
-FROTH_FFI_ARITY(test_echo_int, "echo.int", "( value -- value )", 1, 1,
-                "Echo an integer argument") {
-  FROTH_POP(value);
-  FROTH_PUSH(value);
-  return FROTH_OK;
-}
-
-FROTH_FFI_ARITY(test_echo_text, "echo.text", "( text -- text )", 1, 1,
-                "Echo a text argument") {
-  const uint8_t *data = NULL;
-  froth_cell_t length = 0;
-
-  FROTH_TRY(froth_pop_bstring(froth_vm, &data, &length));
-  return froth_push_bstring(froth_vm, data, length);
-}
-
-FROTH_FFI_ARITY(test_touch_nil, "touch.nil", "( -- )", 0, 0,
-                "Return no result") {
-  return FROTH_OK;
-}
-
-FROTH_FFI_ARITY(test_bool_arg, "bool.arg", "( flag -- n )", 1, 1,
-                "Observe Frothy bool coercion") {
-  FROTH_POP(value);
-  FROTH_PUSH(value);
-  return FROTH_OK;
-}
-
-FROTH_FFI_ARITY(test_fail_push, "fail.push", "( value -- )", 1, 0,
-                "Push then fail so the shim must unwind DS") {
-  FROTH_POP(value);
-  FROTH_PUSH(value);
-  return FROTH_ERROR_IO;
-}
-
-FROTH_FFI_ARITY(test_force_zero, "echo.int", "( value -- 0 )", 1, 1,
-                "Return zero for rollback verification") {
-  FROTH_POP(value);
-  FROTH_PUSH(0);
-  return FROTH_OK;
-}
-
-static const froth_ffi_entry_t test_bindings[] = {
-    FROTH_BIND(test_echo_int),  FROTH_BIND(test_echo_text),
-    FROTH_BIND(test_touch_nil), FROTH_BIND(test_bool_arg),
-    FROTH_BIND(test_fail_push), {0},
-};
-
 static const frothy_ffi_param_t maintained_echo_int_params[] = {
     FROTHY_FFI_PARAM_INT("value"),
 };
@@ -275,6 +226,84 @@ static const frothy_ffi_param_t maintained_make_cells_params[] = {
 static const frothy_ffi_param_t maintained_cells_len_params[] = {
     FROTHY_FFI_PARAM_CELLS("cells"),
 };
+
+static const frothy_ffi_param_t synthetic_echo_int_params[] = {
+    FROTHY_FFI_PARAM_INT("value"),
+};
+
+static const frothy_ffi_param_t synthetic_echo_text_params[] = {
+    FROTHY_FFI_PARAM_TEXT("text"),
+};
+
+static const frothy_ffi_param_t synthetic_bool_arg_params[] = {
+    FROTHY_FFI_PARAM_BOOL("flag"),
+};
+
+static froth_error_t synthetic_echo_int(frothy_runtime_t *runtime,
+                                        const void *context,
+                                        const frothy_value_t *args,
+                                        size_t arg_count,
+                                        frothy_value_t *out) {
+  int32_t value = 0;
+
+  (void)runtime;
+  (void)context;
+  (void)arg_count;
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &value));
+  return frothy_ffi_return_int(value, out);
+}
+
+static froth_error_t synthetic_echo_text(frothy_runtime_t *runtime,
+                                         const void *context,
+                                         const frothy_value_t *args,
+                                         size_t arg_count,
+                                         frothy_value_t *out) {
+  const char *text = NULL;
+  size_t length = 0;
+
+  (void)context;
+  (void)arg_count;
+  FROTH_TRY(frothy_ffi_expect_text(runtime, args, 0, &text, &length));
+  return frothy_ffi_return_text(runtime, text, length, out);
+}
+
+static froth_error_t synthetic_touch_nil(frothy_runtime_t *runtime,
+                                         const void *context,
+                                         const frothy_value_t *args,
+                                         size_t arg_count,
+                                         frothy_value_t *out) {
+  (void)runtime;
+  (void)context;
+  (void)args;
+  (void)arg_count;
+  return frothy_ffi_return_nil(out);
+}
+
+static froth_error_t synthetic_bool_arg(frothy_runtime_t *runtime,
+                                        const void *context,
+                                        const frothy_value_t *args,
+                                        size_t arg_count,
+                                        frothy_value_t *out) {
+  bool value = false;
+
+  (void)runtime;
+  (void)context;
+  (void)arg_count;
+  FROTH_TRY(frothy_ffi_expect_bool(args, 0, &value));
+  return frothy_ffi_return_int(value ? -1 : 0, out);
+}
+
+static froth_error_t synthetic_force_zero(frothy_runtime_t *runtime,
+                                          const void *context,
+                                          const frothy_value_t *args,
+                                          size_t arg_count,
+                                          frothy_value_t *out) {
+  (void)runtime;
+  (void)context;
+  (void)args;
+  (void)arg_count;
+  return frothy_ffi_return_int(0, out);
+}
 
 static froth_error_t maintained_echo_int(frothy_runtime_t *runtime,
                                          const void *context,
@@ -420,6 +449,52 @@ static froth_error_t maintained_force_zero(frothy_runtime_t *runtime,
   return frothy_ffi_return_int(0, out);
 }
 
+static const frothy_ffi_entry_t test_bindings[] = {
+    {
+        .name = "echo.int",
+        .params = synthetic_echo_int_params,
+        .param_count = FROTHY_FFI_PARAM_COUNT(synthetic_echo_int_params),
+        .arity = 1,
+        .result_type = FROTHY_FFI_VALUE_INT,
+        .help = "Echo an integer argument.",
+        .flags = FROTHY_FFI_FLAG_NONE,
+        .callback = synthetic_echo_int,
+        .stack_effect = "( value -- value )",
+    },
+    {
+        .name = "echo.text",
+        .params = synthetic_echo_text_params,
+        .param_count = FROTHY_FFI_PARAM_COUNT(synthetic_echo_text_params),
+        .arity = 1,
+        .result_type = FROTHY_FFI_VALUE_TEXT,
+        .help = "Echo a text argument.",
+        .flags = FROTHY_FFI_FLAG_NONE,
+        .callback = synthetic_echo_text,
+        .stack_effect = "( text -- text )",
+    },
+    {
+        .name = "touch.nil",
+        .arity = 0,
+        .result_type = FROTHY_FFI_VALUE_NIL,
+        .help = "Return no result.",
+        .flags = FROTHY_FFI_FLAG_NONE,
+        .callback = synthetic_touch_nil,
+        .stack_effect = "( -- )",
+    },
+    {
+        .name = "bool.arg",
+        .params = synthetic_bool_arg_params,
+        .param_count = FROTHY_FFI_PARAM_COUNT(synthetic_bool_arg_params),
+        .arity = 1,
+        .result_type = FROTHY_FFI_VALUE_INT,
+        .help = "Observe Frothy bool coercion.",
+        .flags = FROTHY_FFI_FLAG_NONE,
+        .callback = synthetic_bool_arg,
+        .stack_effect = "( flag -- n )",
+    },
+    {0},
+};
+
 static const frothy_ffi_entry_t maintained_bindings[] = {
     {
         .name = "maint.echo.int",
@@ -545,20 +620,33 @@ static const frothy_ffi_entry_t maintained_partial_failure_bindings[] = {
     {0},
 };
 
-static const froth_ffi_entry_t legacy_partial_failure_bindings[] = {
-    FROTH_BIND(test_force_zero),
+static const frothy_ffi_entry_t synthetic_partial_failure_bindings[] = {
     {
-        .name = "legacy.bad",
+        .name = "echo.int",
+        .params = synthetic_echo_int_params,
+        .param_count = FROTHY_FFI_PARAM_COUNT(synthetic_echo_int_params),
+        .arity = 1,
+        .result_type = FROTHY_FFI_VALUE_INT,
+        .help = "Return zero for rollback verification.",
+        .flags = FROTHY_FFI_FLAG_NONE,
+        .callback = synthetic_force_zero,
+        .stack_effect = "( value -- 0 )",
+    },
+    {
+        .name = "synthetic.bad.params",
+        .param_count = 1,
+        .arity = 1,
+        .result_type = FROTHY_FFI_VALUE_INT,
         .stack_effect = "( value -- value )",
-        .in_arity = 1,
-        .out_arity = 1,
-        .help = "Malformed legacy binding with missing word.",
+        .help = "Malformed synthetic binding with missing params.",
+        .flags = FROTHY_FFI_FLAG_NONE,
+        .callback = synthetic_echo_int,
     },
     {0},
 };
 
 static int install_test_bindings(void) {
-  froth_error_t err = frothy_ffi_install_binding_table(test_bindings);
+  froth_error_t err = frothy_ffi_install_table(test_bindings);
 
   if (err != FROTH_OK) {
     fprintf(stderr, "failed to install synthetic FFI table: %d\n", (int)err);
@@ -879,9 +967,10 @@ static int test_reinstall_failure_preserves_existing_slots(void) {
   ok &= expect_int_value(out, 5, "echo.int: 5");
   release_value(&out);
   frothy_runtime_test_fail_next_append(runtime());
-  err = frothy_ffi_install_binding_table(test_bindings);
+  err = frothy_ffi_install_table(test_bindings);
   if (err != FROTH_ERROR_HEAP_OUT_OF_MEMORY) {
-    fprintf(stderr, "expected legacy reinstall failure to report %d, got %d\n",
+    fprintf(stderr,
+            "expected synthetic reinstall failure to report %d, got %d\n",
             (int)FROTH_ERROR_HEAP_OUT_OF_MEMORY, (int)err);
     ok = 0;
   }
@@ -910,14 +999,16 @@ static int test_failed_install_does_not_partially_rebind_existing_slot(void) {
 
   reset_frothy_state();
   ok &= install_test_bindings();
-  err = frothy_ffi_install_binding_table(legacy_partial_failure_bindings);
+  err = frothy_ffi_install_table(synthetic_partial_failure_bindings);
   if (err != FROTH_ERROR_SIGNATURE) {
-    fprintf(stderr, "expected legacy partial install to fail with %d, got %d\n",
+    fprintf(stderr,
+            "expected synthetic partial install to fail with %d, got %d\n",
             (int)FROTH_ERROR_SIGNATURE, (int)err);
     ok = 0;
   }
   ok &= expect_ok("echo.int: 34", &out);
-  ok &= expect_int_value(out, 34, "legacy install rollback should preserve echo");
+  ok &= expect_int_value(out, 34,
+                         "synthetic install rollback should preserve echo");
   release_value(&out);
   return ok;
 }
@@ -952,29 +1043,6 @@ static int test_maintained_result_validation_releases_output(void) {
   }
   ok &= expect_nil_value(out, "maint.bad.result should leave nil output");
   release_value(&out);
-  return ok;
-}
-
-static int test_stack_cleanup_after_native_failure(void) {
-  frothy_value_t arg = frothy_value_make_nil();
-  frothy_value_t out = frothy_value_make_nil();
-  int ok = 1;
-
-  reset_frothy_state();
-  ok &= install_test_bindings();
-  ok &= frothy_value_make_int(99, &arg) == FROTH_OK;
-  froth_vm.ds.data[0] = 1234;
-  froth_vm.ds.pointer = 1;
-  froth_vm.thrown = 777;
-  ok &= expect_native_call("fail.push", &arg, 1, &out, FROTH_ERROR_IO);
-  if (froth_vm.ds.pointer != 1 || froth_vm.ds.data[0] != 1234) {
-    fprintf(stderr, "fail.push did not restore data stack depth\n");
-    ok = 0;
-  }
-  if (froth_vm.thrown != 777) {
-    fprintf(stderr, "fail.push did not restore thrown state\n");
-    ok = 0;
-  }
   return ok;
 }
 
@@ -1106,11 +1174,11 @@ static int test_wrap_uptime_ms_payload(void) {
   int ok = 1;
 
   reset_frothy_state();
-  if (froth_push(&froth_vm, wrapped) != FROTH_OK) {
+  if (froth_stack_push(&froth_vm.ds, wrapped) != FROTH_OK) {
     fprintf(stderr, "wrapped uptime should fit the Froth payload range\n");
     return 0;
   }
-  if (froth_pop(&froth_vm, &round_trip) != FROTH_OK) {
+  if (froth_stack_pop(&froth_vm.ds, &round_trip) != FROTH_OK) {
     fprintf(stderr, "wrapped uptime should round-trip through the Froth stack\n");
     return 0;
   }
@@ -1148,7 +1216,6 @@ int main(void) {
   ok &= test_failed_install_does_not_partially_rebind_existing_slot();
   ok &= test_maintained_install_rejects_missing_params();
   ok &= test_maintained_result_validation_releases_output();
-  ok &= test_stack_cleanup_after_native_failure();
   ok &= test_board_millis_monotonic();
   ok &= test_board_gpio_read_round_trip();
   ok &= test_board_workshop_parity_guards();

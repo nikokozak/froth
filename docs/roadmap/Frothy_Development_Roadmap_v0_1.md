@@ -24,18 +24,17 @@ It is a sequencing and control document.
 This block is the live control surface for repo status.
 
 Current milestone: `pre-thesis publishability prune`
-Today's goal: continue the non-workshop thesis prune with front-door docs,
-public-surface residue checks, shipped-surface local validation, and the next
-small prune cut that materially simplifies the repo before publication
-Next artifact: next small non-workshop prune tranche after the current
-control-doc alignment and validation pass lands
+Today's goal: close the FFI-boundary prune by retiring legacy board/project FFI
+exports, aligning docs with Frothy ADR-125, and proving the maintained
+`esp32-devkit-v1` path
+Next artifact: next small non-workshop prune tranche after the FFI-boundary
+cut and validation pass land
 Blocked by: none
-Next proof command: for the next tranche, start with the smallest focused gate;
-the current non-workshop closeout proof record is
-`sh tools/frothy/proof_control_surface_docs.sh`, `make test-publishability`,
-and `sh tools/frothy/proof.sh control /dev/cu.usbserial-0001` on
-`esp32-devkit-v1`; `make test-all` remains the extended local gate wrapped by
-the publishability lane
+Next proof command: for the FFI-boundary cut, run `make test-frothy`,
+`./tools/cli/frothy-cli build --target esp-idf --board esp32-devkit-v1`, and
+`sh tools/frothy/proof.sh m10 --assume-blink-confirmed /dev/cu.usbserial-0001`;
+for the next tranche, start with the smallest focused gate that exercises the
+changed surface
 Slip against plan: the workshop-operational closeout remains open and is
 intentionally deferred for this pass; the thesis-facing repo now has the
 publishability-prune decisions and proof gates captured in the working tree

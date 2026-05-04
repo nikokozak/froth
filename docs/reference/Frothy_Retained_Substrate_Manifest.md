@@ -1,8 +1,8 @@
 # Frothy Retained Substrate Manifest
 
 Status: active reference
-Date: 2026-04-14
-Authority: `docs/reference/Froth_Substrate_References.md`, `CMakeLists.txt`, `targets/esp-idf/main/CMakeLists.txt`
+Date: 2026-05-04
+Authority: `docs/reference/Froth_Substrate_References.md`, Frothy ADR-125, `CMakeLists.txt`, `targets/esp-idf/main/CMakeLists.txt`
 
 This manifest names the retained Froth substrate and the temporary
 compatibility seams that still ship in the maintained Frothy tree.
@@ -13,6 +13,7 @@ It exists to keep the boundary explicit:
 - Frothy-owned runtime code remains the maintained product surface
 - temporary compatibility shims stay visible and bounded until they can be
   deleted cleanly
+- retired legacy board/project authoring surfaces stay out of the active path
 
 ## Retained Froth Substrate
 
@@ -59,9 +60,8 @@ These are Frothy-owned runtime or board-facing sources on the maintained path:
 - the `src/frothy_*.c` language/runtime units listed in the host and ESP-IDF
   build targets
 
-New board and project FFI code should prefer the maintained
-`frothy_ffi_entry_t` / `frothy_project_bindings` path declared in
-`src/frothy_ffi.h`.
+New board and project FFI code must use the maintained `frothy_ffi_entry_t`
+path declared in `src/frothy_ffi.h`.
 
 ## Temporary Compatibility Layer
 
@@ -70,24 +70,18 @@ runtime modules:
 
 - `src/compat/frothy_console_compat.c`
 - `src/compat/frothy_link_stub.c`
-- `src/frothy_ffi_legacy.h`
 
-These compatibility exports remain accepted only while retained substrate and
-legacy board/project FFI paths still need them:
+The retained `src/froth_ffi.c` / `src/froth_ffi.h` units remain internal
+substrate. They are not a maintained board or project authoring surface.
 
-- `froth_ffi_entry_t` tables via `froth_board_bindings`
-- `froth_ffi_entry_t` tables via `froth_project_bindings`
-- `frothy_ffi_install_binding_table(...)`
-
-New code should not add to that legacy surface.
+Per Frothy ADR-125, active board and project FFI code must not export
+`froth_board_bindings` or `froth_project_bindings`, and must not call a legacy
+binding-table installer.
 
 ## Current Legacy Holdouts
 
-The maintained repo still carries these explicit legacy FFI exports:
+No active board or project legacy FFI exports remain in the maintained tree.
 
-- `boards/posix/ffi.h`
-- `boards/esp32-devkit-v1/ffi.h`
-- `tests/project_ffi/legacy_bindings.c`
-
-They are retained only because the board/project migration is not complete
-yet. They should shrink over time; they should not spread.
+The remaining C-boundary cleanup is narrower: audit retained `froth_ffi.*`
+internal substrate users, then retire or relocate that substrate only when no
+live runtime owner depends on it.

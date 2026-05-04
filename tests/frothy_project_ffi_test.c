@@ -11,15 +11,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef FROTHY_PROJECT_FFI_USE_LEGACY_EXPORT
-#define FROTHY_TEST_PROJECT_BINDING_NAME "project.legacy.int"
-#define FROTHY_TEST_PROJECT_REPORT_EFFECT "( value -- value )"
-#define FROTHY_TEST_PROJECT_REPORT_HELP "Project-legacy FFI test binding."
-#else
 #define FROTHY_TEST_PROJECT_BINDING_NAME "project.echo.int"
 #define FROTHY_TEST_PROJECT_REPORT_EFFECT "( value -- value )"
 #define FROTHY_TEST_PROJECT_REPORT_HELP "Project-maintained FFI test binding."
-#endif
 
 static frothy_runtime_t *runtime(void) {
   return &froth_vm.frothy_runtime;

@@ -1,4 +1,3 @@
-#include "froth_ffi.h"
 #include "froth_slot_table.h"
 #include "froth_tbuf.h"
 #include "froth_vm.h"
@@ -232,15 +231,35 @@ static void leave_workspace(bench_workspace_t *workspace) {
   workspace->active = false;
 }
 
-FROTH_FFI_ARITY(bench_echo_int, "echo.int", "( value -- value )", 1, 1,
-                "Benchmark integer echo binding") {
-  FROTH_POP(value);
-  FROTH_PUSH(value);
-  return FROTH_OK;
+static const frothy_ffi_param_t bench_echo_int_params[] = {
+    FROTHY_FFI_PARAM_INT("value"),
+};
+
+static froth_error_t bench_echo_int(frothy_runtime_t *runtime,
+                                    const void *context,
+                                    const frothy_value_t *args,
+                                    size_t arg_count, frothy_value_t *out) {
+  int32_t value = 0;
+
+  (void)runtime;
+  (void)context;
+  (void)arg_count;
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &value));
+  return frothy_ffi_return_int(value, out);
 }
 
-static const froth_ffi_entry_t bench_bindings[] = {
-    FROTH_BIND(bench_echo_int),
+static const frothy_ffi_entry_t bench_bindings[] = {
+    {
+        .name = "echo.int",
+        .params = bench_echo_int_params,
+        .param_count = FROTHY_FFI_PARAM_COUNT(bench_echo_int_params),
+        .arity = 1,
+        .result_type = FROTHY_FFI_VALUE_INT,
+        .help = "Benchmark integer echo binding.",
+        .flags = FROTHY_FFI_FLAG_NONE,
+        .callback = bench_echo_int,
+        .stack_effect = "( value -- value )",
+    },
     {0},
 };
 
@@ -248,7 +267,7 @@ static froth_error_t prepare_program_case(bench_case_t *bench_case) {
   FROTH_TRY(reset_frothy_state(false));
 
   if (bench_case->install_test_ffi) {
-    FROTH_TRY(frothy_ffi_install_binding_table(bench_bindings));
+    FROTH_TRY(frothy_ffi_install_table(bench_bindings));
   }
   FROTH_TRY(eval_setup_lines(bench_case->setup_source));
 

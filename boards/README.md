@@ -182,9 +182,9 @@ FROTHY_FFI_DECLARE(frothy_board_bindings);
 `frothy_ffi_entry_t`. The Frothy boot path installs that table as base-image
 native slots.
 
-Retained boards such as `boards/posix/` and `boards/esp32-devkit-v1/` still
-ship a legacy `froth_ffi_entry_t` export while they are being ported. New
-board code should not start there.
+All maintained board code should use this value-oriented table shape. The
+legacy `froth_ffi_entry_t` board export is retired by Frothy ADR-125 and is
+not a supported starting point for new boards.
 
 ## ffi.c
 

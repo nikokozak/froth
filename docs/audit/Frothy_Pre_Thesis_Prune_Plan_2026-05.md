@@ -50,6 +50,9 @@ Immediate issue already cut in this pass:
   slow CMake/config smokes are labeled `frothy_slow`; `make test` is now
   fast CTest plus CLI unit tests, while `make test-all` and `make test-frothy`
   still carry slow CTest and the host proof rehearsal lane
+- legacy board/project FFI exports retired under Frothy ADR-125; POSIX and
+  `esp32-devkit-v1` now use `frothy_ffi_entry_t`, the public legacy installer
+  is gone, and the legacy project-FFI fixture has been deleted
 
 Remaining cleanup pressure:
 
@@ -60,7 +63,9 @@ Remaining cleanup pressure:
 - The VS Code extension keeps Node/TypeScript as an explicit extension-local
   exception under Frothy ADR-124.
 - Retained `src/froth_*` substrate is documented but still interleaved with
-  product runtime code and compatibility shims.
+  product runtime code and compatibility shims; after Frothy ADR-125, remaining
+  `froth_ffi.*` cleanup is an internal substrate audit rather than a public FFI
+  compatibility question.
 
 ## Authority Tensions
 
@@ -186,9 +191,10 @@ Exit proof:
 
 Do not blind-rename retained `froth_*` files. Instead:
 
-- delete legacy FFI exports after board/project FFI are fully on
-  `frothy_ffi_entry_t`
-- remove `src/frothy_ffi_legacy.h`
+- keep legacy board/project FFI exports deleted now that active board/project
+  FFI is fully on `frothy_ffi_entry_t`
+- audit retained internal `froth_ffi.*` substrate users before any relocation
+  or deletion
 - remove `src/compat/*` once no retained substrate requires it
 - make one CMake source list the shared host/ESP-IDF runtime inventory
 - move retained substrate into an explicit directory only if it reduces reader

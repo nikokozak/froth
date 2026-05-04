@@ -563,24 +563,6 @@ if(FROTHY_BUILD_HOST)
       )
     endif()
 
-    set(FROTHY_TEST_LEGACY_PROJECT_FFI_CONFIG
-        "${CMAKE_SOURCE_DIR}/tests/project_ffi/legacy_project_ffi.cmake")
-    if(EXISTS "${FROTHY_TEST_LEGACY_PROJECT_FFI_CONFIG}")
-      frothy_add_project_ffi_test(
-        frothy_project_ffi_legacy_tests
-        frothy_project_ffi_legacy
-        "${FROTHY_TEST_LEGACY_PROJECT_FFI_CONFIG}"
-        FROTHY_PROJECT_FFI_USE_LEGACY_EXPORT
-      )
-      frothy_add_project_ffi_test(
-        frothy_project_ffi_legacy_no_weak_tests
-        frothy_project_ffi_legacy_no_weak
-        "${FROTHY_TEST_LEGACY_PROJECT_FFI_CONFIG}"
-        FROTHY_FORCE_NO_WEAK_SYMBOLS
-        FROTHY_PROJECT_FFI_USE_LEGACY_EXPORT
-      )
-    endif()
-
     set(FROTHY_PROJECT_FFI_CONFIG_SMOKE
         "${CMAKE_SOURCE_DIR}/tests/project_ffi/project_ffi_config_smoke.sh")
     if(EXISTS "${FROTHY_PROJECT_FFI_CONFIG_SMOKE}" AND
@@ -593,18 +575,6 @@ if(FROTHY_BUILD_HOST)
                 "${FROTH_PLATFORM}"
                 "${FROTHY_TEST_MAINTAINED_PROJECT_FFI_CONFIG}")
       set_tests_properties(frothy_project_ffi_config_maintained_smoke
-        PROPERTIES LABELS "frothy;frothy_slow" TIMEOUT 60)
-    endif()
-    if(EXISTS "${FROTHY_PROJECT_FFI_CONFIG_SMOKE}" AND
-       EXISTS "${FROTHY_TEST_LEGACY_PROJECT_FFI_CONFIG}")
-      add_test(NAME frothy_project_ffi_config_legacy_smoke
-        COMMAND /bin/sh "${FROTHY_PROJECT_FFI_CONFIG_SMOKE}"
-                "${CMAKE_COMMAND}"
-                "${CMAKE_SOURCE_DIR}"
-                "${FROTH_BOARD}"
-                "${FROTH_PLATFORM}"
-                "${FROTHY_TEST_LEGACY_PROJECT_FFI_CONFIG}")
-      set_tests_properties(frothy_project_ffi_config_legacy_smoke
         PROPERTIES LABELS "frothy;frothy_slow" TIMEOUT 60)
     endif()
   endif()
