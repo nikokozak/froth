@@ -24,20 +24,25 @@ It is a sequencing and control document.
 This block is the live control surface for repo status.
 
 Current milestone: `pre-thesis publishability prune`
-Today's goal: review and land the thesis-prune tranche now that the local and
-real-device closeout gates are green
-Next artifact: commit the thesis-prune tranche
+Today's goal: continue the non-workshop thesis prune with front-door docs,
+public-surface residue checks, shipped-surface local validation, and the next
+small prune cut that materially simplifies the repo before publication
+Next artifact: next small non-workshop prune tranche after the current
+control-doc alignment and validation pass lands
 Blocked by: none
-Next proof command: rerun `make test-all` plus
-`sh tools/frothy/proof.sh control <PORT>` on `esp32-devkit-v1` if the tranche
-changes again before commit
-Slip against plan: the workshop-operational closeout remains open, but the
-thesis-facing repo now has the publishability-prune decisions and proof gates
-captured in the working tree
+Next proof command: for the next tranche, start with the smallest focused gate;
+the current non-workshop closeout proof record is
+`sh tools/frothy/proof_control_surface_docs.sh`, `make test-publishability`,
+and `sh tools/frothy/proof.sh control /dev/cu.usbserial-0001` on
+`esp32-devkit-v1`; `make test-all` remains the extended local gate wrapped by
+the publishability lane
+Slip against plan: the workshop-operational closeout remains open and is
+intentionally deferred for this pass; the thesis-facing repo now has the
+publishability-prune decisions and proof gates captured in the working tree
 Cut candidate if slip persists: do not attempt a broad internal `froth_*` C
-symbol rename this week; remove Python and generated artifacts first, keep VS
-Code explicitly extension-local, and leave project-format names alone under
-Frothy ADR-124
+symbol rename during this thesis-prune pass; remove Python and generated
+artifacts first, keep VS Code explicitly extension-local, and leave
+project-format names alone under Frothy ADR-124
 
 ## 3. Operating Rules
 

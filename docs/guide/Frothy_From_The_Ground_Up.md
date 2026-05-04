@@ -2833,7 +2833,7 @@ prove end-to-end stories the unit tests alone cannot.
 
 ### Worked Example
 
-If you want one maintainer command that gives real confidence, run:
+For the fast local edit loop, run:
 
 ```sh
 make test
@@ -2847,11 +2847,21 @@ What that actually buys you:
 - shell coverage for command sugar and prompt behavior
 - FFI coverage for type conversion and filtering
 
+For thesis/public-surface closeout, run the shipped-surface local gate:
+
+```sh
+make test-publishability
+```
+
+That wraps the extended local `C`, `Go`, and shell gate and then exercises the
+explicit extension-local Node lane for VS Code.
+
 What it does not magically prove:
 
 - every board-specific hardware behavior on real devices
 - every future syntax idea in draft docs
 - the absence of all resource-limit edge cases on every target
+- the final real-device sanity proof required before sign-off
 
 ### What to remember
 
@@ -2892,25 +2902,21 @@ your head.
 
 **Active now**
 
+- pre-thesis publishability prune and dependency collapse: remove low-risk
+  legacy residue, keep generated PDFs out of active source, keep Python out of
+  maintained proof/build/release/docs glue, and keep Node explicit as a VS
+  Code-only exception
+
+That is the immediate live priority because the codebase is moving toward a
+thesis-facing public snapshot. The roadmap current-state block and
+`PROGRESS.md` are the authoritative control surface for that work.
+
+**Deferred while the thesis prune leads**
+
 - workshop operational closeout across clean-machine validation, room-side
   recovery prep, and one recorded workshop-board rehearsal
-
-That is the immediate live priority because the major runtime and language
-tranches are already landed, and the remaining real risk sits in truthful
-operator proof on clean machines and real devices. The roadmap current-state
-block and `PROGRESS.md` are the authoritative control surface for that work.
-
-**Queued after the current operational closeout**
-
-- clean-machine validation on the promised attendee platforms
-- classroom hardware and recovery kit closeout
-- final measured workshop rehearsal
-- post-workshop publishability reset tranches
 - the bounded frame-arena ownership revisit if Frothy intentionally grows
   multiple live runtime instances again
-
-**Still deliberately deferred**
-
 - wider workspace/image-flow work beyond the first frozen doc tranche
 - broader language widening beyond the landed surface
 - runtime data models that would weaken persistence or inspection clarity

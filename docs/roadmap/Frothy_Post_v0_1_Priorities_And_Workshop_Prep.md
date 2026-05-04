@@ -1,6 +1,6 @@
 # Frothy Post-v0.1 Priorities And Workshop Prep
 
-Status: active follow-on priority note
+Status: retained follow-on priority note; workshop queue currently deferred
 Date: 2026-04-14
 Authority: `docs/spec/Frothy_Language_Spec_v0_1.md`, `docs/spec/Frothy_Language_Spec_vNext.md`, `docs/spec/Frothy_Surface_Syntax_Proposal_vNext.md`, `docs/adr/108-frothy-ffi-boundary.md`, `docs/adr/112-next-stage-language-growth-and-recovery-boundary.md`, `docs/adr/114-next-stage-structural-surface-and-recovery-shape.md`, `docs/adr/115-first-workspace-image-flow-tranche.md`, `docs/adr/116-targeted-session-start-and-thin-follow-on-control-docs.md`, `docs/roadmap/Frothy_Development_Roadmap_v0_1.md`
 
@@ -31,14 +31,15 @@ What is already settled:
   export are now
   landed on `main`
 
-What still needs explicit surfacing is the order of the next follow-on work.
-The workshop implementation tranche is now landed on `main`, and the immediate
-queue is workshop-operational closeout: clean-machine validation, room-side
-hardware prep, and one recorded measured rehearsal pass. The first explicit
-evaluator-frame-stack tranche and the prompt-facing record repair are now
-landed on `main`; the bounded frame-arena ownership revisit is pushed back
-until Frothy intentionally grows multiple live runtime instances or another
-re-entrant evaluator owner in one process.
+What still needs explicit surfacing is which work is active and which work is
+preserved for later. The workshop implementation tranche is now landed on
+`main`, and the workshop-operational closeout remains open but deferred:
+clean-machine validation, room-side hardware prep, and one recorded measured
+rehearsal pass are not the active lane for the current thesis-facing prune. The
+first explicit evaluator-frame-stack tranche and the prompt-facing record
+repair are now landed on `main`; the bounded frame-arena ownership revisit is
+pushed back until Frothy intentionally grows multiple live runtime instances or
+another re-entrant evaluator owner in one process.
 
 The workshop-operational artifacts are now concrete in-repo:
 
@@ -55,10 +56,11 @@ still have to be run and recorded.
 
 ## Why This Order
 
-- Clean-machine validation, classroom hardware prep, and measured rehearsal now
-  lead because the remaining workshop risk is operational. The install/docs
+- Clean-machine validation, classroom hardware prep, and measured rehearsal are
+  deferred for the current thesis-prune pass, not deleted. The install/docs
   surface and the room-side recovery artifacts are already checked in; what is
-  left is to execute and record the real passes. References:
+  left is to execute and record the real passes when workshop work is
+  reprioritized. References:
   `docs/guide/Frothy_Workshop_Clean_Machine_Validation.md`,
   `boards/esp32-devkit-v4-game-board/WORKSHOP.md`, and
   `docs/roadmap/Frothy_Workshop_Rehearsal_Closeout_2026-04-14.md`.
@@ -85,23 +87,24 @@ That means the repo now has:
 2. one explicit Frothy-owned publishability matrix plus narrow legacy
    compatibility notes
 3. a maintained core proof/dependency surface centered on `C`, `Go`, and
-   `Shell`, with `Node` and hardware-only `Python` kept explicit
+   `Shell`, with `Node` kept explicit as a VS Code-only exception and Python
+   kept out of maintained proof/build/release/docs glue
 4. an explicit retained-substrate/runtime-boundary record in code and docs
 5. one maintained docs/archive front door instead of competing cleanup notes
 
 ## Workshop Gate For 2026-04-16
 
-Before the 2026-04-16 workshop:
+The pre-workshop checklist for the now-deferred 2026-04-16 gate was:
 
-- publish a truthful install path with a frozen support matrix
-- publish one clear Frothy-owned CLI/install story, with legacy `froth`
+- a truthful install path with a frozen support matrix
+- one clear Frothy-owned CLI/install story, with legacy `froth`
   compatibility called out only where still needed
-- give attendees a sendable install note and a preflight path before they
-  arrive
-- keep the introspection, puzzle, blink, animation, sensor, and persistence
+- a sendable install note and a preflight path before attendees arrive
+- the introspection, puzzle, blink, animation, sensor, and persistence
   path on one sanctioned starter and one maintained board surface
-- prove the path on clean machines and carry a recovery kit into the room
-- keep workspace/image flow deferred behind the workshop-critical tranches
+- clean-machine proof and a room-side recovery kit
+- workspace/image flow kept deferred behind the then-current operational
+  tranches
 
 ## Reordering Rule
 

@@ -115,7 +115,7 @@ rg -n '^Current milestone: `pre-thesis publishability prune`$' \
 rg -n '^Next artifact:' docs/roadmap/Frothy_Development_Roadmap_v0_1.md
 rg -n 'Frothy ADR-124|make test-all' \
   docs/roadmap/Frothy_Development_Roadmap_v0_1.md
-rg -n 'proof\.sh control <PORT>' \
+rg -n 'proof\.sh control (<PORT>|/dev/cu\.usbserial-0001)' \
   docs/roadmap/Frothy_Development_Roadmap_v0_1.md
 
 require_absent '^## Current Control Snapshot$' PROGRESS.md TIMELINE.md

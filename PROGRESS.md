@@ -72,9 +72,10 @@ file is wrong.
 - This control-surface repair tranche is landed: `PROGRESS.md` and
   `TIMELINE.md` are thin again, the repo startup guidance is task-scoped, and
   the forward queue now lives in one short roadmap note plus Frothy ADR-116.
-- The workshop-operational queue now leads: clean-machine validation,
-  room-side hardware/recovery prep, and one recorded measured rehearsal pass;
-  the evaluator frame-arena ownership revisit is deferred until Frothy
+- The workshop-operational queue is retained but no longer leads this pass:
+  clean-machine validation, room-side hardware/recovery prep, and one recorded
+  measured rehearsal pass remain open behind the current thesis-facing prune.
+  The evaluator frame-arena ownership revisit is deferred until Frothy
   intentionally grows multiple live runtime instances or another re-entrant
   evaluator owner.
 - The first workshop base-image board/library cut is landed: `millis()` and
@@ -199,7 +200,7 @@ file is wrong.
   References:
   `docs/audit/Frothy_Repo_Audit_2026-04.md` and
   `docs/reference/Frothy_Retained_Substrate_Manifest.md`.
-- The pre-thesis prune pass is now active and tracked in
+- The pre-thesis prune pass is active and tracked in
   `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`: the first low-risk
   cut removes the tracked Mach-O helper binary, the unused Froth `board.froth`
   ESP-IDF embed path, and the generated guide PDF plus ReportLab renderer;
@@ -225,14 +226,24 @@ file is wrong.
   working tree. The flashed v1 image still has 0x96180 bytes free in the app
   partition; the current ELF reports `.dram0.data=115008` and
   `.dram0.bss=43104`.
+- The front-door control docs now defer workshop-operational work for the
+  current thesis-facing pass. The non-workshop validation closeout is green:
+  `sh tools/frothy/proof_control_surface_docs.sh`, `make test-publishability`,
+  and `sh tools/frothy/proof.sh control /dev/cu.usbserial-0001` have passed in
+  this working tree. The VS Code host-smoke portion of `make
+  test-publishability` needs normal desktop permissions rather than the sandbox
+  used for most shell commands.
 
 ## Remaining Gates
 
-- Pre-thesis publishability prune is the active gate: the project-format,
-  generated-PDF, and VS Code/Node policy decisions are now captured by Frothy
-  ADR-124, and the local closeout gate is green in this working tree. The
-  remaining step is review/stage/commit.
-- Workshop-operational closeout remains open behind the thesis-facing prune:
+- Pre-thesis publishability prune is the active non-workshop gate: the
+  project-format, generated-PDF, and VS Code/Node policy decisions are captured
+  by Frothy ADR-124; the old Python hardware-proof holdouts are gone; and the
+  local shipped-surface validation is green. The remaining work is any next
+  small prune tranche that still materially simplifies the repo before
+  publication.
+- Workshop-operational closeout is explicitly deferred behind the thesis-facing
+  prune:
   clean-machine validation and room-side hardware/recovery prep still need to
   be executed, and one complete recorded rehearsal pass still needs to be
   captured; the focused v4 workshop-board hardware smoke is now recorded.

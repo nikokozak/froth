@@ -1,6 +1,6 @@
 # Frothy Timeline
 
-*Last updated: 2026-05-03*
+*Last updated: 2026-05-04*
 
 This file is the movable milestone and queue ledger for Frothy.
 The roadmap current-state block in
@@ -56,8 +56,8 @@ The queue below is intentionally movable. Reorder it as priorities change, but
 keep each item's description and references so deferral does not erase context.
 
 - [~] Pre-thesis publishability prune and dependency collapse
-  Deliverable: remove low-risk legacy Froth residue, replace remaining Python
-  proof helpers with Go or delete them from the maintained surface, keep
+  Deliverable: remove low-risk legacy Froth residue, keep Python proof helpers
+  out of the maintained surface after the Go-backed proof migration, keep
   generated PDFs out of active source unless rebuilt outside the core dependency
   budget, keep VS Code/Node explicitly extension-local, and defer
   `froth.toml` / `.froth-build` / `.froth` project-format renaming under
@@ -66,7 +66,10 @@ keep each item's description and references so deferral does not erase context.
   payload generator excludes ignored ESP-IDF build caches, maintained M10 and
   v4 hardware proof wrappers now delegate to Go test-runner commands instead
   of Python, the v1 board has enough slot headroom for the control smoke, and
-  `make test-all` plus the real `esp32-devkit-v1` control proof are green.
+  `make test-all`, `make test-publishability`, and the real
+  `esp32-devkit-v1` control proof are green. The front-door docs now treat
+  workshop work as deferred while the thesis-facing public-surface validation
+  stays active.
   References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
   `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, `tools/frothy/`,
   `tools/cli/cmd/test-runner/`, and `docs/audit/Frothy_Repo_Audit_2026-04.md`.
@@ -175,7 +178,8 @@ keep each item's description and references so deferral does not erase context.
   Intel, and Linux x86_64 before the workshop.
   Note: the exact checklist and recording sheet are now frozen in
   `docs/guide/Frothy_Workshop_Clean_Machine_Validation.md`; the actual
-  machine-by-machine passes remain open.
+  machine-by-machine passes remain open and deferred for the current
+  thesis-prune pass.
   References: `.github/workflows/release.yml`, `README.md`,
   `docs/guide/Frothy_Workshop_Clean_Machine_Validation.md`, and the workshop
   install path above.
@@ -184,7 +188,7 @@ keep each item's description and references so deferral does not erase context.
   board labels, and a written reflash/fallback procedure.
   Note: the written room-side pack-out and recovery card now live in
   `boards/esp32-devkit-v4-game-board/WORKSHOP.md`; physical packing and labeling remain
-  open.
+  open and deferred for the current thesis-prune pass.
   References: `tools/frothy/proof_m10_smoke.sh`,
   `docs/archive/proofs/m10_esp32_proof_transcript.txt`, `boards/`, and
   `boards/esp32-devkit-v4-game-board/WORKSHOP.md`.
@@ -194,7 +198,8 @@ keep each item's description and references so deferral does not erase context.
   the maintained workshop path.
   Note: the checklist, room-side recovery card, and rehearsal status note are
   checked in, but the actual clean-machine passes, physical room pack-out, and
-  one complete recorded rehearsal remain open.
+  one complete recorded rehearsal remain open. This queue is intentionally
+  deferred while the thesis-facing prune and public-surface validation lead.
   References: `docs/guide/Frothy_Workshop_Clean_Machine_Validation.md`,
   `boards/esp32-devkit-v4-game-board/WORKSHOP.md`,
   `docs/roadmap/Frothy_Workshop_Rehearsal_Closeout_2026-04-14.md`,

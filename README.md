@@ -4,23 +4,26 @@ Frothy is a small live lexical language for programmable devices.
 
 Frothy `v0.1` is functionally closed.
 
-The live roadmap milestone is `workshop operational closeout`. The remaining
-work is operational rather than architectural: execute the promised
-clean-machine validation, finish the room-side hardware/recovery pack-out, and
-record one complete workshop-board rehearsal on the maintained path.
+The live roadmap milestone is `pre-thesis publishability prune`. The
+non-workshop work now leads: keep the public thesis-facing codebase light,
+readable, and dependency-bounded; keep generated PDFs out of active source;
+keep Python out of maintained proof, build, release, and docs glue; and run the
+shipped-surface local gate from this checkout.
 
-The forward queue after that is explicit:
+Workshop material remains in-tree as retained operational reference, but it is
+not the active queue for this pass.
+
+The forward queue after the thesis prune is explicit:
 
 - FFI boundary quality and porting discipline
 - small useful core library growth
 - robust string support
 - measured performance tightening
 - direct-control tooling improvements
-- later workspace/image-flow growth only after the workshop-critical tranches
-  prove themselves
+- later workspace/image-flow growth only after it is intentionally reprioritized
 
 See `docs/roadmap/Frothy_Post_v0_1_Priorities_And_Workshop_Prep.md` for the
-kept-vs-deferred stack.
+kept-vs-deferred stack, including the deferred workshop-operational queue.
 
 The repo reuses inherited Froth substrate where that is the simplest working
 path, but Froth's old roadmap, stack-centric user model, and language
@@ -28,26 +31,23 @@ priorities are not active policy here.
 
 ## Start Here
 
-Use the smallest maintained doc set for the workshop path:
+Use the smallest maintained doc set for the thesis/public repo path:
 
-- `docs/guide/Frothy_Workshop_Install_Quickstart.md`: attendee install note
-  and preflight
-- `docs/guide/Frothy_Workshop_Quick_Reference.md`: first connect, inspection,
-  board surface, persistence, and troubleshooting
-- `docs/guide/Frothy_Workshop_Clean_Machine_Validation.md`: promised-platform
-  validation checklist and recording sheet
-- `boards/esp32-devkit-v4-game-board/WORKSHOP.md`: room-side hardware pack-out and
-  recovery card
-- `workshop/README.md`: the tiny checked-in source for the public workshop
-  repo, published at [nikokozak/frothy-workshop](https://github.com/nikokozak/frothy-workshop)
-- `docs/roadmap/Frothy_Workshop_Rehearsal_Closeout_2026-04-14.md`: workshop
-  rehearsal status note and required real-device proof command
+- `docs/spec/Frothy_Language_Spec_v0_1.md`: accepted current language contract
+- `docs/guide/Frothy_From_The_Ground_Up.md`: narrative guide to the current
+  system
+- `docs/adr/README.md`: Frothy `100`-series authority index
+- `docs/adr/124-pre-thesis-project-format-and-dependency-policy.md`: current
+  project-format, generated-PDF, Python, and Node policy
+- `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`: active prune plan
+- `docs/roadmap/Frothy_Development_Roadmap_v0_1.md`: live current-state block
+- `PROGRESS.md` and `TIMELINE.md`: short operational note and movable queue
 
-## Workshop Support Matrix
+## Deferred Workshop Materials
 
-The promised attendee path is smaller than the repo surface.
-These are the assets and listings the current manual release path is set up to
-publish:
+The workshop path is retained but deferred for the current thesis-prune pass.
+These assets and listings remain the recorded workshop promise when that queue
+is reprioritized:
 
 | Surface | Release surface | Workshop promise |
 | --- | --- | --- |
@@ -82,7 +82,7 @@ release identity, and the installed/repo-local CLI surface is `frothy`.
 VS Code still keeps legacy `froth` discovery as a temporary compatibility path
 during the transition.
 
-## Workshop Install
+## Workshop Install (Deferred)
 
 The attendee quickstart lives in
 `docs/guide/Frothy_Workshop_Install_Quickstart.md`.
@@ -90,9 +90,9 @@ The in-room prompt and recovery cheat sheet lives in
 `docs/guide/Frothy_Workshop_Quick_Reference.md`.
 
 Use that guide for the exact Homebrew, release-tarball, and VSIX install
-commands.
+commands when the workshop queue resumes.
 
-The maintained workshop assumptions for this tranche are:
+The retained workshop assumptions are:
 
 - attendees use the installed CLI command `frothy`
 - attendees do not need a repo checkout, `esp-idf`, or source builds before
@@ -104,7 +104,7 @@ The maintained workshop assumptions for this tranche are:
   absolute path of the installed binary; legacy `froth` fallback remains
   available during the transition
 
-The maintained editor path stays on the accepted direct-control surface:
+The retained editor path stays on the accepted direct-control surface:
 
 - VS Code owns one helper child per window
 - the helper owns one direct control session at a time
@@ -176,8 +176,8 @@ frothy send src/main.froth
   language direction without widening current behavior
 - `docs/roadmap/Frothy_Development_Roadmap_v0_1.md`: live control surface and
   accepted milestone roadmap
-- `docs/roadmap/Frothy_Post_v0_1_Priorities_And_Workshop_Prep.md`: near-term
-  post-`v0.1` queue and workshop gate
+- `docs/roadmap/Frothy_Post_v0_1_Priorities_And_Workshop_Prep.md`: post-`v0.1`
+  queue note and deferred workshop gate
 - `docs/adr/README.md`: ADR authority split and Frothy `100`-series index
 - `PROGRESS.md`: thin operational note
 - `TIMELINE.md`: movable checkbox ledger
