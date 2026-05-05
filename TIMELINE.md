@@ -122,7 +122,10 @@ keep each item's description and references so deferral does not erase context.
   after snapshot code moved into the Frothy-owned runtime sources. The first
   large-runtime cut tightens record-definition lookup and guard behavior
   without changing the record object model, then centralizes `frothy_value.c`
-  live-object lookup and value API guard behavior.
+  live-object lookup and value API guard behavior. The follow-on lifecycle cut
+  separates direct object storage teardown from child-value release and makes
+  evaluator scratch-slot/frame-stack invariants and repeated node-switch
+  ownership paths explicit.
   References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
   `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, Frothy ADR-125,
   Frothy ADR-126, Frothy ADR-127, `tools/frothy/`,

@@ -594,14 +594,18 @@ static bool frothy_runtime_take_free_span(frothy_runtime_t *runtime,
   return false;
 }
 
-static void frothy_runtime_discard_object(frothy_runtime_t *runtime,
-                                          size_t object_id) {
-  frothy_object_t *object = &runtime->objects[object_id];
-
-  if (!object->live) {
-    return;
+static void frothy_runtime_release_code_storage(frothy_runtime_t *runtime,
+                                                frothy_object_t *object) {
+  if (object->as.code.payload.length > 0) {
+    frothy_runtime_release_payload(runtime, object->as.code.payload);
+  } else {
+    frothy_ir_program_free(&object->as.code.program);
   }
+}
 
+/* Releases direct object storage; child value ownership is handled separately. */
+static void frothy_runtime_release_object_storage(frothy_runtime_t *runtime,
+                                                  frothy_object_t *object) {
   switch (object->kind) {
   case FROTHY_OBJECT_TEXT:
     frothy_runtime_release_payload(runtime, object->as.text.payload);
@@ -609,11 +613,7 @@ static void frothy_runtime_discard_object(frothy_runtime_t *runtime,
   case FROTHY_OBJECT_CELLS:
     break;
   case FROTHY_OBJECT_CODE:
-    if (object->as.code.payload.length > 0) {
-      frothy_runtime_release_payload(runtime, object->as.code.payload);
-    } else {
-      frothy_ir_program_free(&object->as.code.program);
-    }
+    frothy_runtime_release_code_storage(runtime, object);
     break;
   case FROTHY_OBJECT_RECORD_DEF:
     frothy_runtime_release_payload(runtime, object->as.record_def.payload);
@@ -625,9 +625,24 @@ static void frothy_runtime_discard_object(frothy_runtime_t *runtime,
   case FROTHY_OBJECT_FREE:
     break;
   }
+}
 
+static void frothy_runtime_finish_object_teardown(frothy_runtime_t *runtime,
+                                                  frothy_object_t *object) {
   frothy_object_reset(object);
   runtime->live_object_count--;
+}
+
+static void frothy_runtime_discard_object(frothy_runtime_t *runtime,
+                                          size_t object_id) {
+  frothy_object_t *object = &runtime->objects[object_id];
+
+  if (!object->live) {
+    return;
+  }
+
+  frothy_runtime_release_object_storage(runtime, object);
+  frothy_runtime_finish_object_teardown(runtime, object);
 }
 
 static froth_error_t frothy_runtime_clear_live_object(frothy_runtime_t *runtime,
@@ -699,11 +714,26 @@ static froth_error_t frothy_runtime_get_object(const frothy_runtime_t *runtime,
   return FROTH_OK;
 }
 
+static void frothy_runtime_install_object(frothy_runtime_t *runtime,
+                                          size_t object_id,
+                                          const frothy_object_t *object,
+                                          frothy_value_t *out) {
+  runtime->objects[object_id] = *object;
+  runtime->objects[object_id].refcount = 1;
+  runtime->objects[object_id].live = true;
+  runtime->live_object_count++;
+  *out = frothy_object_value(object_id);
+}
+
 static froth_error_t frothy_runtime_append_object(frothy_runtime_t *runtime,
                                                   const frothy_object_t *object,
                                                   frothy_value_t *out) {
   size_t object_id;
   size_t object_limit;
+
+  if (runtime == NULL || object == NULL || out == NULL) {
+    return FROTH_ERROR_BOUNDS;
+  }
 
   if (runtime->test_fail_next_append) {
     runtime->test_fail_next_append = false;
@@ -712,11 +742,7 @@ static froth_error_t frothy_runtime_append_object(frothy_runtime_t *runtime,
 
   for (object_id = 0; object_id < runtime->object_count; object_id++) {
     if (!runtime->objects[object_id].live) {
-      runtime->objects[object_id] = *object;
-      runtime->objects[object_id].refcount = 1;
-      runtime->objects[object_id].live = true;
-      runtime->live_object_count++;
-      *out = frothy_object_value(object_id);
+      frothy_runtime_install_object(runtime, object_id, object, out);
       return FROTH_OK;
     }
   }
@@ -733,11 +759,7 @@ static froth_error_t frothy_runtime_append_object(frothy_runtime_t *runtime,
   if (runtime->object_count > runtime->object_high_water) {
     runtime->object_high_water = runtime->object_count;
   }
-  runtime->objects[object_id] = *object;
-  runtime->objects[object_id].refcount = 1;
-  runtime->objects[object_id].live = true;
-  runtime->live_object_count++;
-  *out = frothy_object_value(object_id);
+  frothy_runtime_install_object(runtime, object_id, object, out);
   return FROTH_OK;
 }
 
@@ -754,7 +776,7 @@ static froth_error_t frothy_runtime_clear_live_object(frothy_runtime_t *runtime,
 
   switch (object->kind) {
   case FROTHY_OBJECT_TEXT:
-    frothy_runtime_release_payload(runtime, object->as.text.payload);
+    frothy_runtime_release_object_storage(runtime, object);
     break;
   case FROTHY_OBJECT_CELLS:
     base = object->as.cells.span.base;
@@ -768,14 +790,10 @@ static froth_error_t frothy_runtime_clear_live_object(frothy_runtime_t *runtime,
     frothy_runtime_add_free_span(runtime, base, length);
     break;
   case FROTHY_OBJECT_CODE:
-    if (object->as.code.payload.length > 0) {
-      frothy_runtime_release_payload(runtime, object->as.code.payload);
-    } else {
-      frothy_ir_program_free(&object->as.code.program);
-    }
+    frothy_runtime_release_object_storage(runtime, object);
     break;
   case FROTHY_OBJECT_RECORD_DEF:
-    frothy_runtime_release_payload(runtime, object->as.record_def.payload);
+    frothy_runtime_release_object_storage(runtime, object);
     break;
   case FROTHY_OBJECT_RECORD: {
     frothy_value_t *fields = NULL;
@@ -785,9 +803,8 @@ static froth_error_t frothy_runtime_clear_live_object(frothy_runtime_t *runtime,
     for (i = 0; i < object->as.record.field_count; i++) {
       FROTH_TRY(frothy_value_release(runtime, fields[i]));
     }
-    FROTH_TRY(
-        frothy_value_release(runtime, object->as.record.definition));
-    frothy_runtime_release_payload(runtime, object->as.record.payload);
+    FROTH_TRY(frothy_value_release(runtime, object->as.record.definition));
+    frothy_runtime_release_object_storage(runtime, object);
     break;
   }
   case FROTHY_OBJECT_NATIVE:
@@ -795,8 +812,7 @@ static froth_error_t frothy_runtime_clear_live_object(frothy_runtime_t *runtime,
     break;
   }
 
-  frothy_object_reset(object);
-  runtime->live_object_count--;
+  frothy_runtime_finish_object_teardown(runtime, object);
   return FROTH_OK;
 }
 

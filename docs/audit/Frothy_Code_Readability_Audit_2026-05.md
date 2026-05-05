@@ -44,6 +44,8 @@ Each reviewed file or small file group should answer:
 | Build source ownership | `cmake/frothy_runtime_sources.cmake`, `CMakeLists.txt`, `targets/esp-idf/main/CMakeLists.txt` | tightened | Removed the empty snapshot-source return left behind after snapshot ownership moved into `frothy_snapshot.[ch]`. Host and ESP-IDF targets now consume only product and retained-substrate source lists, and the root support-source variable uses the Frothy name consistently. | `make --no-print-directory test-frothy`; `make --no-print-directory test-frothy-slow`; `sh tools/frothy/proof.sh m10 /dev/cu.usbserial-0001` with `FROTHY_BINARY=build/test/host-default/Frothy` |
 | Record runtime API boundary | `src/frothy_value.[ch]`, `src/frothy_eval.c`, `tests/frothy_eval_test.c` | tightened | Record-definition arity/field lookup no longer forces callers to receive and suppress an unused name. The record runtime entry points now have boring null-output/null-runtime guards, and record payload sizing checks the multiplication before allocation. | `cmake --build build/test/host-default`; `ctest --test-dir build/test/host-default -R 'frothy_(eval\|snapshot)' --output-on-failure`; `make --no-print-directory test-frothy`; `sh tools/frothy/proof.sh m10 /dev/cu.usbserial-0001` with `FROTHY_BINARY=build/test/host-default/Frothy` |
 | Value object lookup and API guards | `src/frothy_value.c`, `tests/frothy_eval_test.c` | tightened | Centralized live-object bounds checks so classify/render/retain/release and typed getters share the same live-object guard. Added explicit null-runtime/null-output guards for value classify/render/equality/literal conversion and code allocation entry points, plus a refcount overflow guard. | `cmake --build build/test/host-default`; `ctest --test-dir build/test/host-default -R 'frothy_(eval\|snapshot\|ffi)' --output-on-failure`; `make --no-print-directory test-frothy`; `sh tools/frothy/proof.sh m10 /dev/cu.usbserial-0001` with `FROTHY_BINARY=build/test/host-default/Frothy` |
+| Value payload and object lifecycle | `src/frothy_value.c`, `tests/frothy_eval_test.c` | tightened | Split direct object storage release from child-value release so reset/free paths and refcounted teardown read as separate ownership stories. Object installation now has one helper for reused and newly appended slots, and payload allocation guard coverage includes null entry points. | `cmake --build build/test/host-default`; `ctest --test-dir build/test/host-default -R 'frothy_(eval\|snapshot\|ffi)' --output-on-failure`; `make --no-print-directory test-frothy`; `sh tools/frothy/proof.sh m10 /dev/cu.usbserial-0001` with `FROTHY_BINARY=build/test/host-default/Frothy` |
+| Eval frame stack and switch error paths | `src/frothy_eval.c`, `tests/frothy_eval_test.c` | tightened | Made the evaluator scratch-slot count explicit, centralized frame-stack used-counter synchronization, and added bounds guards for null/empty eval-program entry points before frame allocation. The large node switch now uses shared helpers for scratch-child phase transitions, completing `out` values, and marking moved scratch slots so repeated ownership/error paths read consistently. | `cmake --build build/test/host-default`; `ctest --test-dir build/test/host-default -R 'frothy_(eval\|snapshot\|ffi)' --output-on-failure`; `make --no-print-directory test-frothy`; `sh tools/frothy/proof.sh m10 /dev/cu.usbserial-0001` with `FROTHY_BINARY=build/test/host-default/Frothy` |
 
 ## Validation Notes
 
@@ -89,6 +91,15 @@ Current record runtime API boundary cut:
   `FROTHY_BINARY=build/test/host-default/Frothy`
 
 Current value object lookup and API guard cut:
+
+- `cmake --build build/test/host-default`
+- `ctest --test-dir build/test/host-default -R 'frothy_(eval|snapshot|ffi)'
+  --output-on-failure`
+- `make --no-print-directory test-frothy`
+- `sh tools/frothy/proof.sh m10 /dev/cu.usbserial-0001` with
+  `FROTHY_BINARY=build/test/host-default/Frothy`
+
+Current value/eval lifecycle and eval-switch readability cut:
 
 - `cmake --build build/test/host-default`
 - `ctest --test-dir build/test/host-default -R 'frothy_(eval|snapshot|ffi)'

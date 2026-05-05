@@ -759,8 +759,10 @@ static int test_value_runtime_api_guards(void) {
       .kind = FROTHY_IR_LITERAL_NIL,
   };
   frothy_ir_program_t program;
+  frothy_payload_span_t span = {0};
   frothy_value_t value = frothy_value_make_nil();
   frothy_value_class_t value_class = FROTHY_VALUE_CLASS_INT;
+  void *payload_data = NULL;
   char *rendered = NULL;
   bool equal = false;
   int ok = 1;
@@ -783,6 +785,12 @@ static int test_value_runtime_api_guards(void) {
         FROTH_ERROR_BOUNDS;
   ok &= frothy_value_retain(NULL, value) == FROTH_ERROR_BOUNDS;
   ok &= frothy_value_release(NULL, value) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_payload(NULL, 1, &span, &payload_data) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_payload(runtime(), 1, NULL, &payload_data) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_payload(runtime(), 1, &span, NULL) ==
+        FROTH_ERROR_BOUNDS;
   ok &= frothy_runtime_alloc_packed_code(NULL, &program, FROTHY_IR_NODE_INVALID,
                                          0, 0, &value) == FROTH_ERROR_BOUNDS;
   ok &= frothy_runtime_alloc_packed_code(runtime(), NULL,
@@ -802,6 +810,25 @@ static int test_value_runtime_api_guards(void) {
 
   if (!ok) {
     fprintf(stderr, "value runtime API guards failed\n");
+  }
+  frothy_ir_program_free(&program);
+  return ok;
+}
+
+static int test_eval_runtime_api_guards(void) {
+  frothy_ir_program_t program;
+  frothy_value_t value = frothy_value_make_nil();
+  int ok = 1;
+
+  reset_frothy_state();
+  frothy_ir_program_init(&program);
+
+  ok &= frothy_eval_program(NULL, &value) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_eval_program(&program, NULL) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_eval_program(&program, &value) == FROTH_ERROR_BOUNDS;
+
+  if (!ok) {
+    fprintf(stderr, "eval runtime API guards failed\n");
   }
   frothy_ir_program_free(&program);
   return ok;
@@ -1310,6 +1337,7 @@ int main(void) {
   ok &= test_fixed_layout_records();
   ok &= test_record_runtime_api_guards();
   ok &= test_value_runtime_api_guards();
+  ok &= test_eval_runtime_api_guards();
   ok &= test_spoken_ledger_surface_and_control_forms();
   ok &= test_temporary_results_release_cleanly();
   ok &= test_code_payload_reuse_with_factory_churn();

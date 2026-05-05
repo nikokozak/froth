@@ -27,7 +27,8 @@ Current milestone: `pre-thesis publishability prune`
 Today's goal: continue the file-by-file code readability audit without broad
 rearchitecture; current cuts tightened the retained type/value and build-source
 ownership boundaries and started the large runtime pass with `frothy_value.c`
-record/API guard and live-object lookup cleanup
+record/API guard, live-object lookup, object-lifecycle, and `frothy_eval.c`
+frame-stack/node-switch cleanup
 Next artifact: continue the readability audit through the remaining large
 Frothy runtime units
 Blocked by: none

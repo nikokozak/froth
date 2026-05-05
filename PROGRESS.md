@@ -398,6 +398,16 @@ Historical validation notes before 2026-05-05 use the old broad
   host test-profile build, focused eval/snapshot/FFI CTests, and
   `make --no-print-directory test-frothy`, plus the M10 proof on
   `/dev/cu.usbserial-0001`.
+- The value/eval lifecycle readability cut is in the current working tree:
+  direct object storage teardown is now separate from child-value release,
+  reused and newly appended object slots share one install helper, evaluator
+  scratch-slot and frame-stack counters have named invariants, and empty/null
+  eval-program entry points fail closed. The large eval node switch now uses
+  shared helpers for scratch-child phase transitions, completing `out` values,
+  and marking moved scratch slots. Validation passed with the host test-profile
+  build, focused eval/snapshot/FFI CTests,
+  `make --no-print-directory test-frothy`, and the M10 proof on
+  `/dev/cu.usbserial-0001`.
 
 ## Remaining Gates
 
@@ -408,7 +418,7 @@ Historical validation notes before 2026-05-05 use the old broad
   the retained substrate audit closed, the Frothy host test lanes split, and
   the CLI integration lanes deduplicated, the next useful cleanup line is the
   file-by-file readability audit, continuing through the larger Frothy runtime
-  units after the first `frothy_value.c` object-lookup cleanup.
+  units after the first `frothy_value.c` and `frothy_eval.c` lifecycle cuts.
 - Workshop-operational closeout is explicitly deferred behind the thesis-facing
   prune:
   clean-machine validation and room-side hardware/recovery prep still need to
