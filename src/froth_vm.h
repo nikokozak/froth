@@ -2,18 +2,12 @@
 
 #include "froth_cellspace.h"
 #include "froth_heap.h"
-#include "froth_stack.h"
-#include "froth_tbuf.h"
 #include "frothy_value.h"
 #include <stdbool.h>
 
 struct froth_vm_t {
-  froth_stack_t ds;
-  froth_stack_t rs;
-  froth_cs_t cs;
   froth_heap_t heap;
   froth_cellspace_t cellspace;
-  froth_tbuf_t tbuf;
   froth_cell_t thrown;
   froth_cell_t last_error_slot; /* slot index at point of error, or -1 */
   volatile int interrupted;

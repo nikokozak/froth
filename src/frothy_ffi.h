@@ -98,6 +98,9 @@ froth_error_t frothy_ffi_install_board_base_slots(void);
 void frothy_ffi_test_fail_slot_replace_at(size_t call_index,
                                           froth_error_t error);
 #endif
+froth_error_t frothy_ffi_emit_string(const char *str);
+void frothy_ffi_poll(froth_vm_t *vm);
+const char *frothy_ffi_format_number(froth_cell_t number);
 bool frothy_ffi_native_is_foreign(frothy_native_fn_t fn, const void *context);
 const char *frothy_ffi_native_owner(frothy_native_fn_t fn, const void *context);
 const char *frothy_ffi_native_effect(frothy_native_fn_t fn, const void *context);

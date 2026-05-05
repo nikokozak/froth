@@ -34,11 +34,6 @@ static bool frothy_reset_epoch_matches(uint32_t reset_epoch) {
   return frothy_runtime()->reset_epoch == reset_epoch;
 }
 
-static froth_error_t frothy_eval_reset_sentinel(frothy_value_t *out) {
-  *out = frothy_value_make_nil();
-  return FROTH_ERROR_RESET;
-}
-
 static froth_error_t frothy_poll_interrupt(void) {
   platform_check_interrupt(&froth_vm);
   if (!froth_vm.interrupted) {

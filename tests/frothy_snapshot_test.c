@@ -1,5 +1,4 @@
 #include "froth_slot_table.h"
-#include "froth_snapshot.h"
 #include "froth_vm.h"
 #include "frothy_base_image.h"
 #include "frothy_boot.h"
@@ -334,7 +333,7 @@ static int expect_binding_render_view(const char *name,
 static int expect_snapshot_present(bool expected, const char *label) {
   uint8_t slot = 0;
   uint32_t generation = 0;
-  froth_error_t err = froth_snapshot_pick_active(&slot, &generation);
+  froth_error_t err = frothy_snapshot_pick_active(&slot, &generation);
 
   if (expected && err != FROTH_OK) {
     fprintf(stderr, "%s expected active snapshot, got %d\n", label, (int)err);
@@ -355,11 +354,11 @@ static int patch_active_snapshot_payload(size_t payload_offset,
   const char *path;
   FILE *file = NULL;
   uint8_t header[FROTH_SNAPSHOT_HEADER_SIZE];
-  froth_snapshot_header_info_t info;
+  frothy_snapshot_header_info_t info;
   uint8_t *payload = NULL;
   int ok = 0;
 
-  if (froth_snapshot_pick_active(&slot, &generation) != FROTH_OK) {
+  if (frothy_snapshot_pick_active(&slot, &generation) != FROTH_OK) {
     fprintf(stderr, "no active snapshot to patch\n");
     return 0;
   }
@@ -376,7 +375,7 @@ static int patch_active_snapshot_payload(size_t payload_offset,
     perror("fread");
     goto done;
   }
-  if (froth_snapshot_parse_header(header, &info) != FROTH_OK) {
+  if (frothy_snapshot_parse_header(header, &info) != FROTH_OK) {
     fprintf(stderr, "failed to parse snapshot header for patch\n");
     goto done;
   }
@@ -403,8 +402,8 @@ static int patch_active_snapshot_payload(size_t payload_offset,
       perror("fread");
       goto done;
     }
-    if (froth_snapshot_build_header(header, info.payload_len, payload,
-                                    info.generation) != FROTH_OK) {
+    if (frothy_snapshot_build_header(header, info.payload_len, payload,
+                                     info.generation) != FROTH_OK) {
       fprintf(stderr, "failed to rebuild snapshot header\n");
       goto done;
     }
@@ -437,13 +436,13 @@ static int load_active_snapshot_payload(uint8_t **payload_out,
   const char *path;
   FILE *file = NULL;
   uint8_t header[FROTH_SNAPSHOT_HEADER_SIZE];
-  froth_snapshot_header_info_t info;
+  frothy_snapshot_header_info_t info;
   uint8_t *payload = NULL;
   int ok = 0;
 
   *payload_out = NULL;
   *payload_length_out = 0;
-  if (froth_snapshot_pick_active(&slot, &generation) != FROTH_OK) {
+  if (frothy_snapshot_pick_active(&slot, &generation) != FROTH_OK) {
     fprintf(stderr, "no active snapshot to load\n");
     return 0;
   }
@@ -458,7 +457,7 @@ static int load_active_snapshot_payload(uint8_t **payload_out,
     perror("fread");
     goto done;
   }
-  if (froth_snapshot_parse_header(header, &info) != FROTH_OK) {
+  if (frothy_snapshot_parse_header(header, &info) != FROTH_OK) {
     fprintf(stderr, "failed to parse snapshot header for load\n");
     goto done;
   }
@@ -746,8 +745,8 @@ static int write_test_snapshot_payload(const test_snapshot_payload_t *payload) {
   FILE *file = NULL;
   int ok = 0;
 
-  if (froth_snapshot_build_header(header, (uint32_t)payload->length,
-                                  payload->bytes, 1) != FROTH_OK) {
+  if (frothy_snapshot_build_header(header, (uint32_t)payload->length,
+                                   payload->bytes, 1) != FROTH_OK) {
     fprintf(stderr, "failed to build test snapshot header\n");
     return 0;
   }

@@ -18,27 +18,18 @@ It exists to keep the boundary explicit:
 These retained source files still build on maintained Frothy paths because the
 current runtime still reuses them directly:
 
-- `src/froth_console.c`
-- `src/froth_tbuf.c`
 - `src/froth_vm.c`
 - `src/froth_heap.c`
 - `src/froth_cellspace.c`
 - `src/froth_slot_table.c`
-- `src/froth_snapshot.c`
 - `src/froth_crc32.c`
-- `src/froth_transport.c`
 
 The corresponding retained public headers are:
 
 - `src/froth_cellspace.h`
-- `src/froth_console.h`
 - `src/froth_crc32.h`
 - `src/froth_heap.h`
 - `src/froth_slot_table.h`
-- `src/froth_snapshot.h`
-- `src/froth_stack.h`
-- `src/froth_tbuf.h`
-- `src/froth_transport.h`
 - `src/froth_types.h`
 - `src/froth_vm.h`
 
@@ -54,14 +45,24 @@ These are Frothy-owned runtime or board-facing sources on the maintained path:
 
 New board and project FFI code must use the maintained `frothy_ffi_entry_t`
 path declared in `src/frothy_ffi.h`.
+The small board-facing emit, poll, and number-format helpers that previously
+lived in `src/froth_console.[ch]` now live in `src/frothy_ffi.[ch]` because
+their only maintained callers are board FFI bindings.
+
+Snapshot ownership now lives in `src/frothy_snapshot.c` /
+`src/frothy_snapshot.h`. The old retained `froth_snapshot.[ch]` unit was folded
+there because the only live behavior left in it was snapshot header
+construction, header parsing, and A/B slot selection for the Frothy-owned
+save/restore/wipe path.
 
 ## Compatibility Layer
 
 No source-level C compatibility shims remain on the maintained build path.
 The prior `src/compat/*` shims and the unused `src/froth_link.h` dispatcher
 header were removed after source inventory found no retained call sites.
-Inbound transport now stops at decode/header parse in `src/froth_transport.c`;
-Frothy-owned dispatch lives in `src/frothy_control.c`.
+The prior retained `src/froth_transport.[ch]` unit is also gone; the only live
+wire behavior left there was COBS/header/frame handling for the Frothy control
+session, so that behavior now lives privately in `src/frothy_control.c`.
 
 Per Frothy ADR-125, active board and project FFI code must not export
 `froth_board_bindings` or `froth_project_bindings`, and must not call a legacy

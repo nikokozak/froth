@@ -2,11 +2,12 @@
 
 #include "ffi.h"
 #include "froth_slot_table.h"
-#include "froth_tbuf.h"
 #include "froth_vm.h"
+#include "platform.h"
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -99,6 +100,22 @@ static froth_error_t frothy_ffi_test_maybe_fail_slot_replace(void) {
 
 froth_cell_t frothy_ffi_wrap_uptime_ms(uint32_t uptime_ms) {
   return froth_wrap_payload((froth_cell_u_t)uptime_ms);
+}
+
+froth_error_t frothy_ffi_emit_string(const char *str) {
+  for (const char *p = str; *p != '\0'; p++) {
+    FROTH_TRY(platform_emit((uint8_t)*p));
+  }
+  return FROTH_OK;
+}
+
+void frothy_ffi_poll(froth_vm_t *vm) { platform_check_interrupt(vm); }
+
+const char *frothy_ffi_format_number(froth_cell_t number) {
+  static char buf[32];
+
+  snprintf(buf, sizeof(buf), "%" FROTH_CELL_FORMAT, number);
+  return buf;
 }
 
 uint32_t frothy_ffi_random_seed(uint32_t seed) {

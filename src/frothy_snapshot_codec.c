@@ -1,11 +1,11 @@
 #include "frothy_snapshot_codec.h"
 
 #include "froth_slot_table.h"
-#include "froth_snapshot.h"
 #include "froth_vm.h"
 #include "frothy_ir.h"
 #include "frothy_ir_internal.h"
 #include "frothy_name_rules.h"
+#include "frothy_snapshot.h"
 #include "frothy_value.h"
 
 #include <limits.h>
@@ -1676,47 +1676,6 @@ static froth_error_t frothy_snapshot_decode_value(
   }
 
   return FROTH_ERROR_SNAPSHOT_FORMAT;
-}
-
-static froth_error_t frothy_snapshot_decode_literal(
-    frothy_snapshot_reader_t *reader, frothy_ir_literal_t *literal_out) {
-  uint8_t kind = 0;
-  uint32_t length = 0;
-  const uint8_t *bytes = NULL;
-
-  memset(literal_out, 0, sizeof(*literal_out));
-  FROTH_TRY(frothy_snapshot_reader_read_u8(reader, &kind));
-  literal_out->kind = (frothy_ir_literal_kind_t)kind;
-  switch (literal_out->kind) {
-  case FROTHY_IR_LITERAL_INT:
-      {
-        int32_t value = 0;
-        FROTH_TRY(frothy_snapshot_reader_read_i32(reader, &value));
-        literal_out->as.int_value = (froth_cell_t)value;
-        return FROTH_OK;
-      }
-  case FROTHY_IR_LITERAL_BOOL:
-      {
-        uint8_t value = 0;
-        FROTH_TRY(frothy_snapshot_reader_read_u8(reader, &value));
-        literal_out->as.bool_value = value != 0;
-        return FROTH_OK;
-      }
-  case FROTHY_IR_LITERAL_NIL:
-    return FROTH_OK;
-  case FROTHY_IR_LITERAL_TEXT:
-    FROTH_TRY(frothy_snapshot_reader_read_u32(reader, &length));
-    FROTH_TRY(frothy_snapshot_reader_read_bytes(reader, length, &bytes));
-    return frothy_snapshot_strdup((const char *)bytes, length,
-                                  &literal_out->as.text_value);
-  }
-
-  return FROTH_ERROR_SNAPSHOT_FORMAT;
-}
-
-static froth_error_t frothy_snapshot_dup_symbol(
-    const frothy_snapshot_symbol_t *symbol, char **out) {
-  return frothy_snapshot_strdup(symbol->name, symbol->length, out);
 }
 
 static froth_error_t frothy_snapshot_add_size(size_t lhs, size_t rhs,

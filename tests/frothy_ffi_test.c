@@ -1,5 +1,4 @@
 #include "froth_slot_table.h"
-#include "froth_tbuf.h"
 #include "froth_vm.h"
 #include "frothy_eval.h"
 #include "frothy_ffi.h"
@@ -22,9 +21,6 @@ static void release_value(frothy_value_t *value) {
 static void reset_frothy_state(void) {
   frothy_runtime_free(runtime());
   (void)froth_slot_reset_overlay();
-  froth_vm.ds.pointer = 0;
-  froth_vm.rs.pointer = 0;
-  froth_vm.cs.pointer = 0;
   froth_vm.heap.pointer = 0;
   froth_vm.boot_complete = 1;
   froth_vm.trampoline_depth = 0;
@@ -33,7 +29,6 @@ static void reset_frothy_state(void) {
   froth_vm.last_error_slot = -1;
   froth_vm.mark_offset = (froth_cell_u_t)-1;
   froth_cellspace_init(&froth_vm.cellspace);
-  froth_tbuf_init(&froth_vm);
   frothy_runtime_init(runtime(), &froth_vm.cellspace);
 }
 

@@ -89,47 +89,6 @@ static void frothy_cellspace_store_value(froth_cellspace_t *cellspace,
   cellspace->data[index] = frothy_value_to_cell(value);
 }
 
-static froth_error_t frothy_strdup(const char *text, size_t length,
-                                   char **out) {
-  char *copy = (char *)malloc(length + 1);
-
-  if (copy == NULL) {
-    return FROTH_ERROR_HEAP_OUT_OF_MEMORY;
-  }
-
-  memcpy(copy, text, length);
-  copy[length] = '\0';
-  *out = copy;
-  return FROTH_OK;
-}
-
-static froth_error_t frothy_strdup_printf(char **out, const char *format, ...) {
-  va_list args;
-  va_list copy;
-  int needed;
-  char *buffer;
-
-  va_start(args, format);
-  va_copy(copy, args);
-  needed = vsnprintf(NULL, 0, format, copy);
-  va_end(copy);
-  if (needed < 0) {
-    va_end(args);
-    return FROTH_ERROR_IO;
-  }
-
-  buffer = (char *)malloc((size_t)needed + 1);
-  if (buffer == NULL) {
-    va_end(args);
-    return FROTH_ERROR_HEAP_OUT_OF_MEMORY;
-  }
-
-  (void)vsnprintf(buffer, (size_t)needed + 1, format, args);
-  va_end(args);
-  *out = buffer;
-  return FROTH_OK;
-}
-
 static froth_error_t frothy_quote_text(const char *text, size_t length,
                                        char **out) {
   size_t extra = 2;

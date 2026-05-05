@@ -987,30 +987,6 @@ static froth_error_t frothy_print_help(void) {
   return frothy_emit_text("exit\n");
 }
 
-static froth_error_t frothy_print_words(void) {
-  const char **names = NULL;
-  size_t count = 0;
-  size_t i;
-  froth_error_t err;
-
-  err = frothy_inspect_collect_words(&names, &count);
-  if (err != FROTH_OK) {
-    return err;
-  }
-  for (i = 0; i < count; i++) {
-    err = frothy_emit_text(names[i]);
-    if (err != FROTH_OK) {
-      break;
-    }
-    err = platform_emit('\n');
-    if (err != FROTH_OK) {
-      break;
-    }
-  }
-  frothy_inspect_free_words(names);
-
-  return err;
-}
 static bool frothy_slot_emits_output(frothy_runtime_t *runtime,
                                      const char *slot_name) {
   froth_cell_u_t slot_index = 0;

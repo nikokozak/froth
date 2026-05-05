@@ -86,9 +86,22 @@ keep each item's description and references so deferral does not erase context.
   Go protocol helpers that described no maintained control path; it is green
   through host, CLI, ESP-IDF, and `esp32-devkit-v1` M10 proof gates. The
   retained utility-helper cut now removes the dead `froth_stack_*` helper API
-  and `src/froth_stack.c`, folds `froth_fmt` into `froth_console`, updates the
-  retained-substrate manifest, and is green through host, ESP-IDF, and
-  `esp32-devkit-v1` M10 proof gates.
+  and `src/froth_stack.c`, folds `froth_fmt` into the then-live console helper,
+  updates the retained-substrate manifest, and is green through host, ESP-IDF,
+  and `esp32-devkit-v1` M10 proof gates. The current warning/dead-utility cut
+  removes unused static helpers, deletes the unused `froth_tbuf.[ch]`
+  transient string-buffer substrate and its build/project knobs, moves both
+  maintained ESP32 board ADC paths to `adc_oneshot`, and is green through host,
+  CLI, both touched ESP-IDF board builds, and `esp32-devkit-v1` M10 proof
+  gates. The follow-on stack/config cut removes the unused inherited VM
+  data/return/control stack storage, its board/CMake knobs, the stale active
+  `perm` tutorial, and dead console/platform nonblocking-input wrappers, and
+  is green through host, CLI, both ESP-IDF board builds, and
+  `esp32-devkit-v1` M10 proof gates. The snapshot-ownership fold removes the
+  separate retained `src/froth_snapshot.[ch]` unit, keeps header
+  construction/parsing and A/B slot selection beside Frothy save/restore/wipe,
+  and is green through `git diff --check`, host, CLI, both ESP-IDF board
+  builds, and `esp32-devkit-v1` M10 proof gates.
   References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
   `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, Frothy ADR-125,
   `tools/frothy/`,
@@ -253,6 +266,10 @@ keep each item's description and references so deferral does not erase context.
   Include: the board/project FFI compatibility path is closed by Frothy
   ADR-125; the maintained `frothy_ffi_entry_t` path is the only live
   board/project ABI.
+  Include: follow-on prune slices have deleted the unowned `froth_ffi`,
+  `froth_stack`, `froth_tbuf`, `froth_snapshot`, `froth_transport`, and
+  `froth_console` retained units from the maintained path where Frothy-owned
+  owners now exist or no live owner remained.
 - [x] Publishability reset tranche 5: docs front door and archive pass
   Deliverable: keep one front door, shorten extension docs to extension-owned
   behavior, and archive historical proof evidence and duplicated release prose

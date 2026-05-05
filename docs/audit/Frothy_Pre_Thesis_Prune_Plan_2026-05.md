@@ -25,7 +25,7 @@ maintained tree.
 Tracked source after the first immediate prune slice, counting files still
 present in the working tree:
 
-- `C` and headers: 40 `.c`, 30 `.h`
+- `C` and headers: 36 `.c`, 25 `.h`
 - Go: 80 `.go`
 - Frothy source and parser fixtures: 39 `.frothy`, 29 `.ir`
 - Shell glue: 25 `.sh`
@@ -53,6 +53,28 @@ Immediate issue already cut in this pass:
 - legacy board/project FFI exports retired under Frothy ADR-125; POSIX and
   `esp32-devkit-v1` now use `frothy_ffi_entry_t`, the public legacy installer
   is gone, and the legacy project-FFI fixture has been deleted
+- dead C utility substrate removed after retained-source audit:
+  `src/froth_ffi.[ch]`, `src/froth_stack.[ch]`, `src/froth_fmt.[ch]`, and
+  `src/froth_tbuf.[ch]` no longer ship on the maintained path
+- stale transient-buffer CMake and project-manifest tuning knobs removed:
+  `FROTH_TBUF_SIZE`, `FROTH_TDESC_MAX`, `tbuf_size`, and `tdesc_max`
+- stale inherited stack/permutation tuning knobs removed:
+  `FROTH_DS_CAPACITY`, `FROTH_RS_CAPACITY`, `FROTH_CS_CAPACITY`,
+  `FROTH_MAX_PERM_SIZE`, `ds_depth`, and `rs_depth`
+- maintained ESP32 board ADC bindings moved from the deprecated ADC1 driver API
+  to the ESP-IDF `adc_oneshot` API
+- stale active stack-language tutorial removed:
+  `docs/perm-tutorial.md`
+- old retained snapshot header/slot-selection unit folded into the Frothy-owned
+  snapshot owner: `src/froth_snapshot.[ch]` no longer ships beside
+  `src/frothy_snapshot.[ch]`
+- old retained transport unit folded into the Frothy-owned control owner:
+  COBS/header/frame handling now lives privately in `src/frothy_control.c`, and
+  `src/froth_transport.[ch]` no longer ships as a separate public C surface
+- old retained console helper folded into the Frothy-owned FFI owner:
+  board-facing emit, poll, and number-format helpers now live in
+  `src/frothy_ffi.[ch]`, and `src/froth_console.[ch]` no longer ships as a
+  separate retained C surface
 
 Remaining cleanup pressure:
 
@@ -66,9 +88,18 @@ Remaining cleanup pressure:
   product runtime code; after Frothy ADR-125, the internal `froth_ffi.*`
   substrate audit found no live owner, and the follow-on source inventory
   removed the final `src/compat/*` C shims and unused inherited link-dispatch
-  header. The next utility cut removes the unowned `froth_stack_*` helper API
-  and emptyable `src/froth_stack.c` unit while keeping the VM stack structs;
-  it also folds the two-function `froth_fmt` helper into `froth_console`.
+  header. The utility cuts have now removed the unowned `froth_stack_*` helper
+  API, the emptyable `src/froth_stack.c` unit, the unused VM stack storage
+  structs, the two-function `froth_fmt` helper unit, and the unused
+  `froth_tbuf` transient string-buffer substrate. The snapshot cut folds the
+  old retained `froth_snapshot.[ch]` header and A/B slot-selection plumbing
+  into `src/frothy_snapshot.[ch]`, leaving snapshot save/restore/wipe under one
+  Frothy owner. The transport cut folds the old retained
+  `froth_transport.[ch]` COBS/header/frame helpers into `src/frothy_control.c`,
+  leaving the control wire format stable but removing another public retained
+  substrate unit. The console cut folds the old retained `froth_console.[ch]`
+  emit/poll/format helpers into `src/frothy_ffi.[ch]`, where their only live
+  board FFI callers already anchor the dependency.
 
 ## Authority Tensions
 
@@ -200,10 +231,21 @@ Do not blind-rename retained `froth_*` files. Instead:
   the audit found no live runtime owner
 - keep `src/compat/*` deleted now that no retained substrate requires it
 - keep one CMake source list as the shared host/ESP-IDF runtime inventory
-- keep `froth_stack.h` only as the VM stack-struct declaration until a later
-  runtime-layout pass proves that boundary can be simplified further
+- keep the removed inherited VM stack storage and board stack-depth knobs out
+  of the maintained tree; Frothy execution now uses the Frothy evaluator frame
+  stack rather than the old data/return/control stack arrays
 - keep console formatting helpers with the console substrate instead of a
   separate unowned formatting source/header pair
+- keep the deleted `froth_tbuf` transient-buffer path out of the maintained
+  tree; Frothy runtime text storage now uses the Frothy object allocator path
+- keep ESP32 board ADC reads on `adc_oneshot` rather than the deprecated ADC1
+  driver API
+- keep `froth_snapshot.[ch]` deleted now that its remaining header and slot
+  selection behavior lives in the Frothy snapshot owner
+- keep `froth_transport.[ch]` deleted now that its remaining COBS/header/frame
+  behavior lives privately in the Frothy control owner
+- keep `froth_console.[ch]` deleted now that its remaining board-facing helper
+  behavior lives in the Frothy FFI owner
 - move retained substrate into an explicit directory only if it reduces reader
   confusion without hiding ownership
 
@@ -211,6 +253,8 @@ Exit proof:
 
 - `cmake -S . -B build && cmake --build build`
 - `ctest --test-dir build --output-on-failure -L frothy`
+- `./tools/cli/frothy-cli build --target esp-idf --board esp32-devkit-v1`
+- `./tools/cli/frothy-cli build --target esp-idf --board esp32-devkit-v4-game-board`
 - `sh tools/frothy/proof.sh control <PORT>`
 
 ### 6. Collapse Docs To One Reader Path

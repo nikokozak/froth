@@ -4,8 +4,8 @@ import "fmt"
 
 // Encode applies COBS encoding to data, eliminating all 0x00 bytes.
 // The output is always slightly larger than the input (at most 1 byte
-// per 254 input bytes, plus 1). This mirrors froth_cobs_encode in
-// froth_transport.c.
+// per 254 input bytes, plus 1). This mirrors the device-side COBS encoder in
+// src/frothy_control.c.
 func COBSEncode(data []byte) []byte {
 	// Algorithm:
 	//
@@ -59,8 +59,8 @@ func COBSEncode(data []byte) []byte {
 }
 
 // Decode reverses COBS encoding. Returns the decoded data or an error
-// if the encoding is invalid. This mirrors froth_cobs_decode in
-// froth_transport.c.
+// if the encoding is invalid. This mirrors the device-side COBS decoder in
+// src/frothy_control.c.
 func COBSDecode(data []byte) ([]byte, error) {
 	// Algorithm:
 	//

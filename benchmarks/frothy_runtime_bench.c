@@ -1,5 +1,4 @@
 #include "froth_slot_table.h"
-#include "froth_tbuf.h"
 #include "froth_vm.h"
 #include "frothy_base_image.h"
 #include "frothy_eval.h"
@@ -89,9 +88,6 @@ static froth_error_t ensure_platform_runtime(void) {
 static froth_error_t reset_frothy_state(bool install_base_image) {
   frothy_runtime_free(runtime());
   (void)froth_slot_reset_overlay();
-  froth_vm.ds.pointer = 0;
-  froth_vm.rs.pointer = 0;
-  froth_vm.cs.pointer = 0;
   froth_vm.heap.pointer = 0;
   froth_vm.boot_complete = 1;
   froth_vm.trampoline_depth = 0;
@@ -101,7 +97,6 @@ static froth_error_t reset_frothy_state(bool install_base_image) {
   froth_vm.mark_offset = (froth_cell_u_t)-1;
   froth_vm.watermark_heap_offset = 0;
   froth_cellspace_init(&froth_vm.cellspace);
-  froth_tbuf_init(&froth_vm);
   frothy_runtime_init(runtime(), &froth_vm.cellspace);
   if (install_base_image) {
     FROTH_TRY(frothy_base_image_install());
@@ -111,16 +106,12 @@ static froth_error_t reset_frothy_state(bool install_base_image) {
 }
 
 static froth_error_t reset_snapshot_state(void) {
-  froth_vm.ds.pointer = 0;
-  froth_vm.rs.pointer = 0;
-  froth_vm.cs.pointer = 0;
   froth_vm.boot_complete = 1;
   froth_vm.trampoline_depth = 0;
   froth_vm.interrupted = 0;
   froth_vm.thrown = FROTH_OK;
   froth_vm.last_error_slot = -1;
   froth_vm.mark_offset = (froth_cell_u_t)-1;
-  froth_tbuf_init(&froth_vm);
 
   if (!bench_snapshot_runtime_ready) {
     FROTH_TRY(reset_frothy_state(true));

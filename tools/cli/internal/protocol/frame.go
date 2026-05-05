@@ -8,7 +8,8 @@ import (
 	"strconv"
 )
 
-// Frame layout constants matching ADR-048 and froth_transport.h.
+// Frame layout constants matching ADR-048 and the device-side Frothy control
+// frame helpers.
 const (
 	HeaderSize        = 20
 	DefaultMaxPayload = 1024
@@ -45,7 +46,7 @@ type Header struct {
 
 // BuildFrame constructs a complete raw frame (header + payload) with
 // computed CRC32. Returns the frame bytes ready for COBS encoding.
-// This mirrors froth_link_header_build in froth_transport.c.
+// This mirrors the device-side frame builder in src/frothy_control.c.
 func BuildFrame(sessionID uint64, msgType byte, seq uint16, payload []byte) ([]byte, error) {
 	// Frame layout (20-byte header + N payload bytes):
 	//   [0..1]   magic "FL"
@@ -91,7 +92,7 @@ func BuildFrame(sessionID uint64, msgType byte, seq uint16, payload []byte) ([]b
 
 // ParseFrame validates and parses a decoded (post-COBS) frame.
 // Returns the header and payload slice, or an error.
-// This mirrors froth_link_header_parse in froth_transport.c.
+// This mirrors the device-side frame parser in src/frothy_control.c.
 func ParseFrame(frame []byte) (*Header, []byte, error) {
 	// Validation order (matches device side):
 	// 1. Frame must be at least 20 bytes (header size).

@@ -267,10 +267,54 @@ file is wrong.
 - The retained utility-substrate prune is validated: the unowned
   `froth_stack_*` helper API and `src/froth_stack.c` unit are gone while the
   VM-owned stack structs remain, and the two-function `froth_fmt` helper unit
-  is folded into `froth_console`. Validation passed with the host build,
-  `make --no-print-directory test-frothy`, the maintained
+  was folded into the then-live console helper. Validation passed with the host
+  build, `make --no-print-directory test-frothy`, the maintained
   `esp32-devkit-v1` ESP-IDF build, and the M10 proof on
   `/dev/cu.usbserial-0001`.
+- The ESP-IDF warning and dead-utility prune is validated in the current
+  working tree: unused static helpers in the evaluator, shell, value, and
+  snapshot codec are removed; the unused `froth_tbuf.[ch]` transient
+  string-buffer substrate plus its CMake and project-manifest tuning knobs are
+  gone; and both maintained ESP32 board ADC paths now use `adc_oneshot` instead
+  of the deprecated ADC1 API. Validation passed with the host build,
+  `make --no-print-directory test-frothy`, `go test ./...` from `tools/cli`,
+  both `esp32-devkit-v1` and `esp32-devkit-v4-game-board` ESP-IDF builds, and
+  the M10 proof on `/dev/cu.usbserial-0001`.
+- The follow-on VM stack/config prune is validated in the current working
+  tree: the unused inherited data/return/control stack storage and
+  `src/froth_stack.h` are removed from `froth_vm_t`, the stale
+  `FROTH_DS_CAPACITY`, `FROTH_RS_CAPACITY`, `FROTH_CS_CAPACITY`,
+  `FROTH_MAX_PERM_SIZE`, `ds_depth`, and `rs_depth` knobs are gone, dead
+  console/platform nonblocking-input wrappers are removed, and the old active
+  `docs/perm-tutorial.md` stack-language tutorial is deleted. Validation
+  passed with the host build, `make --no-print-directory test-frothy`,
+  `go test ./...` from `tools/cli`, both `esp32-devkit-v1` and
+  `esp32-devkit-v4-game-board` ESP-IDF builds, and the M10 proof on
+  `/dev/cu.usbserial-0001`.
+- The snapshot-ownership fold is validated in the current working tree:
+  `src/froth_snapshot.[ch]` is deleted, snapshot header construction/parsing
+  and A/B slot selection now live beside save/restore/wipe in
+  `src/frothy_snapshot.[ch]`, the retained-substrate manifest no longer names
+  snapshot as a separate live Froth unit, and the tracked source inventory is
+  down to 38 `.c` files and 27 `.h` files. Validation passed with
+  `git diff --check`, the host build, `make --no-print-directory test-frothy`,
+  `go test ./...` from `tools/cli`, both maintained ESP-IDF board builds, and
+  the M10 proof on `/dev/cu.usbserial-0001`.
+- The transport-ownership fold is validated in the current working tree:
+  `src/froth_transport.[ch]` is deleted, the COBS/header/frame helpers now
+  live privately in `src/frothy_control.c`, and the CLI protocol mirror points
+  at the Frothy control owner instead of a retained transport unit. Validation
+  passed with `git diff --check`, the host build,
+  `make --no-print-directory test-frothy`, `go test ./...` from `tools/cli`,
+  both maintained ESP-IDF board builds, and the M10 proof on
+  `/dev/cu.usbserial-0001`.
+- The console-helper ownership fold is validated in the current working tree:
+  `src/froth_console.[ch]` is deleted and the remaining board-facing emit,
+  poll, and number-format helpers now live on the maintained
+  `src/frothy_ffi.[ch]` surface used by board bindings. Validation passed with
+  `git diff --check`, the host build, `make --no-print-directory test-frothy`,
+  `go test ./...` from `tools/cli`, both maintained ESP-IDF board builds, and
+  the M10 proof on `/dev/cu.usbserial-0001`.
 
 ## Remaining Gates
 

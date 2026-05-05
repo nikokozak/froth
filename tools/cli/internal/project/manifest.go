@@ -37,8 +37,6 @@ type BuildConfig struct {
 	HeapSize       *int `toml:"heap_size"`
 	SlotTableSize  *int `toml:"slot_table_size"`
 	LineBufferSize *int `toml:"line_buffer_size"`
-	TbufSize       *int `toml:"tbuf_size"`
-	TdescMax       *int `toml:"tdesc_max"`
 }
 
 type FFIConfig struct {
@@ -160,12 +158,6 @@ func (b *BuildConfig) CMakeArgs() []string {
 	}
 	if b.LineBufferSize != nil {
 		args = append(args, fmt.Sprintf("-DFROTH_LINE_BUFFER_SIZE=%d", *b.LineBufferSize))
-	}
-	if b.TbufSize != nil {
-		args = append(args, fmt.Sprintf("-DFROTH_TBUF_SIZE=%d", *b.TbufSize))
-	}
-	if b.TdescMax != nil {
-		args = append(args, fmt.Sprintf("-DFROTH_TDESC_MAX=%d", *b.TdescMax))
 	}
 	return args
 }

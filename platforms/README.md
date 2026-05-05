@@ -63,17 +63,6 @@ Read one byte from the console input. This call blocks until a byte is
 available. On a hosted system, read from stdin. On a microcontroller,
 read from the UART RX line or USB-CDC endpoint.
 
-### platform_key_ready
-
-```c
-bool platform_key_ready(void);
-```
-
-Return true if at least one byte can be read from console input without
-blocking. Used by the Froth `key?` word to allow non-blocking input
-polling. On POSIX, `poll()` with a zero timeout works. On a
-microcontroller, check the UART RX FIFO status register or equivalent.
-
 ### platform_fatal
 
 ```c
@@ -189,7 +178,6 @@ implementation and a good reference when writing a new platform.
 | `platform_init` | `signal(SIGINT, handler)` to set up Ctrl-C interrupt |
 | `platform_emit` | `fputc(byte, stdout)` |
 | `platform_key` | `fgetc(stdin)` |
-| `platform_key_ready` | `poll()` on stdin with zero timeout |
 | `platform_fatal` | `exit(1)` |
 | `platform_snapshot_read` | `fopen` + `fseek` + `fread` on a file per slot |
 | `platform_snapshot_write` | `fopen` + `fseek` + `fwrite`, creating if needed |

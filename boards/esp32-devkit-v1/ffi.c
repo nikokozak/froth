@@ -1,15 +1,14 @@
 /* Maintained ESP32 DevKit V1 board FFI bindings. */
 
 #include "ffi.h"
-#include "driver/adc.h"
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "driver/ledc.h"
 #include "driver/uart.h"
+#include "esp_adc/adc_oneshot.h"
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "froth_console.h"
 #include "froth_types.h"
 #include "froth_vm.h"
 #include "frothy_ffi.h"
@@ -22,53 +21,85 @@ static froth_error_t throw_program_interrupted(froth_vm_t *froth_vm) {
 }
 
 static froth_error_t poll_interruptible_wait(froth_vm_t *froth_vm) {
-  froth_console_poll(froth_vm);
+  frothy_ffi_poll(froth_vm);
   if (froth_vm->interrupted) {
     return throw_program_interrupted(froth_vm);
   }
   return FROTH_OK;
 }
 
-#if defined(ADC_ATTEN_DB_12)
 #define FROTH_BOARD_ADC_ATTEN ADC_ATTEN_DB_12
-#else
-#define FROTH_BOARD_ADC_ATTEN ADC_ATTEN_DB_11
-#endif
 
+static adc_oneshot_unit_handle_t esp32_adc1_handle;
 static uint8_t esp32_gpio_output_shadow_valid[GPIO_NUM_MAX];
 static froth_cell_t esp32_gpio_output_shadow_levels[GPIO_NUM_MAX];
 static uint32_t esp32_random_state = 1;
 
 static bool esp32_adc1_channel_for_pin(froth_cell_t pin,
-                                       adc1_channel_t *channel_out) {
+                                       adc_channel_t *channel_out) {
   switch (pin) {
   case 32:
-    *channel_out = ADC1_CHANNEL_4;
+    *channel_out = ADC_CHANNEL_4;
     return true;
   case 33:
-    *channel_out = ADC1_CHANNEL_5;
+    *channel_out = ADC_CHANNEL_5;
     return true;
   case 34:
-    *channel_out = ADC1_CHANNEL_6;
+    *channel_out = ADC_CHANNEL_6;
     return true;
   case 35:
-    *channel_out = ADC1_CHANNEL_7;
+    *channel_out = ADC_CHANNEL_7;
     return true;
   case 36:
-    *channel_out = ADC1_CHANNEL_0;
+    *channel_out = ADC_CHANNEL_0;
     return true;
   case 37:
-    *channel_out = ADC1_CHANNEL_1;
+    *channel_out = ADC_CHANNEL_1;
     return true;
   case 38:
-    *channel_out = ADC1_CHANNEL_2;
+    *channel_out = ADC_CHANNEL_2;
     return true;
   case 39:
-    *channel_out = ADC1_CHANNEL_3;
+    *channel_out = ADC_CHANNEL_3;
     return true;
   default:
     return false;
   }
+}
+
+static froth_error_t esp32_adc1_ensure(adc_oneshot_unit_handle_t *out) {
+  if (esp32_adc1_handle == NULL) {
+    const adc_oneshot_unit_init_cfg_t init = {
+        .unit_id = ADC_UNIT_1,
+        .clk_src = ADC_RTC_CLK_SRC_DEFAULT,
+        .ulp_mode = ADC_ULP_MODE_DISABLE,
+    };
+
+    if (adc_oneshot_new_unit(&init, &esp32_adc1_handle) != ESP_OK) {
+      return FROTH_ERROR_IO;
+    }
+  }
+
+  *out = esp32_adc1_handle;
+  return FROTH_OK;
+}
+
+static froth_error_t esp32_adc1_read_channel(adc_channel_t channel,
+                                             int *sample_out) {
+  adc_oneshot_unit_handle_t handle = NULL;
+  const adc_oneshot_chan_cfg_t config = {
+      .atten = FROTH_BOARD_ADC_ATTEN,
+      .bitwidth = ADC_BITWIDTH_12,
+  };
+
+  FROTH_TRY(esp32_adc1_ensure(&handle));
+  if (adc_oneshot_config_channel(handle, channel, &config) != ESP_OK) {
+    return FROTH_ERROR_IO;
+  }
+  if (adc_oneshot_read(handle, channel, sample_out) != ESP_OK) {
+    return FROTH_ERROR_IO;
+  }
+  return FROTH_OK;
 }
 
 static bool esp32_gpio_pin_valid(froth_cell_t pin) {
@@ -197,9 +228,8 @@ static froth_error_t esp32_adc_read(frothy_runtime_t *runtime,
                                     const void *context,
                                     const frothy_value_t *args,
                                     size_t arg_count, frothy_value_t *out) {
-  adc1_channel_t channel;
-  esp_err_t err;
-  int sample;
+  adc_channel_t channel;
+  int sample = 0;
   int32_t pin = 0;
 
   ESP32_UNUSED_CALLBACK_CONTEXT();
@@ -209,20 +239,7 @@ static froth_error_t esp32_adc_read(frothy_runtime_t *runtime,
     return FROTH_ERROR_BOUNDS;
   }
 
-  err = adc1_config_width(ADC_WIDTH_BIT_12);
-  if (err != ESP_OK) {
-    return FROTH_ERROR_IO;
-  }
-
-  err = adc1_config_channel_atten(channel, FROTH_BOARD_ADC_ATTEN);
-  if (err != ESP_OK) {
-    return FROTH_ERROR_IO;
-  }
-
-  sample = adc1_get_raw(channel);
-  if (sample < 0) {
-    return FROTH_ERROR_IO;
-  }
+  FROTH_TRY(esp32_adc1_read_channel(channel, &sample));
 
   return frothy_ffi_return_int(sample, out);
 }
@@ -992,15 +1009,15 @@ static froth_error_t esp32_console_info(frothy_runtime_t *runtime,
   (void)args;
   FROTH_TRY(platform_console_uart_info(&info));
 
-  FROTH_TRY(froth_console_emit_string("console uart"));
-  FROTH_TRY(froth_console_emit_string(froth_console_format_number(info.port)));
-  FROTH_TRY(froth_console_emit_string(" tx="));
-  FROTH_TRY(froth_console_emit_string(froth_console_format_number(info.tx)));
-  FROTH_TRY(froth_console_emit_string(" rx="));
-  FROTH_TRY(froth_console_emit_string(froth_console_format_number(info.rx)));
-  FROTH_TRY(froth_console_emit_string(" baud="));
-  FROTH_TRY(froth_console_emit_string(froth_console_format_number(info.baud)));
-  FROTH_TRY(froth_console_emit_string("\n"));
+  FROTH_TRY(frothy_ffi_emit_string("console uart"));
+  FROTH_TRY(frothy_ffi_emit_string(frothy_ffi_format_number(info.port)));
+  FROTH_TRY(frothy_ffi_emit_string(" tx="));
+  FROTH_TRY(frothy_ffi_emit_string(frothy_ffi_format_number(info.tx)));
+  FROTH_TRY(frothy_ffi_emit_string(" rx="));
+  FROTH_TRY(frothy_ffi_emit_string(frothy_ffi_format_number(info.rx)));
+  FROTH_TRY(frothy_ffi_emit_string(" baud="));
+  FROTH_TRY(frothy_ffi_emit_string(frothy_ffi_format_number(info.baud)));
+  FROTH_TRY(frothy_ffi_emit_string("\n"));
   return frothy_ffi_return_nil(out);
 }
 
@@ -1011,9 +1028,6 @@ static froth_error_t esp32_console_default(frothy_runtime_t *runtime,
                                            frothy_value_t *out) {
   ESP32_UNUSED_CALLBACK_CONTEXT();
   (void)args;
-  if (froth_console_live_active()) {
-    return FROTH_ERROR_BUSY;
-  }
 
   if (console_route_conflicts_aux(FROTH_BOARD_CONSOLE_DEFAULT_PORT,
                                   FROTH_BOARD_CONSOLE_DEFAULT_TX_PIN,
@@ -1021,7 +1035,6 @@ static froth_error_t esp32_console_default(frothy_runtime_t *runtime,
     return FROTH_ERROR_BUSY;
   }
 
-  FROTH_TRY(froth_console_flush_output());
   FROTH_TRY(platform_console_uart_default());
   return frothy_ffi_return_nil(out);
 }
@@ -1042,15 +1055,10 @@ static froth_error_t esp32_console_uart_bind(frothy_runtime_t *runtime,
   FROTH_TRY(frothy_ffi_expect_int(args, 2, &rx));
   FROTH_TRY(frothy_ffi_expect_int(args, 3, &baud));
 
-  if (froth_console_live_active()) {
-    return FROTH_ERROR_BUSY;
-  }
-
   if (console_route_conflicts_aux(port, tx, rx)) {
     return FROTH_ERROR_BUSY;
   }
 
-  FROTH_TRY(froth_console_flush_output());
   FROTH_TRY(platform_console_uart_bind(port, tx, rx, baud));
   return frothy_ffi_return_nil(out);
 }

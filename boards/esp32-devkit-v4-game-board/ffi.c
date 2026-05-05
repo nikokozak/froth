@@ -1,6 +1,5 @@
 #include "ffi.h"
 
-#include "froth_console.h"
 #include "froth_vm.h"
 #include "frothy_tm1629.h"
 #include "platform.h"
@@ -10,8 +9,8 @@
 #include <string.h>
 
 #ifdef ESP_PLATFORM
-#include "driver/adc.h"
 #include "driver/gpio.h"
+#include "esp_adc/adc_oneshot.h"
 #include "esp_err.h"
 #include "esp_rom_sys.h"
 #include "freertos/FreeRTOS.h"
@@ -44,10 +43,8 @@
 #define BOARD_POSIX_GPIO_MAX 40
 #endif
 
-#if defined(ESP_PLATFORM) && defined(ADC_ATTEN_DB_12)
+#if defined(ESP_PLATFORM)
 #define BOARD_ADC_ATTEN ADC_ATTEN_DB_12
-#elif defined(ESP_PLATFORM)
-#define BOARD_ADC_ATTEN ADC_ATTEN_DB_11
 #endif
 
 static frothy_tm1629_t board_tm1629;
@@ -55,6 +52,7 @@ static bool board_runtime_initialized = false;
 static uint32_t board_random_state = 1;
 
 #ifdef ESP_PLATFORM
+static adc_oneshot_unit_handle_t board_adc1_handle;
 static uint8_t board_gpio_output_shadow_valid[GPIO_NUM_MAX];
 static int32_t board_gpio_output_shadow_levels[GPIO_NUM_MAX];
 #else
@@ -69,7 +67,7 @@ static froth_error_t board_throw_program_interrupted(froth_vm_t *froth_vm) {
 }
 
 static froth_error_t board_poll_interruptible_wait(froth_vm_t *froth_vm) {
-  froth_console_poll(froth_vm);
+  frothy_ffi_poll(froth_vm);
   if (froth_vm->interrupted) {
     return board_throw_program_interrupted(froth_vm);
   }
@@ -94,35 +92,70 @@ static froth_error_t board_delay_interruptible_ms(froth_vm_t *froth_vm,
 }
 
 #ifdef ESP_PLATFORM
-static bool board_adc1_channel_for_pin(int32_t pin, adc1_channel_t *channel_out) {
+static bool board_adc1_channel_for_pin(int32_t pin, adc_channel_t *channel_out) {
   switch (pin) {
   case 32:
-    *channel_out = ADC1_CHANNEL_4;
+    *channel_out = ADC_CHANNEL_4;
     return true;
   case 33:
-    *channel_out = ADC1_CHANNEL_5;
+    *channel_out = ADC_CHANNEL_5;
     return true;
   case 34:
-    *channel_out = ADC1_CHANNEL_6;
+    *channel_out = ADC_CHANNEL_6;
     return true;
   case 35:
-    *channel_out = ADC1_CHANNEL_7;
+    *channel_out = ADC_CHANNEL_7;
     return true;
   case 36:
-    *channel_out = ADC1_CHANNEL_0;
+    *channel_out = ADC_CHANNEL_0;
     return true;
   case 37:
-    *channel_out = ADC1_CHANNEL_1;
+    *channel_out = ADC_CHANNEL_1;
     return true;
   case 38:
-    *channel_out = ADC1_CHANNEL_2;
+    *channel_out = ADC_CHANNEL_2;
     return true;
   case 39:
-    *channel_out = ADC1_CHANNEL_3;
+    *channel_out = ADC_CHANNEL_3;
     return true;
   default:
     return false;
   }
+}
+
+static froth_error_t board_adc1_ensure(adc_oneshot_unit_handle_t *out) {
+  if (board_adc1_handle == NULL) {
+    const adc_oneshot_unit_init_cfg_t init = {
+        .unit_id = ADC_UNIT_1,
+        .clk_src = ADC_RTC_CLK_SRC_DEFAULT,
+        .ulp_mode = ADC_ULP_MODE_DISABLE,
+    };
+
+    if (adc_oneshot_new_unit(&init, &board_adc1_handle) != ESP_OK) {
+      return FROTH_ERROR_IO;
+    }
+  }
+
+  *out = board_adc1_handle;
+  return FROTH_OK;
+}
+
+static froth_error_t board_adc1_read_channel(adc_channel_t channel,
+                                             int *sample_out) {
+  adc_oneshot_unit_handle_t handle = NULL;
+  const adc_oneshot_chan_cfg_t config = {
+      .atten = BOARD_ADC_ATTEN,
+      .bitwidth = ADC_BITWIDTH_12,
+  };
+
+  FROTH_TRY(board_adc1_ensure(&handle));
+  if (adc_oneshot_config_channel(handle, channel, &config) != ESP_OK) {
+    return FROTH_ERROR_IO;
+  }
+  if (adc_oneshot_read(handle, channel, sample_out) != ESP_OK) {
+    return FROTH_ERROR_IO;
+  }
+  return FROTH_OK;
 }
 
 static bool board_gpio_pin_valid(int32_t pin) {
@@ -130,7 +163,7 @@ static bool board_gpio_pin_valid(int32_t pin) {
 }
 
 static bool board_adc_pin_valid(int32_t pin) {
-  adc1_channel_t channel;
+  adc_channel_t channel;
 
   return board_adc1_channel_for_pin(pin, &channel);
 }
@@ -165,7 +198,8 @@ static bool board_tm1629_pin_mode(void *context, int32_t pin, bool output) {
   }
   if (output) {
     board_gpio_output_shadow_valid[pin] = 1;
-    board_gpio_output_shadow_levels[pin] = gpio_get_level((gpio_num_t)pin) ? 1 : 0;
+    board_gpio_output_shadow_levels[pin] =
+        gpio_get_level((gpio_num_t)pin) ? 1 : 0;
   } else {
     board_gpio_output_shadow_valid[pin] = 0;
   }
@@ -247,7 +281,8 @@ static void board_init_runtime_state(void) {
   };
 
 #ifdef ESP_PLATFORM
-  memset(board_gpio_output_shadow_valid, 0, sizeof(board_gpio_output_shadow_valid));
+  memset(board_gpio_output_shadow_valid, 0,
+         sizeof(board_gpio_output_shadow_valid));
   memset(board_gpio_output_shadow_levels, 0,
          sizeof(board_gpio_output_shadow_levels));
 #else
@@ -438,22 +473,13 @@ static froth_error_t board_adc_read_cb(frothy_runtime_t *runtime,
 
 #ifdef ESP_PLATFORM
   {
-    adc1_channel_t channel;
+    adc_channel_t channel;
     int sample = 0;
 
     if (!board_adc1_channel_for_pin(pin, &channel)) {
       return FROTH_ERROR_BOUNDS;
     }
-    if (adc1_config_width(ADC_WIDTH_BIT_12) != ESP_OK) {
-      return FROTH_ERROR_IO;
-    }
-    if (adc1_config_channel_atten(channel, BOARD_ADC_ATTEN) != ESP_OK) {
-      return FROTH_ERROR_IO;
-    }
-    sample = adc1_get_raw(channel);
-    if (sample < 0) {
-      return FROTH_ERROR_IO;
-    }
+    FROTH_TRY(board_adc1_read_channel(channel, &sample));
     return frothy_ffi_return_int(sample, out);
   }
 #else

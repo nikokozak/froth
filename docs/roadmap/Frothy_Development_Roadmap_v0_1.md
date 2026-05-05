@@ -24,12 +24,14 @@ It is a sequencing and control document.
 This block is the live control surface for repo status.
 
 Current milestone: `pre-thesis publishability prune`
-Today's goal: finish the C-runtime readability prune by deleting the dead
-stack-helper source/API and folding the tiny unowned `froth_fmt` helper unit
-into the console substrate
-Next artifact: next retained-substrate audit, starting with whether the
-remaining console/tbuf utilities can be made clearer without hiding platform
-ownership
+Today's goal: close the retained-substrate snapshot, transport, and
+console-helper ownership folds after removing unused stack/tbuf storage, dead
+console wrappers, stale stack-facing board config knobs, and the ESP-IDF ADC
+warning source
+Next artifact: next retained-substrate audit, focused on whether the remaining
+`froth_heap`, `froth_cellspace`, `froth_slot_table`, `froth_crc32`, and
+`froth_vm` units should stay as named substrate or move behind narrower
+Frothy-owned boundaries
 Blocked by: none
 Next proof command: for the next tranche, start with the smallest focused gate
 that exercises the changed surface, then finish sign-off with a real

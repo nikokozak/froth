@@ -1,4 +1,3 @@
-#include "froth_snapshot.h"
 #include "froth_slot_table.h"
 #include "froth_vm.h"
 #include "frothy_base_image.h"

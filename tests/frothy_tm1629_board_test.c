@@ -1,5 +1,4 @@
 #include "froth_slot_table.h"
-#include "froth_tbuf.h"
 #include "froth_vm.h"
 #include "frothy_base_image.h"
 #include "frothy_eval.h"

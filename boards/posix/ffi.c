@@ -1,6 +1,5 @@
 #include "froth_vm.h"
 #include "ffi.h"
-#include "froth_console.h"
 #include "frothy_ffi.h"
 #include "platform.h"
 #include <stdint.h>
@@ -87,9 +86,9 @@ static froth_error_t posix_poll_interruptible_wait(void) {
 }
 
 static froth_error_t emit_trace_prefix(const char *prefix, froth_cell_t handle) {
-  FROTH_TRY(froth_console_emit_string(prefix));
-  FROTH_TRY(froth_console_emit_string(froth_console_format_number(handle)));
-  FROTH_TRY(froth_console_emit_string("] "));
+  FROTH_TRY(frothy_ffi_emit_string(prefix));
+  FROTH_TRY(frothy_ffi_emit_string(frothy_ffi_format_number(handle)));
+  FROTH_TRY(frothy_ffi_emit_string("] "));
   return FROTH_OK;
 }
 
@@ -116,9 +115,9 @@ static froth_error_t prim_gpio_mode(frothy_runtime_t *runtime,
   }
 
   posix_gpio_known[pin] = 1;
-  froth_console_emit_string("[gpio] pin ");
-  froth_console_emit_string(froth_console_format_number(pin));
-  froth_console_emit_string(mode == 1 ? " -> OUTPUT\n" : " -> INPUT\n");
+  frothy_ffi_emit_string("[gpio] pin ");
+  frothy_ffi_emit_string(frothy_ffi_format_number(pin));
+  frothy_ffi_emit_string(mode == 1 ? " -> OUTPUT\n" : " -> INPUT\n");
   return frothy_ffi_return_nil(out);
 }
 
@@ -139,9 +138,9 @@ static froth_error_t prim_gpio_write(frothy_runtime_t *runtime,
 
   posix_gpio_known[pin] = 1;
   posix_gpio_levels[pin] = value ? 1 : 0;
-  froth_console_emit_string("[gpio] pin ");
-  froth_console_emit_string(froth_console_format_number(pin));
-  froth_console_emit_string(value ? " = HIGH\n" : " = LOW\n");
+  frothy_ffi_emit_string("[gpio] pin ");
+  frothy_ffi_emit_string(frothy_ffi_format_number(pin));
+  frothy_ffi_emit_string(value ? " = HIGH\n" : " = LOW\n");
   return frothy_ffi_return_nil(out);
 }
 
@@ -405,9 +404,9 @@ static froth_error_t prim_i2c_write_byte(frothy_runtime_t *runtime,
     return FROTH_ERROR_BOUNDS;
   }
   emit_trace_prefix("[i2c", device);
-  froth_console_emit_string("write-byte ");
-  froth_console_emit_string(froth_console_format_number(byte));
-  froth_console_emit_string("\n");
+  frothy_ffi_emit_string("write-byte ");
+  frothy_ffi_emit_string(frothy_ffi_format_number(byte));
+  frothy_ffi_emit_string("\n");
   return frothy_ffi_return_nil(out);
 }
 
@@ -444,11 +443,11 @@ static froth_error_t prim_i2c_write_reg(frothy_runtime_t *runtime,
     return FROTH_ERROR_BOUNDS;
   }
   emit_trace_prefix("[i2c", device);
-  froth_console_emit_string("write-reg ");
-  froth_console_emit_string(froth_console_format_number(reg));
-  froth_console_emit_string(" <- ");
-  froth_console_emit_string(froth_console_format_number(byte));
-  froth_console_emit_string("\n");
+  frothy_ffi_emit_string("write-reg ");
+  frothy_ffi_emit_string(frothy_ffi_format_number(reg));
+  frothy_ffi_emit_string(" <- ");
+  frothy_ffi_emit_string(frothy_ffi_format_number(byte));
+  frothy_ffi_emit_string("\n");
   return frothy_ffi_return_nil(out);
 }
 

@@ -71,8 +71,6 @@ determine what words and pins are available on the target.
   "config": {
     "cell_size_bits": 32,
     "heap_size": 4096,
-    "ds_depth": 64,
-    "rs_depth": 32,
     "slot_count": 128,
     "has_snapshots": true,
     "snapshot_block_size": 4096
@@ -110,21 +108,18 @@ size of internal data structures. Larger values use more RAM.
 | Key | CMake define | Default | Notes |
 |-----|-------------|---------|-------|
 | `cell_size_bits` | `FROTH_CELL_SIZE_BITS` | 32 | Width of a Froth cell in bits. Valid values: 8, 16, 32, 64. |
-| `heap_size` | `FROTH_HEAP_SIZE` | 4096 | Heap size in bytes. All quotations, patterns, and strings are allocated here. |
-| `ds_depth` | `FROTH_DS_CAPACITY` | 256 | Maximum data stack depth in cells. |
-| `rs_depth` | `FROTH_RS_CAPACITY` | 256 | Maximum return stack depth in cells. |
+| `heap_size` | `FROTH_HEAP_SIZE` | 4096 | Retained substrate heap size in bytes. |
 | `slot_count` | `FROTH_SLOT_TABLE_SIZE` | 128 | Maximum number of named slots (words). Includes stdlib and board words. |
 | `has_snapshots` | `FROTH_HAS_SNAPSHOTS` | true | Enable save/restore/wipe. Requires the platform to implement snapshot storage. |
 | `snapshot_block_size` | `FROTH_SNAPSHOT_BLOCK_SIZE` | 2048 | Size of each snapshot storage slot in bytes. |
 | `frothy_object_capacity` | `FROTHY_OBJECT_CAPACITY` | 128 | Optional Frothy runtime object/free-span capacity for boards that ship a larger base library. |
 | `frothy_payload_capacity` | `FROTHY_PAYLOAD_CAPACITY` | 16384 generic / 90112 on `esp-idf` | Optional Frothy runtime payload arena size in bytes for boards that ship a larger base library. |
 
-For resource-constrained targets, reduce `heap_size`, `ds_depth`,
-`rs_depth`, and `slot_count`. The POSIX board uses generous defaults
-suitable for desktop development. An ESP32 with 320KB SRAM can
-comfortably use the defaults. Smaller chips (ESP32-C3, RP2040) may
-need lower values depending on how much RAM your application needs
-for other purposes.
+For resource-constrained targets, reduce `heap_size`, `slot_count`, and
+the Frothy object/payload capacities. The POSIX board uses generous defaults
+suitable for desktop development. An ESP32 with 320KB SRAM can comfortably use
+the maintained defaults. Smaller chips may need lower values depending on how
+much RAM the application needs for other purposes.
 
 The maintained `esp32-devkit-v1` board intentionally overrides the default
 `slot_count` to leave user-word headroom after its GPIO/ADC/I2C/UART base

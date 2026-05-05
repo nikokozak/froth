@@ -23,19 +23,12 @@ function(frothy_runtime_sources out_product out_substrate out_snapshot
     ${source_root}/src/froth_heap.c
     ${source_root}/src/froth_cellspace.c
     ${source_root}/src/froth_slot_table.c
-    ${source_root}/src/froth_transport.c
     ${source_root}/src/froth_crc32.c
-    ${source_root}/src/froth_console.c
-    ${source_root}/src/froth_tbuf.c
   )
 
-  set(snapshot_sources
-    ${source_root}/src/froth_snapshot.c
-  )
+  set(snapshot_sources)
 
   set(support_sources
-    ${source_root}/src/froth_console.c
-    ${source_root}/src/froth_tbuf.c
     ${source_root}/src/frothy_ffi.c
     ${board_sources}
   )
