@@ -467,6 +467,7 @@ if(FROTHY_BUILD_HOST)
       platforms/${FROTH_PLATFORM}/platform.c
     )
     frothy_configure_target(frothy_ffi_tests)
+    target_compile_definitions(frothy_ffi_tests PRIVATE FROTHY_FFI_TESTING)
     frothy_generate_board_pin_seed(frothy_ffi_tests ${CMAKE_SOURCE_DIR} ${FROTH_BOARD})
     frothy_generate_board_base_lib(frothy_ffi_tests ${CMAKE_SOURCE_DIR} ${FROTH_BOARD})
     add_test(NAME frothy_ffi COMMAND frothy_ffi_tests)

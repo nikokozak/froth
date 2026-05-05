@@ -94,6 +94,10 @@ void frothy_ffi_get_last_error(const frothy_runtime_t *runtime,
 froth_error_t frothy_ffi_install_table(const frothy_ffi_entry_t *table);
 froth_error_t frothy_ffi_install_pin_table(const frothy_board_pin_t *pins);
 froth_error_t frothy_ffi_install_board_base_slots(void);
+#ifdef FROTHY_FFI_TESTING
+void frothy_ffi_test_fail_slot_replace_at(size_t call_index,
+                                          froth_error_t error);
+#endif
 bool frothy_ffi_native_is_foreign(frothy_native_fn_t fn, const void *context);
 const char *frothy_ffi_native_owner(frothy_native_fn_t fn, const void *context);
 const char *frothy_ffi_native_effect(frothy_native_fn_t fn, const void *context);

@@ -242,6 +242,15 @@ file is wrong.
   `esp32-devkit-v1` board tables are on `frothy_ffi_entry_t`, the public
   legacy installer and legacy project-FFI smoke fixture are removed, and
   remaining `froth_ffi.*` work is scoped to internal retained substrate.
+- The FFI installer rollback hardening cut follows that boundary prune:
+  staged native values now have an explicit slot-transfer ownership contract,
+  successful table replacement retires prior native bindings at the table
+  commit point, application-phase install failure releases failed and
+  unapplied staged natives after rolling back prior replacements, duplicate
+  binding names fail before allocation, and focused C coverage now forces the
+  failure path without adding hooks to the maintained runtime build. Validation
+  passed with `make test-frothy`, the maintained `esp32-devkit-v1` ESP-IDF
+  build, and the M10 proof on `/dev/cu.usbserial-0001`.
 
 ## Remaining Gates
 

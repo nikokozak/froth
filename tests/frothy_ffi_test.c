@@ -620,6 +620,69 @@ static const frothy_ffi_entry_t maintained_partial_failure_bindings[] = {
     {0},
 };
 
+static const frothy_ffi_entry_t maintained_application_failure_bindings[] = {
+    {
+        .name = "maint.echo.int",
+        .params = maintained_echo_int_params,
+        .param_count = FROTHY_FFI_PARAM_COUNT(maintained_echo_int_params),
+        .arity = 1,
+        .result_type = FROTHY_FFI_VALUE_INT,
+        .help = "Override maintained echo for application rollback verification.",
+        .flags = FROTHY_FFI_FLAG_NONE,
+        .callback = maintained_force_zero,
+        .stack_effect = "( value -- 0 )",
+    },
+    {
+        .name = "maint.apply.fail",
+        .params = maintained_echo_int_params,
+        .param_count = FROTHY_FFI_PARAM_COUNT(maintained_echo_int_params),
+        .arity = 1,
+        .result_type = FROTHY_FFI_VALUE_INT,
+        .help = "Reaches the test-only application failure hook.",
+        .flags = FROTHY_FFI_FLAG_NONE,
+        .callback = maintained_echo_int,
+        .stack_effect = "( value -- value )",
+    },
+    {
+        .name = "maint.apply.later",
+        .params = maintained_echo_int_params,
+        .param_count = FROTHY_FFI_PARAM_COUNT(maintained_echo_int_params),
+        .arity = 1,
+        .result_type = FROTHY_FFI_VALUE_INT,
+        .help = "Staged after the forced application failure.",
+        .flags = FROTHY_FFI_FLAG_NONE,
+        .callback = maintained_echo_int,
+        .stack_effect = "( value -- value )",
+    },
+    {0},
+};
+
+static const frothy_ffi_entry_t maintained_duplicate_name_bindings[] = {
+    {
+        .name = "maint.echo.int",
+        .params = maintained_echo_int_params,
+        .param_count = FROTHY_FFI_PARAM_COUNT(maintained_echo_int_params),
+        .arity = 1,
+        .result_type = FROTHY_FFI_VALUE_INT,
+        .help = "First duplicate name.",
+        .flags = FROTHY_FFI_FLAG_NONE,
+        .callback = maintained_echo_int,
+        .stack_effect = "( value -- value )",
+    },
+    {
+        .name = "maint.echo.int",
+        .params = maintained_echo_int_params,
+        .param_count = FROTHY_FFI_PARAM_COUNT(maintained_echo_int_params),
+        .arity = 1,
+        .result_type = FROTHY_FFI_VALUE_INT,
+        .help = "Second duplicate name.",
+        .flags = FROTHY_FFI_FLAG_NONE,
+        .callback = maintained_force_zero,
+        .stack_effect = "( value -- 0 )",
+    },
+    {0},
+};
+
 static const frothy_ffi_entry_t synthetic_partial_failure_bindings[] = {
     {
         .name = "echo.int",
@@ -881,14 +944,20 @@ static int test_maintained_structured_error_copies_text(void) {
 static int test_maintained_reinstall_is_idempotent(void) {
   froth_error_t err = FROTH_OK;
   frothy_value_t out = frothy_value_make_nil();
+  size_t live_before = 0;
   int ok = 1;
 
   reset_frothy_state();
   ok &= install_maintained_bindings();
+  live_before = frothy_runtime_live_object_count(runtime());
   err = frothy_ffi_install_table(maintained_bindings);
   if (err != FROTH_OK) {
     fprintf(stderr, "expected maintained reinstall to succeed, got %d\n",
             (int)err);
+    ok = 0;
+  }
+  if (frothy_runtime_live_object_count(runtime()) != live_before) {
+    fprintf(stderr, "maintained reinstall should replace natives without leaking\n");
     ok = 0;
   }
   ok &= expect_ok("maint.echo.int: 9", &out);
@@ -1013,6 +1082,39 @@ static int test_failed_install_does_not_partially_rebind_existing_slot(void) {
   return ok;
 }
 
+static int test_application_failure_releases_all_staged_natives(void) {
+  froth_error_t err = FROTH_OK;
+  frothy_value_t out = frothy_value_make_nil();
+  size_t live_before = 0;
+  int ok = 1;
+
+  reset_frothy_state();
+  ok &= install_maintained_bindings();
+  live_before = frothy_runtime_live_object_count(runtime());
+  ok &= expect_ok("maint.echo.int: 21", &out);
+  ok &= expect_int_value(out, 21, "maint.echo.int before application failure");
+  release_value(&out);
+
+  frothy_ffi_test_fail_slot_replace_at(1, FROTH_ERROR_IO);
+  err = frothy_ffi_install_table(maintained_application_failure_bindings);
+  if (err != FROTH_ERROR_IO) {
+    fprintf(stderr,
+            "expected application-phase install failure to report %d, got %d\n",
+            (int)FROTH_ERROR_IO, (int)err);
+    ok = 0;
+  }
+  if (frothy_runtime_live_object_count(runtime()) != live_before) {
+    fprintf(stderr,
+            "application-phase install failure leaked staged native objects\n");
+    ok = 0;
+  }
+  ok &= expect_ok("maint.echo.int: 34", &out);
+  ok &= expect_int_value(out, 34,
+                         "application rollback should preserve echo");
+  release_value(&out);
+  return ok;
+}
+
 static int test_maintained_install_rejects_missing_params(void) {
   froth_error_t err = FROTH_OK;
   int ok = 1;
@@ -1022,6 +1124,26 @@ static int test_maintained_install_rejects_missing_params(void) {
   if (err != FROTH_ERROR_SIGNATURE) {
     fprintf(stderr, "expected malformed maintained install to fail with %d, got %d\n",
             (int)FROTH_ERROR_SIGNATURE, (int)err);
+    ok = 0;
+  }
+  return ok;
+}
+
+static int test_maintained_install_rejects_duplicate_names(void) {
+  froth_error_t err = FROTH_OK;
+  size_t live_before = 0;
+  int ok = 1;
+
+  reset_frothy_state();
+  live_before = frothy_runtime_live_object_count(runtime());
+  err = frothy_ffi_install_table(maintained_duplicate_name_bindings);
+  if (err != FROTH_ERROR_SIGNATURE) {
+    fprintf(stderr, "expected duplicate maintained FFI names to fail with %d, got %d\n",
+            (int)FROTH_ERROR_SIGNATURE, (int)err);
+    ok = 0;
+  }
+  if (frothy_runtime_live_object_count(runtime()) != live_before) {
+    fprintf(stderr, "duplicate-name install should fail before allocation\n");
     ok = 0;
   }
   return ok;
@@ -1214,7 +1336,9 @@ int main(void) {
   ok &= test_maintained_return_helpers_validate_out();
   ok &= test_reinstall_failure_preserves_existing_slots();
   ok &= test_failed_install_does_not_partially_rebind_existing_slot();
+  ok &= test_application_failure_releases_all_staged_natives();
   ok &= test_maintained_install_rejects_missing_params();
+  ok &= test_maintained_install_rejects_duplicate_names();
   ok &= test_maintained_result_validation_releases_output();
   ok &= test_board_millis_monotonic();
   ok &= test_board_gpio_read_round_trip();

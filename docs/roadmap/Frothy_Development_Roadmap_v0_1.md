@@ -24,17 +24,17 @@ It is a sequencing and control document.
 This block is the live control surface for repo status.
 
 Current milestone: `pre-thesis publishability prune`
-Today's goal: close the FFI-boundary prune by retiring legacy board/project FFI
-exports, aligning docs with Frothy ADR-125, and proving the maintained
+Today's goal: harden the maintained FFI installer after the legacy-export
+prune by making rollback ownership explicit, retiring replaced native bindings
+at table commit, rejecting duplicate table names before allocation, proving
+application-phase install failure cleanup, and revalidating the maintained
 `esp32-devkit-v1` path
-Next artifact: next small non-workshop prune tranche after the FFI-boundary
-cut and validation pass land
+Next artifact: next small non-workshop C-runtime prune after FFI installer
+rollback hardening lands
 Blocked by: none
-Next proof command: for the FFI-boundary cut, run `make test-frothy`,
-`./tools/cli/frothy-cli build --target esp-idf --board esp32-devkit-v1`, and
-`sh tools/frothy/proof.sh m10 --assume-blink-confirmed /dev/cu.usbserial-0001`;
-for the next tranche, start with the smallest focused gate that exercises the
-changed surface
+Next proof command: for the next tranche, start with the smallest focused gate
+that exercises the changed surface, then finish sign-off with a real
+`esp32-devkit-v1` proof on `/dev/cu.usbserial-0001`
 Slip against plan: the workshop-operational closeout remains open and is
 intentionally deferred for this pass; the thesis-facing repo now has the
 publishability-prune decisions and proof gates captured in the working tree

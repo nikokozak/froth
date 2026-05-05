@@ -72,7 +72,12 @@ keep each item's description and references so deferral does not erase context.
   stays active, deferred workshop docs/export checks now live behind
   `make test-workshop` instead of the default non-workshop gates, and the
   legacy board/project FFI export path is retired under Frothy ADR-125 with
-  active boards and project FFI tests on `frothy_ffi_entry_t`.
+  active boards and project FFI tests on `frothy_ffi_entry_t`. The follow-on
+  FFI installer hardening makes staged-native ownership explicit, retires
+  prior native bindings only after table commit, rejects duplicate table names
+  before allocation, and proves application-phase install rollback does not
+  leak or partially rebind; the cut has a passing `esp32-devkit-v1` M10 device
+  proof.
   References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
   `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, Frothy ADR-125,
   `tools/frothy/`,

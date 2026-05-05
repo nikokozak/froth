@@ -71,6 +71,33 @@ const frothy_ffi_entry_t frothy_project_bindings[] FROTHY_WEAK_DEF = {{0}};
 
 #define FROTHY_FFI_RANDOM_DEFAULT_SEED UINT32_C(0x6d2b79f5)
 
+#ifdef FROTHY_FFI_TESTING
+static size_t frothy_ffi_test_slot_replace_calls = 0;
+static size_t frothy_ffi_test_slot_replace_fail_at = SIZE_MAX;
+static froth_error_t frothy_ffi_test_slot_replace_error = FROTH_OK;
+
+void frothy_ffi_test_fail_slot_replace_at(size_t call_index,
+                                          froth_error_t error) {
+  frothy_ffi_test_slot_replace_calls = 0;
+  frothy_ffi_test_slot_replace_fail_at = call_index;
+  frothy_ffi_test_slot_replace_error =
+      error == FROTH_OK ? FROTH_ERROR_IO : error;
+}
+
+static froth_error_t frothy_ffi_test_maybe_fail_slot_replace(void) {
+  if (frothy_ffi_test_slot_replace_fail_at != SIZE_MAX &&
+      frothy_ffi_test_slot_replace_calls++ ==
+          frothy_ffi_test_slot_replace_fail_at) {
+    froth_error_t error = frothy_ffi_test_slot_replace_error;
+
+    frothy_ffi_test_slot_replace_fail_at = SIZE_MAX;
+    frothy_ffi_test_slot_replace_error = FROTH_OK;
+    return error;
+  }
+  return FROTH_OK;
+}
+#endif
+
 froth_cell_t frothy_ffi_wrap_uptime_ms(uint32_t uptime_ms) {
   return froth_wrap_payload((froth_cell_u_t)uptime_ms);
 }
@@ -334,6 +361,35 @@ frothy_ffi_validate_entry_shape(const frothy_ffi_entry_t *entry) {
   return FROTH_OK;
 }
 
+static froth_error_t
+frothy_ffi_validate_table_entries(const frothy_ffi_entry_t *table,
+                                  size_t *count_out) {
+  size_t i;
+
+  if (count_out != NULL) {
+    *count_out = 0;
+  }
+  if (table == NULL) {
+    return FROTH_OK;
+  }
+
+  for (i = 0; table[i].name != NULL; i++) {
+    size_t j;
+
+    FROTH_TRY(frothy_ffi_validate_entry_shape(&table[i]));
+    for (j = 0; j < i; j++) {
+      if (strcmp(table[j].name, table[i].name) == 0) {
+        return FROTH_ERROR_SIGNATURE;
+      }
+    }
+  }
+
+  if (count_out != NULL) {
+    *count_out = i;
+  }
+  return FROTH_OK;
+}
+
 static froth_error_t frothy_ffi_validate_arg(frothy_runtime_t *runtime,
                                              const frothy_ffi_param_t *param,
                                              const frothy_value_t *args,
@@ -558,6 +614,23 @@ static froth_error_t frothy_ffi_restore_slot_state(
   return froth_slot_set_overlay(slot_index, state->overlay);
 }
 
+static void
+frothy_ffi_release_replaced_slot_impl(const frothy_ffi_slot_state_t *state,
+                                      frothy_value_t replacement) {
+  if (state == NULL || state->binding_kind != FROTHY_FFI_SLOT_IMPL) {
+    return;
+  }
+  if (state->impl == frothy_value_to_cell(replacement)) {
+    return;
+  }
+  (void)frothy_value_release(&froth_vm.frothy_runtime,
+                             frothy_value_from_cell(state->impl));
+}
+
+/*
+ * On success, ownership of value transfers to the slot table. On failure, the
+ * caller still owns value and must release it if it holds a runtime object.
+ */
 static froth_error_t frothy_ffi_replace_slot_impl(
     froth_cell_u_t slot_index, frothy_value_t value, uint8_t overlay,
     uint8_t in_arity, uint8_t out_arity) {
@@ -566,6 +639,9 @@ static froth_error_t frothy_ffi_replace_slot_impl(
   froth_error_t rollback_err = FROTH_OK;
 
   FROTH_TRY(frothy_ffi_capture_slot_state(slot_index, &saved_state));
+#ifdef FROTHY_FFI_TESTING
+  FROTH_TRY(frothy_ffi_test_maybe_fail_slot_replace());
+#endif
 
   err = froth_slot_clear_binding(slot_index);
   if (err != FROTH_OK) {
@@ -598,7 +674,6 @@ rollback:
   if (rollback_err != FROTH_OK) {
     return rollback_err;
   }
-  (void)frothy_value_release(&froth_vm.frothy_runtime, value);
   return err;
 }
 
@@ -654,12 +729,19 @@ frothy_ffi_dispatch_for_source(frothy_ffi_source_t source) {
 static froth_error_t frothy_ffi_bind_pin(const frothy_board_pin_t *pin) {
   frothy_value_t value = frothy_value_make_nil();
   froth_cell_u_t slot_index = 0;
+  froth_error_t err = FROTH_OK;
 
   FROTH_TRY(frothy_value_make_int((int32_t)pin->value, &value));
-  FROTH_TRY(frothy_ffi_find_slot_for_binding(pin->name, &slot_index));
-  return frothy_ffi_replace_slot_impl(slot_index, value, 0,
-                                      FROTH_SLOT_ARITY_UNKNOWN,
-                                      FROTH_SLOT_ARITY_UNKNOWN);
+  err = frothy_ffi_find_slot_for_binding(pin->name, &slot_index);
+  if (err == FROTH_OK) {
+    err = frothy_ffi_replace_slot_impl(slot_index, value, 0,
+                                       FROTH_SLOT_ARITY_UNKNOWN,
+                                       FROTH_SLOT_ARITY_UNKNOWN);
+  }
+  if (err != FROTH_OK) {
+    (void)frothy_value_release(&froth_vm.frothy_runtime, value);
+  }
+  return err;
 }
 
 static froth_error_t
@@ -679,10 +761,7 @@ frothy_ffi_install_table_for_source(const frothy_ffi_entry_t *table,
     return FROTH_ERROR_SIGNATURE;
   }
 
-  for (i = 0; table[i].name != NULL; i++) {
-    FROTH_TRY(frothy_ffi_validate_entry_shape(&table[i]));
-    applicable_count++;
-  }
+  FROTH_TRY(frothy_ffi_validate_table_entries(table, &applicable_count));
 
   if (applicable_count == 0) {
     return FROTH_OK;
@@ -728,11 +807,16 @@ frothy_ffi_install_table_for_source(const frothy_ffi_entry_t *table,
       froth_error_t rollback_err =
           frothy_ffi_rollback_pending_slot_impls(pending, i);
 
+      frothy_ffi_release_pending_slot_impls(pending + i, staged_count - i);
       free(pending);
       return rollback_err != FROTH_OK ? rollback_err : err;
     }
   }
 
+  for (i = 0; i < staged_count; i++) {
+    frothy_ffi_release_replaced_slot_impl(&pending[i].saved_state,
+                                          pending[i].value);
+  }
   free(pending);
   return FROTH_OK;
 
