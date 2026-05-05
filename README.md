@@ -137,6 +137,14 @@ make test-frothy-proofs
 make test-frothy-full
 ```
 
+Focused CLI lanes:
+
+```sh
+make test-cli
+make test-cli-local
+make test-integration
+```
+
 Optional deferred or extension lanes:
 
 ```sh
@@ -156,6 +164,9 @@ The maintained test contract is:
 - `make test-frothy-slow`: slower Frothy CMake/config smoke CTests
 - `make test-frothy-proofs`: Frothy host proof-script rehearsal
 - `make test-frothy-full`: all Frothy host CTests plus host proofs
+- `make test-cli`: CLI unit tests
+- `make test-cli-local`: focused CLI local-runtime integration tests
+- `make test-integration`: CLI build/project integration tests
 - `make test-all`: exhaustive local gate (`C`, `Go`, `Shell`)
 - `make test-publishability`: full shipped-surface local gate (`make test-all` plus `make test-vscode`)
 - `make test-vscode`: explicit extension-local `Node` lane

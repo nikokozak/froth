@@ -72,7 +72,7 @@ test-frothy-full: version-check test-runner-bin ## Run all Frothy host ctests an
 test-cli: version-check test-runner-bin ## Run CLI unit and fake-daemon tests
 	@$(TEST_RUNNER) cli
 
-test-cli-local: version-check test-runner-bin ## Run CLI local-runtime tests
+test-cli-local: version-check test-runner-bin ## Run focused CLI local-runtime integration tests
 	@$(TEST_RUNNER) cli-local
 
 test-vscode: version-check test-runner-bin ## Run VS Code extension tests, package smoke, and host editor smoke
@@ -81,7 +81,7 @@ test-vscode: version-check test-runner-bin ## Run VS Code extension tests, packa
 test-vscode-board: version-check test-runner-bin ## Run VS Code board editor smoke on a real device (use PORT=/dev/...)
 	@$(TEST_RUNNER) vscode-board --port "$(PORT)"
 
-test-integration: version-check test-runner-bin ## Run CLI project integration tests
+test-integration: version-check test-runner-bin ## Run CLI build/project integration tests
 	@$(TEST_RUNNER) integration
 
 test-workshop: version-check test-runner-bin ## Run deferred workshop-only local checks

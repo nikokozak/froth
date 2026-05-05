@@ -3,8 +3,15 @@ SDK_PAYLOAD_DIR := internal/sdk/generated
 # Repo-local checkout builds use the Frothy-owned CLI name.
 OUTPUT ?= frothy-cli
 export FROTH_LINK_MAX_PAYLOAD ?= 1024
+empty :=
+space := $(empty) $(empty)
+LOCAL_RUNTIME_TEST_NAMES := TestIntegrationConnectLocalBuildsAndLaunchesBinary TestIntegrationToolingControlSessionLocalRuntime
+BUILD_PROJECT_INTEGRATION_TEST_NAMES := TestIntegrationNewBuildAndRunBoot TestIntegrationMultiFileProjectBuildsAndResolvesDependencies TestIntegrationBuildCleanRemovesArtifacts TestIntegrationDoctorShowsProjectInfo
+KNOWN_INTEGRATION_TEST_NAMES := $(sort $(LOCAL_RUNTIME_TEST_NAMES) $(BUILD_PROJECT_INTEGRATION_TEST_NAMES))
+LOCAL_RUNTIME_TESTS := ^($(subst $(space),|,$(LOCAL_RUNTIME_TEST_NAMES)))$$
+BUILD_PROJECT_INTEGRATION_TESTS := ^($(subst $(space),|,$(BUILD_PROJECT_INTEGRATION_TEST_NAMES)))$$
 
-.PHONY: sdk-payload build build-test-runner test test-unit test-localruntime test-integration
+.PHONY: sdk-payload build build-test-runner test test-unit test-localruntime test-integration check-integration-tests
 
 # The repo root is the source of truth.
 sdk-payload:
@@ -37,16 +44,36 @@ test-unit: sdk-payload
 		go test ./...; \
 	fi
 
-test-localruntime: sdk-payload
-	@if [ -n "$(GOCACHE)" ]; then \
-		GOCACHE="$(GOCACHE)" go test -tags localruntime ./cmd; \
-	else \
-		go test -tags localruntime ./cmd; \
+check-integration-tests:
+	@integration_files=$$(find cmd -name '*_test.go' -type f -print | xargs grep -l '^//go:build integration$$' | LC_ALL=C sort); \
+	bad_files=$$(printf '%s\n' "$$integration_files" | grep -vE '^cmd/[^/]*integration_test[.]go$$' || true); \
+	if [ -n "$$bad_files" ]; then \
+		printf 'integration tests must live in cmd/*integration_test.go so test-all lane ownership is explicit:\n%s\n' "$$bad_files" >&2; \
+		exit 1; \
+	fi; \
+	all_tests=$$(grep -hE '^func Test[A-Za-z0-9_]*' $$integration_files | sed 's/^func //; s/(.*//' | grep -v '^TestMain$$' | LC_ALL=C sort | tr '\n' ' ' | sed 's/[[:space:]]*$$//'); \
+	bad_names=$$(printf '%s\n' "$$all_tests" | tr ' ' '\n' | grep -v '^TestIntegration' || true); \
+	if [ -n "$$bad_names" ]; then \
+		printf 'integration tests must use TestIntegration* names so the focused lanes fail closed:\n%s\n' "$$bad_names" >&2; \
+		exit 1; \
+	fi; \
+	actual=$$(printf '%s\n' "$$all_tests"); \
+	expected="$(KNOWN_INTEGRATION_TEST_NAMES)"; \
+	if [ "$$actual" != "$$expected" ]; then \
+		printf 'integration test list drifted; assign each TestIntegration* case to LOCAL_RUNTIME_TEST_NAMES or BUILD_PROJECT_INTEGRATION_TEST_NAMES\nexpected: %s\nactual:   %s\n' "$$expected" "$$actual" >&2; \
+		exit 1; \
 	fi
 
-test-integration: sdk-payload
+test-localruntime: sdk-payload check-integration-tests
 	@if [ -n "$(GOCACHE)" ]; then \
-		GOCACHE="$(GOCACHE)" go test -tags integration ./cmd; \
+		GOCACHE="$(GOCACHE)" go test -tags integration -run '$(LOCAL_RUNTIME_TESTS)' ./cmd; \
 	else \
-		go test -tags integration ./cmd; \
+		go test -tags integration -run '$(LOCAL_RUNTIME_TESTS)' ./cmd; \
+	fi
+
+test-integration: sdk-payload check-integration-tests
+	@if [ -n "$(GOCACHE)" ]; then \
+		GOCACHE="$(GOCACHE)" go test -tags integration -run '$(BUILD_PROJECT_INTEGRATION_TESTS)' ./cmd; \
+	else \
+		go test -tags integration -run '$(BUILD_PROJECT_INTEGRATION_TESTS)' ./cmd; \
 	fi

@@ -24,12 +24,13 @@ It is a sequencing and control document.
 This block is the live control surface for repo status.
 
 Current milestone: `pre-thesis publishability prune`
-Today's goal: Frothy ADR-126 splits the Frothy host test surface so fast
-CTest, slow config smoke CTests, and host proof scripts are separately named
-Next artifact: measure and split the remaining CLI integration/proof costs
-only where focused unit coverage can replace smoke-proof breadth honestly
+Today's goal: Frothy ADR-127 deduplicates the CLI portion of `make test-all`
+by splitting local-runtime CLI integration from build/project integration
+Next artifact: audit the 45-second host proof bundle and replace smoke-proof
+breadth with focused C or Go coverage only where behavior is already covered
+honestly
 Blocked by: none
-Next proof command: `make test-frothy-full`, then finish sign-off with a real
+Next proof command: `make test-all`, then finish sign-off with a real
 `esp32-devkit-v1` proof on `/dev/cu.usbserial-0001`
 Slip against plan: the workshop-operational closeout remains open and is
 intentionally deferred for this pass; the thesis-facing repo now has the

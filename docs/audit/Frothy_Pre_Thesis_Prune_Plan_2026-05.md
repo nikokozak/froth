@@ -193,10 +193,17 @@ caches can add time.
 - `make test-frothy`: under half a second after the host profile is current
 - `make test-frothy-slow`: about 8 seconds on this checkout
 - `make test-frothy-proofs`: about 45 seconds on this checkout
-- `make test-all`: about 84 seconds on this checkout in the warm-cache split
-  validation, with CLI integration still around 28 seconds; prior 101-second
-  `test-all` and 34-second CLI integration observations were from an earlier
-  mixed-cache pass
+- `make test-cli-local`: about 9 seconds with a forced rerun on this checkout
+  after Frothy ADR-127 corrected the old no-op-tag unit-test rerun into the
+  focused local-runtime CLI integration lane
+- `make test-integration`: about 16 seconds with a forced rerun on this
+  checkout after Frothy ADR-127 removed ordinary `cmd` unit-test duplication
+  and moved local-runtime CLI integration into `make test-cli-local`
+- `make test-all`: about 54 seconds in the warm-cache validation after Frothy
+  ADR-127; prior warm-cache split validation was about 84 seconds. The lane
+  timings above are current forced-rerun observations, not direct prior-lane
+  comparisons, because the previous `test-cli-local` target was not running
+  the local-runtime integration cases.
 
 Policy:
 
@@ -208,6 +215,12 @@ Policy:
   full-host breadth
 - `make test-all` should stay the extended local gate: fast gate plus slow
   CTest, host smoke proofs, local-runtime tests, and integration tests
+- `make test-cli-local` should stay the focused local-runtime CLI integration
+  lane, while `make test-integration` should stay the build/project
+  integration lane; do not let either target drift back into a broad tagged
+  package rerun
+- the explicit `TestIntegration...` lane lists must fail closed when source
+  tests drift
 - CI should run the slow Frothy CTest and host-proof lanes as separate jobs so
   the coverage is explicit instead of local-only
 - deferred workshop docs/export checks should stay out of the default
@@ -218,9 +231,7 @@ Policy:
 
 Next cleanup candidates:
 
-- split CLI integration tests so build-system integration can run separately
-  from ordinary command behavior
-- move long host prompt/proof scripts toward focused Go tests where possible
+- move long host prompt/proof scripts toward focused C or Go tests where possible
   rather than growing shell transcripts
 - keep workshop rehearsal and docs/export proofs out of default local gates
 

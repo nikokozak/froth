@@ -106,10 +106,15 @@ keep each item's description and references so deferral does not erase context.
   host CTest lane, while `make test-frothy-slow`,
   `make test-frothy-proofs`, and `make test-frothy-full` make the slower
   lanes explicit without changing the extended `make test-all` gate, and CI
-  runs the slow/proof lanes as separate jobs.
+  runs the slow/proof lanes as separate jobs. Frothy ADR-127 then deduplicates
+  the CLI side of `make test-all`: `make test-cli-local` owns local-runtime
+  CLI integration, while `make test-integration` owns the remaining
+  build/project integration cases without rerunning ordinary `cmd` unit tests,
+  and the CLI Makefile now fails closed if the `TestIntegration...` source
+  list drifts.
   References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
   `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, Frothy ADR-125,
-  Frothy ADR-126, `tools/frothy/`,
+  Frothy ADR-126, Frothy ADR-127, `tools/frothy/`,
   `tools/cli/cmd/test-runner/`, and `docs/audit/Frothy_Repo_Audit_2026-04.md`.
 - [x] Prompt-facing record surface matches the landed implementation
   Deliverable: the prompt-facing shell accepts the maintained `record ...`

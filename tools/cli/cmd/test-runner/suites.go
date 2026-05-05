@@ -115,11 +115,7 @@ func runCLILocal() error {
 	if err != nil {
 		return err
 	}
-	if err := ensureProfile(paths, "host-default", false); err != nil {
-		return err
-	}
 	env := baseTestEnv(paths)
-	env["FROTH_TEST_LOCAL_RUNTIME"] = filepath.Join(profileBuildDir(paths, "host-default"), "Frothy")
 	return runCommand(paths, "cli:localruntime", env, paths.Root, "make", "--no-print-directory", "-C", filepath.Join(paths.Root, "tools", "cli"), "test-localruntime")
 }
 
@@ -284,9 +280,9 @@ func printList() {
 	fmt.Println("cli")
 	fmt.Println("  CLI unit tests")
 	fmt.Println("cli-local")
-	fmt.Println("  CLI local-runtime tests")
+	fmt.Println("  focused CLI local-runtime integration tests")
 	fmt.Println("integration")
-	fmt.Println("  CLI integration tests")
+	fmt.Println("  CLI build/project integration tests")
 	fmt.Println("workshop")
 	fmt.Println("  deferred workshop-only local checks")
 	fmt.Println("  includes: workshop export, workshop docs")

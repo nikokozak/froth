@@ -344,6 +344,21 @@ Historical validation notes before 2026-05-05 use the old broad
   `make --no-print-directory test`, `make --no-print-directory test-all`,
   `go test ./...` from `tools/cli`, and the M10 proof on
   `/dev/cu.usbserial-0001`.
+- The `test-all` CLI portion is deduplicated in the current working tree:
+  Frothy ADR-127 keeps `make test-cli-local` as the focused local-runtime CLI
+  integration lane, replacing the old no-op-tag rerun of ordinary `cmd` unit
+  tests; it also makes `make test-integration` run only the remaining
+  build/project integration cases, with a source-list drift check so new
+  `TestIntegration...` cases cannot silently fall out of both lanes.
+  Warm-cache `make test-all` is now about 54 seconds on this checkout, with
+  the host proof bundle still the dominant cost. Validation passed with
+  `git diff --check`, `make --no-print-directory test-list`,
+  `make --no-print-directory -C tools/cli check-integration-tests`,
+  `make --no-print-directory test-cli-local`,
+  `make --no-print-directory test-integration`,
+  `make --no-print-directory test-all`, `go test ./...` from `tools/cli`,
+  focused Claude review with no actionable findings, and the M10 proof on
+  `/dev/cu.usbserial-0001`.
 
 ## Remaining Gates
 
@@ -351,9 +366,9 @@ Historical validation notes before 2026-05-05 use the old broad
   project-format, generated-PDF, and VS Code/Node policy decisions are captured
   by Frothy ADR-124; the old Python hardware-proof holdouts are gone; and the
   legacy board/project FFI export path is retired under Frothy ADR-125. With
-  the retained substrate audit closed and the Frothy host test lanes split, the
-  next useful cleanup line is measuring whether CLI integration/proof breadth
-  can be replaced by focused C or Go coverage.
+  the retained substrate audit closed, the Frothy host test lanes split, and
+  the CLI integration lanes deduplicated, the next useful cleanup line is the
+  remaining host proof-script bundle.
 - Workshop-operational closeout is explicitly deferred behind the thesis-facing
   prune:
   clean-machine validation and room-side hardware/recovery prep still need to
