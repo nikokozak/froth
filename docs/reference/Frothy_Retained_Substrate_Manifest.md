@@ -48,6 +48,11 @@ Current retained-unit notes:
   overlay bindings. It now has an explicit all-slot reset used by VM reset, and
   overlay reset remains the user-image wipe path without relying on all base
   slots being allocated before all overlay slots.
+- `froth_types` remains the narrow retained base-types header: cell sizing,
+  stable error codes, `FROTH_TRY`, and the native primitive hook used by the
+  slot table. The old Froth 3-bit tagged-cell helper surface is no longer part
+  of the maintained path; Frothy/32 value range and wrap behavior live in
+  `frothy_value`.
 - `froth_crc32` remains a tiny shared checksum unit used by both snapshot
   storage and the control frame wire format.
 

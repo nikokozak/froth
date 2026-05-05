@@ -111,11 +111,24 @@ keep each item's description and references so deferral does not erase context.
   CLI integration, while `make test-integration` owns the remaining
   build/project integration cases without rerunning ordinary `cmd` unit tests,
   and the CLI Makefile now fails closed if the `TestIntegration...` source
-  list drifts.
+  list drifts. The post-prune code readability audit is now active at
+  `docs/audit/Frothy_Code_Readability_Audit_2026-05.md`; the first host
+  proof-bundle cut removes duplicate `.control`, surface-render, and
+  multiline Ctrl-C transcript checks where focused C or Go coverage already
+  owns the behavior. The retained type/value boundary cut then removes the
+  unused old Froth 3-bit tagged-cell helper surface from `froth_types.h` and
+  moves Frothy/32 integer range and wrap ownership to `frothy_value`. The
+  build source ownership cut removes the empty snapshot-source lane left behind
+  after snapshot code moved into the Frothy-owned runtime sources. The first
+  large-runtime cut tightens record-definition lookup and guard behavior
+  without changing the record object model, then centralizes `frothy_value.c`
+  live-object lookup and value API guard behavior.
   References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
   `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, Frothy ADR-125,
   Frothy ADR-126, Frothy ADR-127, `tools/frothy/`,
-  `tools/cli/cmd/test-runner/`, and `docs/audit/Frothy_Repo_Audit_2026-04.md`.
+  `tools/cli/cmd/test-runner/`,
+  `docs/audit/Frothy_Code_Readability_Audit_2026-05.md`, and
+  `docs/audit/Frothy_Repo_Audit_2026-04.md`.
 - [x] Prompt-facing record surface matches the landed implementation
   Deliverable: the prompt-facing shell accepts the maintained `record ...`
   forms and keeps record definition, construction, field access, inspection,

@@ -1,5 +1,6 @@
 #include "frothy_ir.h"
 #include "frothy_parser.h"
+#include "frothy_value.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -450,6 +451,62 @@ static int test_top_level_trailing_semicolons(void) {
   return ok;
 }
 
+static int test_integer_literal_range(void) {
+  char source[64];
+  frothy_ir_program_t program;
+  const frothy_ir_node_t *root;
+  const frothy_ir_node_t *value_node;
+  froth_error_t err;
+  int ok = 1;
+
+  snprintf(source, sizeof(source), "maxInt is %d", FROTHY_VALUE_INT_MAX);
+  frothy_ir_program_init(&program);
+  err = frothy_parse_top_level(source, &program);
+  if (err != FROTH_OK) {
+    fprintf(stderr, "max integer literal parse failed: %d\n", (int)err);
+    frothy_ir_program_free(&program);
+    return 0;
+  }
+
+  root = &program.nodes[program.root];
+  if (root->kind != FROTHY_IR_NODE_WRITE_SLOT) {
+    fprintf(stderr, "max integer literal root was not a slot write\n");
+    ok = 0;
+    goto range_done;
+  }
+  value_node = &program.nodes[root->as.write_slot.value];
+  if (value_node->kind != FROTHY_IR_NODE_LIT ||
+      program.literals[value_node->as.lit.literal_id].as.int_value !=
+          FROTHY_VALUE_INT_MAX) {
+    fprintf(stderr, "max integer literal parsed to the wrong IR value\n");
+    ok = 0;
+  }
+range_done:
+  frothy_ir_program_free(&program);
+
+  snprintf(source, sizeof(source), "tooLarge is %d", FROTHY_VALUE_INT_MAX + 1);
+  frothy_ir_program_init(&program);
+  err = frothy_parse_top_level(source, &program);
+  if (err != FROTH_ERROR_VALUE_OVERFLOW) {
+    fprintf(stderr, "integer overflow expected %d, got %d\n",
+            (int)FROTH_ERROR_VALUE_OVERFLOW, (int)err);
+    ok = 0;
+  }
+  frothy_ir_program_free(&program);
+
+  frothy_ir_program_init(&program);
+  err = frothy_parse_top_level("tooHuge is 999999999999999999999999999999",
+                               &program);
+  if (err != FROTH_ERROR_VALUE_OVERFLOW) {
+    fprintf(stderr, "huge integer overflow expected %d, got %d\n",
+            (int)FROTH_ERROR_VALUE_OVERFLOW, (int)err);
+    ok = 0;
+  }
+  frothy_ir_program_free(&program);
+
+  return ok;
+}
+
 int main(void) {
   static const char *const fixture_cases[] = {
       "assign_int",
@@ -606,6 +663,7 @@ int main(void) {
   ok &= test_capacity_failures_recover();
   ok &= test_top_level_prefix_consumes_multiline_forms();
   ok &= test_top_level_trailing_semicolons();
+  ok &= test_integer_literal_range();
 
   return ok ? 0 : 1;
 }

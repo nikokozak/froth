@@ -71,20 +71,9 @@ static void frothy_nil_array(frothy_value_t *values, size_t count) {
   }
 }
 
-static int32_t frothy_wrap_int30(int64_t raw) {
-  const uint32_t mask = ((uint32_t)1u << 30) - 1u;
-  const uint32_t sign = (uint32_t)1u << 29;
-  uint32_t bits = (uint32_t)raw & mask;
-
-  if ((bits & sign) != 0u) {
-    bits |= ~mask;
-  }
-  return (int32_t)bits;
-}
-
 static froth_error_t frothy_make_wrapped_int(int64_t raw,
                                              frothy_value_t *out) {
-  return frothy_value_make_int(frothy_wrap_int30(raw), out);
+  return frothy_value_make_int(frothy_value_wrap_int(raw), out);
 }
 
 static froth_error_t frothy_eval_buffer_init(frothy_eval_buffer_t *buffer,
@@ -323,7 +312,6 @@ static froth_error_t frothy_slot_read_owned(const char *slot_name,
 
 static froth_error_t frothy_slot_update_arity(froth_cell_u_t slot_index,
                                               frothy_value_t value) {
-  const char *record_name = NULL;
   size_t arity = 0;
 
   if (frothy_runtime_get_code(frothy_runtime(), value, NULL, NULL, &arity,
@@ -336,7 +324,7 @@ static froth_error_t frothy_slot_update_arity(froth_cell_u_t slot_index,
       arity < FROTH_SLOT_ARITY_UNKNOWN) {
     return froth_slot_set_arity(slot_index, (uint8_t)arity, 1);
   }
-  if (frothy_runtime_get_record_def(frothy_runtime(), value, &record_name,
+  if (frothy_runtime_get_record_def(frothy_runtime(), value, NULL,
                                     &arity) == FROTH_OK &&
       arity < FROTH_SLOT_ARITY_UNKNOWN) {
     return froth_slot_set_arity(slot_index, (uint8_t)arity, 1);
@@ -641,7 +629,6 @@ static froth_error_t frothy_eval_call(frothy_eval_exec_t *exec,
   case 1: {
     size_t arity = 0;
     size_t local_count = 0;
-    const char *record_name = NULL;
 
     err = frothy_runtime_get_code(frothy_runtime(), frame->values[0],
                                   &frame->target_program, &frame->target_node,
@@ -652,7 +639,7 @@ static froth_error_t frothy_eval_call(frothy_eval_exec_t *exec,
                                       &frame->native_context, NULL, &arity);
       if (err == FROTH_ERROR_TYPE_MISMATCH) {
         err = frothy_runtime_get_record_def(frothy_runtime(), frame->values[0],
-                                            &record_name, &arity);
+                                            NULL, &arity);
         if (err == FROTH_OK) {
           frame->call_kind = FROTHY_EVAL_CALL_RECORD_DEF;
         }
@@ -662,7 +649,6 @@ static froth_error_t frothy_eval_call(frothy_eval_exec_t *exec,
     } else if (err == FROTH_OK) {
       frame->call_kind = FROTHY_EVAL_CALL_CODE;
     }
-    (void)record_name;
 
     if (err != FROTH_OK) {
       return err;

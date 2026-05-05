@@ -179,8 +179,7 @@ frothy_resolve_board_sources(FROTHY_BOARD_SRCS "${CMAKE_SOURCE_DIR}" "${FROTH_BO
 frothy_runtime_sources(
   FROTHY_RUNTIME_PRODUCT_SRCS
   FROTHY_RUNTIME_SUBSTRATE_SRCS
-  FROTHY_RUNTIME_SNAPSHOT_SRCS
-  FROTH_RUNTIME_SUPPORT_SRCS
+  FROTHY_RUNTIME_SUPPORT_SRCS
   "${CMAKE_SOURCE_DIR}"
   FROTHY_BOARD_SRCS
 )
@@ -265,7 +264,7 @@ function(frothy_add_project_ffi_test target_name test_name config_path)
     src/froth_heap.c
     src/froth_cellspace.c
     src/froth_slot_table.c
-    ${FROTH_RUNTIME_SUPPORT_SRCS}
+    ${FROTHY_RUNTIME_SUPPORT_SRCS}
     platforms/${FROTH_PLATFORM}/platform.c
   )
   frothy_apply_project_ffi_config(${target_name} "${config_path}")
@@ -288,9 +287,6 @@ if(FROTHY_BUILD_HOST)
       ${FROTHY_RUNTIME_SUBSTRATE_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
   )
-  if(FROTH_HAS_SNAPSHOTS)
-    target_sources(Frothy PRIVATE ${FROTHY_RUNTIME_SNAPSHOT_SRCS})
-  endif()
   frothy_apply_project_ffi_config(Frothy "${FROTH_PROJECT_FFI_CONFIG}")
   frothy_configure_target(Frothy)
   frothy_generate_board_pin_seed(Frothy ${CMAKE_SOURCE_DIR} ${FROTH_BOARD})
@@ -321,7 +317,7 @@ if(FROTHY_BUILD_HOST)
       src/froth_heap.c
       src/froth_cellspace.c
       src/froth_slot_table.c
-      ${FROTH_RUNTIME_SUPPORT_SRCS}
+      ${FROTHY_RUNTIME_SUPPORT_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
     )
     frothy_configure_target(frothy_eval_tests)
@@ -336,7 +332,6 @@ if(FROTHY_BUILD_HOST)
       tests/frothy_snapshot_test.c
       ${FROTHY_RUNTIME_PRODUCT_SRCS}
       ${FROTHY_RUNTIME_SUBSTRATE_SRCS}
-      ${FROTHY_RUNTIME_SNAPSHOT_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
     )
     frothy_configure_target(frothy_snapshot_tests)
@@ -351,7 +346,6 @@ if(FROTHY_BUILD_HOST)
       tests/frothy_shell_test.c
       ${FROTHY_RUNTIME_PRODUCT_SRCS}
       ${FROTHY_RUNTIME_SUBSTRATE_SRCS}
-      ${FROTHY_RUNTIME_SNAPSHOT_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
     )
     frothy_configure_target(frothy_shell_tests)
@@ -373,7 +367,7 @@ if(FROTHY_BUILD_HOST)
       src/froth_heap.c
       src/froth_cellspace.c
       src/froth_slot_table.c
-      ${FROTH_RUNTIME_SUPPORT_SRCS}
+      ${FROTHY_RUNTIME_SUPPORT_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
     )
     frothy_configure_target(frothy_ffi_tests)
@@ -400,7 +394,6 @@ if(FROTHY_BUILD_HOST)
       tests/frothy_tm1629_board_test.c
       ${FROTHY_RUNTIME_PRODUCT_SRCS}
       ${FROTHY_RUNTIME_SUBSTRATE_SRCS}
-      ${FROTHY_RUNTIME_SNAPSHOT_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
     )
     frothy_configure_target(frothy_tm1629_board_tests)
@@ -416,7 +409,6 @@ if(FROTHY_BUILD_HOST)
       tests/frothy_workshop_memory_test.c
       ${FROTHY_RUNTIME_PRODUCT_SRCS}
       ${FROTHY_RUNTIME_SUBSTRATE_SRCS}
-      ${FROTHY_RUNTIME_SNAPSHOT_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
     )
     frothy_configure_target(frothy_workshop_memory_tests)
@@ -496,7 +488,6 @@ if(FROTHY_BUILD_HOST)
       benchmarks/frothy_runtime_bench.c
       ${FROTHY_RUNTIME_PRODUCT_SRCS}
       ${FROTHY_RUNTIME_SUBSTRATE_SRCS}
-      ${FROTHY_RUNTIME_SNAPSHOT_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
     )
     frothy_configure_target(frothy_runtime_bench)

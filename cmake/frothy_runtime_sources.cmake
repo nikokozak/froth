@@ -1,5 +1,5 @@
-function(frothy_runtime_sources out_product out_substrate out_snapshot
-         out_support source_root board_sources_var)
+function(frothy_runtime_sources out_product out_substrate out_support source_root
+         board_sources_var)
   set(board_sources ${${board_sources_var}})
 
   set(product_sources
@@ -26,8 +26,6 @@ function(frothy_runtime_sources out_product out_substrate out_snapshot
     ${source_root}/src/froth_crc32.c
   )
 
-  set(snapshot_sources)
-
   set(support_sources
     ${source_root}/src/frothy_ffi.c
     ${board_sources}
@@ -35,6 +33,5 @@ function(frothy_runtime_sources out_product out_substrate out_snapshot
 
   set(${out_product} "${product_sources}" PARENT_SCOPE)
   set(${out_substrate} "${substrate_sources}" PARENT_SCOPE)
-  set(${out_snapshot} "${snapshot_sources}" PARENT_SCOPE)
   set(${out_support} "${support_sources}" PARENT_SCOPE)
 endfunction()

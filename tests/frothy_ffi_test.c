@@ -1275,16 +1275,33 @@ static int test_board_embedded_tool_surface(void) {
 }
 
 static int test_wrap_uptime_ms_payload(void) {
-  froth_cell_t wrapped = frothy_ffi_wrap_uptime_ms(UINT32_C(0xffffffff));
+  froth_cell_t wrapped =
+      frothy_ffi_wrap_uptime_ms((uint32_t)FROTHY_VALUE_INT_MAX);
   frothy_value_t value = frothy_value_make_nil();
   int ok = 1;
 
   reset_frothy_state();
+  if (wrapped != FROTHY_VALUE_INT_MAX) {
+    fprintf(stderr, "max uptime should fit the Frothy int range unchanged\n");
+    ok = 0;
+  }
   if (frothy_value_make_int((int32_t)wrapped, &value) != FROTH_OK) {
     fprintf(stderr, "wrapped uptime should fit the Frothy int range\n");
     ok = 0;
   }
   release_value(&value);
+
+  wrapped = frothy_ffi_wrap_uptime_ms((uint32_t)FROTHY_VALUE_INT_MAX + 1u);
+  if (wrapped != FROTHY_VALUE_INT_MIN) {
+    fprintf(stderr, "uptime should wrap across the Frothy int range\n");
+    ok = 0;
+  }
+
+  wrapped = frothy_ffi_wrap_uptime_ms(UINT32_C(0xffffffff));
+  if (wrapped != -1) {
+    fprintf(stderr, "full-width uptime should wrap to -1\n");
+    ok = 0;
+  }
   return ok;
 }
 

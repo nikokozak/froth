@@ -359,6 +359,45 @@ Historical validation notes before 2026-05-05 use the old broad
   `make --no-print-directory test-all`, `go test ./...` from `tools/cli`,
   focused Claude review with no actionable findings, and the M10 proof on
   `/dev/cu.usbserial-0001`.
+- The post-prune code readability audit is now active at
+  `docs/audit/Frothy_Code_Readability_Audit_2026-05.md`. The first host
+  proof-bundle cut removes duplicate transcript checks whose behavior already
+  has a focused owner: `.control` stays with the control smoke, detailed
+  surface-render normalization stays with `frothy_parser`, and multiline
+  Ctrl-C stays with the Go stream proof. Validation passed with
+  `git diff --check`, focused parser/control/REPL/inspect proof commands,
+  `make --no-print-directory test-frothy-proofs`, and the M10 proof on
+  `/dev/cu.usbserial-0001`.
+- The retained type/value boundary cut is in the current working tree:
+  `froth_types.h` is back to narrow retained substrate, the unused old Froth
+  3-bit tagged-cell helpers are gone, Frothy/32 integer range and wrap behavior
+  now live in `frothy_value`, and parser/FFI edge tests cover integer literal
+  overflow plus uptime wrap across the accepted immediate range. Validation
+  passed with the host test-profile build, focused parser/eval/FFI CTests,
+  `make --no-print-directory test-frothy`, `git diff --check`, and the M10
+  proof on `/dev/cu.usbserial-0001`.
+- The build source ownership cut is in the current working tree: the empty
+  snapshot-source return left behind after the snapshot fold is gone from the
+  shared CMake source helper, host and ESP-IDF targets now consume only product
+  plus retained-substrate source lists, and the root support-source variable
+  uses the Frothy name. Validation passed with
+  `make --no-print-directory test-frothy` and
+  `make --no-print-directory test-frothy-slow`, plus the M10 proof on
+  `/dev/cu.usbserial-0001`.
+- The first large-runtime readability cut is in the current working tree:
+  record-definition arity/field lookup no longer forces dummy name variables,
+  record runtime entry points have explicit null-runtime/null-output guards,
+  and record payload allocation checks multiplication before asking the payload
+  arena. Validation passed with the host test-profile build, focused
+  eval/snapshot CTests, `make --no-print-directory test-frothy`, and the M10
+  proof on `/dev/cu.usbserial-0001`.
+- The `frothy_value.c` object-lookup cut is in the current working tree:
+  classify/render/retain/release and typed getters now share one live-object
+  bounds check, value/code API entry points have explicit null guard behavior,
+  and retaining an object refuses refcount overflow. Validation passed with the
+  host test-profile build, focused eval/snapshot/FFI CTests, and
+  `make --no-print-directory test-frothy`, plus the M10 proof on
+  `/dev/cu.usbserial-0001`.
 
 ## Remaining Gates
 
@@ -368,7 +407,8 @@ Historical validation notes before 2026-05-05 use the old broad
   legacy board/project FFI export path is retired under Frothy ADR-125. With
   the retained substrate audit closed, the Frothy host test lanes split, and
   the CLI integration lanes deduplicated, the next useful cleanup line is the
-  remaining host proof-script bundle.
+  file-by-file readability audit, continuing through the larger Frothy runtime
+  units after the first `frothy_value.c` object-lookup cleanup.
 - Workshop-operational closeout is explicitly deferred behind the thesis-facing
   prune:
   clean-machine validation and room-side hardware/recovery prep still need to

@@ -39,6 +39,12 @@ typedef uint32_t frothy_value_t;
 
 typedef struct frothy_runtime_t frothy_runtime_t;
 
+enum {
+  FROTHY_VALUE_INT_BITS = 30,
+  FROTHY_VALUE_INT_MIN = -(1 << (FROTHY_VALUE_INT_BITS - 1)),
+  FROTHY_VALUE_INT_MAX = (1 << (FROTHY_VALUE_INT_BITS - 1)) - 1,
+};
+
 typedef froth_error_t (*frothy_native_fn_t)(frothy_runtime_t *runtime,
                                             const void *context,
                                             const frothy_value_t *args,
@@ -179,6 +185,7 @@ void frothy_runtime_test_set_eval_value_limit(frothy_runtime_t *runtime,
 void frothy_runtime_test_fail_next_append(frothy_runtime_t *runtime);
 
 froth_error_t frothy_value_make_int(int32_t value, frothy_value_t *out);
+int32_t frothy_value_wrap_int(int64_t raw);
 frothy_value_t frothy_value_make_bool(bool value);
 frothy_value_t frothy_value_make_nil(void);
 
@@ -269,6 +276,7 @@ froth_error_t frothy_runtime_alloc_record_def_from_ir(
     frothy_runtime_t *runtime, const char *name,
     const frothy_ir_program_t *program, size_t first_field, size_t field_count,
     frothy_value_t *out);
+/* name_out and field_count_out are optional. */
 froth_error_t frothy_runtime_get_record_def(const frothy_runtime_t *runtime,
                                             frothy_value_t value,
                                             const char **name_out,

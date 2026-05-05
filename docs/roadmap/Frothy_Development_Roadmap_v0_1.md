@@ -24,14 +24,17 @@ It is a sequencing and control document.
 This block is the live control surface for repo status.
 
 Current milestone: `pre-thesis publishability prune`
-Today's goal: Frothy ADR-127 deduplicates the CLI portion of `make test-all`
-by splitting local-runtime CLI integration from build/project integration
-Next artifact: audit the 45-second host proof bundle and replace smoke-proof
-breadth with focused C or Go coverage only where behavior is already covered
-honestly
+Today's goal: continue the file-by-file code readability audit without broad
+rearchitecture; current cuts tightened the retained type/value and build-source
+ownership boundaries and started the large runtime pass with `frothy_value.c`
+record/API guard and live-object lookup cleanup
+Next artifact: continue the readability audit through the remaining large
+Frothy runtime units
 Blocked by: none
-Next proof command: `make test-all`, then finish sign-off with a real
-`esp32-devkit-v1` proof on `/dev/cu.usbserial-0001`
+Next proof command: use the smallest focused lane for each audit cut; for
+shared runtime changes, run focused CTests and `make test-frothy`; add the
+matching slow/config lane when CMake or board source ownership moves, then
+finish sign-off with a real `esp32-devkit-v1` proof on `/dev/cu.usbserial-0001`
 Slip against plan: the workshop-operational closeout remains open and is
 intentionally deferred for this pass; the thesis-facing repo now has the
 publishability-prune decisions and proof gates captured in the working tree

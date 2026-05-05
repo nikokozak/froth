@@ -99,7 +99,7 @@ static froth_error_t frothy_ffi_test_maybe_fail_slot_replace(void) {
 #endif
 
 froth_cell_t frothy_ffi_wrap_uptime_ms(uint32_t uptime_ms) {
-  return froth_wrap_payload((froth_cell_u_t)uptime_ms);
+  return (froth_cell_t)frothy_value_wrap_int((int64_t)uptime_ms);
 }
 
 froth_error_t frothy_ffi_emit_string(const char *str) {

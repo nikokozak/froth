@@ -57,15 +57,6 @@ require_not_contains_line() {
   fi
 }
 
-run_control_front_door_proof() {
-  if ! command -v go >/dev/null 2>&1; then
-    echo "error: go is required for the .control front-door proof" >&2
-    exit 1
-  fi
-
-  sh "$ROOT_DIR/tools/frothy/proof_f1_control_smoke.sh" --host-only
-}
-
 HELP_TRANSCRIPT="$(
   run_transcript \
     'help' \
@@ -84,8 +75,6 @@ require_contains "$HELP_TRANSCRIPT" 'dangerous.wipe'
 require_contains "$HELP_TRANSCRIPT" '.control'
 require_contains "$HELP_TRANSCRIPT" 'quit'
 require_contains "$HELP_TRANSCRIPT" 'exit'
-
-run_control_front_door_proof
 
 WORDS_TRANSCRIPT="$(
   run_transcript \
@@ -155,31 +144,6 @@ require_contains "$INSPECT_TRANSCRIPT" '  see: to alias with arg0 [ arg0 + 1 ]'
 require_contains "$INSPECT_TRANSCRIPT" '  core: (fn arity=1 locals=1 (seq (call (builtin "+") (read-local 0) (lit 1))))'
 require_not_contains "$INSPECT_TRANSCRIPT" 'eval error ('
 require_not_contains "$INSPECT_TRANSCRIPT" 'parse error ('
-
-NORMALIZED_SHOW_TRANSCRIPT="$(
-  run_transcript \
-    'to loopDemo [ repeat 3 as i [ i ] ]' \
-    'to logicDemo with x, y [ x and y ]' \
-    'to logicOr with x, y [ x or y ]' \
-    'to scoped [ here n is 1; n ]' \
-    'to localDemo [ n is 6; n ]' \
-    'show @loopDemo' \
-    'show @logicDemo' \
-    'show @logicOr' \
-    'show @scoped' \
-    'show @localDemo' \
-    'quit'
-)"
-printf '%s\n' "$NORMALIZED_SHOW_TRANSCRIPT"
-require_contains "$NORMALIZED_SHOW_TRANSCRIPT" 'to loopDemo [ repeat 3 as local0 [ local0 ] ]'
-require_contains "$NORMALIZED_SHOW_TRANSCRIPT" 'to logicDemo with arg0, arg1 [ arg0 and arg1 ]'
-require_contains "$NORMALIZED_SHOW_TRANSCRIPT" 'to logicOr with arg0, arg1 [ arg0 or arg1 ]'
-require_contains "$NORMALIZED_SHOW_TRANSCRIPT" 'to scoped [ here local0 is 1; local0 ]'
-require_contains "$NORMALIZED_SHOW_TRANSCRIPT" 'to localDemo [ here local0 is 6; local0 ]'
-require_not_contains "$NORMALIZED_SHOW_TRANSCRIPT" 'while local'
-require_not_contains "$NORMALIZED_SHOW_TRANSCRIPT" 'if arg0 [ if arg1'
-require_not_contains "$NORMALIZED_SHOW_TRANSCRIPT" 'eval error ('
-require_not_contains "$NORMALIZED_SHOW_TRANSCRIPT" 'parse error ('
 
 REBIND_TRANSCRIPT="$(
   run_transcript \
