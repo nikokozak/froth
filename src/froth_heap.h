@@ -11,12 +11,12 @@ typedef struct {
   froth_cell_u_t high_water;
 } froth_heap_t;
 
-
 /* Return a froth_cell_t pointer into the heap at the given byte offset.
  * Useful when you have a raw byte offset (e.g. from a tagged QuoteRef payload)
  * and need to read cell-sized data. */
-static inline froth_cell_t* froth_heap_cell_ptr(froth_heap_t* heap, froth_cell_u_t byte_offset) {
-  return (froth_cell_t*)&heap->data[byte_offset];
+static inline froth_cell_t *froth_heap_cell_ptr(froth_heap_t *heap,
+                                                froth_cell_u_t byte_offset) {
+  return (froth_cell_t *)&heap->data[byte_offset];
 }
 
 static inline froth_cell_u_t froth_heap_high_water(const froth_heap_t *heap) {
@@ -27,9 +27,14 @@ static inline void froth_heap_debug_reset_high_water(froth_heap_t *heap) {
   heap->high_water = heap->pointer;
 }
 
-froth_error_t froth_heap_allocate_bytes(froth_cell_u_t size, froth_heap_t* froth_heap, froth_cell_u_t* assigned_heap_location);
+froth_error_t froth_heap_allocate_bytes(froth_cell_u_t size,
+                                        froth_heap_t *froth_heap,
+                                        froth_cell_u_t *assigned_heap_location);
 
 /* Allocate space for `count` cells on the heap. Returns a typed pointer
  * to the first cell. The byte offset (needed for QuoteRef payloads) is
  * written to `byte_offset_out` if non-NULL. */
-froth_error_t froth_heap_allocate_cells(froth_cell_u_t count, froth_heap_t* froth_heap, froth_cell_t** cells_out, froth_cell_u_t* byte_offset_out);
+froth_error_t froth_heap_allocate_cells(froth_cell_u_t count,
+                                        froth_heap_t *froth_heap,
+                                        froth_cell_t **cells_out,
+                                        froth_cell_u_t *byte_offset_out);

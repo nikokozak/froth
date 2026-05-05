@@ -75,6 +75,13 @@ Immediate issue already cut in this pass:
   board-facing emit, poll, and number-format helpers now live in
   `src/frothy_ffi.[ch]`, and `src/froth_console.[ch]` no longer ships as a
   separate retained C surface
+- retained VM/lifecycle substrate tightened without a broad rename:
+  write-only inherited VM fields are gone, repeated test/bench VM reset pokes
+  now use the explicit global VM reset/boot-complete helpers, slot reset has an
+  all-slot lifecycle owner for fresh VM starts, overlay reset no longer depends
+  on base slots being allocated before overlay slots, and the kept
+  heap/cellspace/slot-table/CRC units are documented as live substrate rather
+  than accidental leftovers
 
 Remaining cleanup pressure:
 
@@ -99,7 +106,10 @@ Remaining cleanup pressure:
   leaving the control wire format stable but removing another public retained
   substrate unit. The console cut folds the old retained `froth_console.[ch]`
   emit/poll/format helpers into `src/frothy_ffi.[ch]`, where their only live
-  board FFI callers already anchor the dependency.
+  board FFI callers already anchor the dependency. The VM/lifecycle audit then
+  removes write-only inherited VM fields and leaves the remaining `froth_vm`,
+  `froth_heap`, `froth_cellspace`, `froth_slot_table`, and `froth_crc32` units
+  as explicitly documented retained substrate.
 
 ## Authority Tensions
 
@@ -234,8 +244,8 @@ Do not blind-rename retained `froth_*` files. Instead:
 - keep the removed inherited VM stack storage and board stack-depth knobs out
   of the maintained tree; Frothy execution now uses the Frothy evaluator frame
   stack rather than the old data/return/control stack arrays
-- keep console formatting helpers with the console substrate instead of a
-  separate unowned formatting source/header pair
+- keep board-facing emit/poll/format helpers in the Frothy FFI owner instead of
+  a separate unowned console source/header pair
 - keep the deleted `froth_tbuf` transient-buffer path out of the maintained
   tree; Frothy runtime text storage now uses the Frothy object allocator path
 - keep ESP32 board ADC reads on `adc_oneshot` rather than the deprecated ADC1
@@ -246,6 +256,11 @@ Do not blind-rename retained `froth_*` files. Instead:
   behavior lives privately in the Frothy control owner
 - keep `froth_console.[ch]` deleted now that its remaining board-facing helper
   behavior lives in the Frothy FFI owner
+- keep the VM reset/boot-complete lifecycle explicit and keep write-only
+  inherited VM fields deleted
+- keep `froth_heap`, `froth_cellspace`, `froth_slot_table`, and `froth_crc32`
+  as named retained substrate while they have multiple live runtime/proof
+  owners
 - move retained substrate into an explicit directory only if it reduces reader
   confusion without hiding ownership
 

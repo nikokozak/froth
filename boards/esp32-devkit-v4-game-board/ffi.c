@@ -62,7 +62,6 @@ static int32_t board_gpio_levels[BOARD_POSIX_GPIO_MAX];
 
 static froth_error_t board_throw_program_interrupted(froth_vm_t *froth_vm) {
   froth_vm->interrupted = 0;
-  froth_vm->thrown = FROTH_OK;
   return FROTH_ERROR_PROGRAM_INTERRUPTED;
 }
 

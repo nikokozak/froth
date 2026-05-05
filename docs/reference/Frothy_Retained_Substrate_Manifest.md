@@ -33,6 +33,24 @@ The corresponding retained public headers are:
 - `src/froth_types.h`
 - `src/froth_vm.h`
 
+Current retained-unit notes:
+
+- `froth_vm` owns the single global VM image, its static heap/cellspace backing
+  storage, and the explicit reset/boot-complete lifecycle. The write-only
+  inherited `thrown`, `last_error_slot`, `trampoline_depth`, and `mark_offset`
+  fields are gone.
+- `froth_heap` remains the byte/cell arena used by slot names and quote payload
+  storage. Its high-water helpers are retained for memory proofs.
+- `froth_cellspace` remains the mutable cell arena used by `cells(...)`,
+  snapshots, and base-image reset. Its high-water helpers are retained for
+  memory proofs.
+- `froth_slot_table` remains the single global slot registry for base and
+  overlay bindings. It now has an explicit all-slot reset used by VM reset, and
+  overlay reset remains the user-image wipe path without relying on all base
+  slots being allocated before all overlay slots.
+- `froth_crc32` remains a tiny shared checksum unit used by both snapshot
+  storage and the control frame wire format.
+
 ## Frothy-Owned Runtime Surface
 
 These are Frothy-owned runtime or board-facing sources on the maintained path:

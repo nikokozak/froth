@@ -1,4 +1,3 @@
-#include "froth_slot_table.h"
 #include "froth_vm.h"
 #include "frothy_eval.h"
 #include "frothy_ffi.h"
@@ -24,17 +23,8 @@ static void release_value(frothy_value_t *value) {
 }
 
 static void reset_frothy_state(void) {
-  frothy_runtime_free(runtime());
-  (void)froth_slot_reset_overlay();
-  froth_vm.heap.pointer = 0;
-  froth_vm.boot_complete = 1;
-  froth_vm.trampoline_depth = 0;
-  froth_vm.interrupted = 0;
-  froth_vm.thrown = FROTH_OK;
-  froth_vm.last_error_slot = -1;
-  froth_vm.mark_offset = (froth_cell_u_t)-1;
-  froth_cellspace_init(&froth_vm.cellspace);
-  frothy_runtime_init(runtime(), &froth_vm.cellspace);
+  froth_vm_reset();
+  froth_vm_mark_boot_complete();
 }
 
 static int eval_source(const char *source, frothy_value_t *out,

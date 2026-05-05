@@ -201,8 +201,7 @@ froth_error_t frothy_boot(void) {
     return err;
   }
 
-  froth_cellspace_init(&froth_vm.cellspace);
-  frothy_runtime_init(&froth_vm.frothy_runtime, &froth_vm.cellspace);
+  froth_vm_reset();
 
   err = frothy_base_image_install();
   if (err != FROTH_OK) {
@@ -210,8 +209,7 @@ froth_error_t frothy_boot(void) {
     return err;
   }
 
-  froth_vm.boot_complete = 1;
-  froth_vm.watermark_heap_offset = froth_vm.heap.pointer;
+  froth_vm_mark_boot_complete();
 
   FROTH_TRY(frothy_emit_line("Frothy shell"));
 #ifdef FROTH_HAS_SNAPSHOTS

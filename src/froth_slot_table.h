@@ -15,16 +15,14 @@
 
 typedef struct {
   const char *name;
-  froth_cell_t impl; // Current Froth value binding; valid when impl_bound != 0
+  froth_cell_t impl; /* Current value binding; valid when impl_bound != 0. */
   froth_native_word_t prim;
   uint8_t overlay;
   uint8_t impl_bound;
-  uint8_t in_arity; // FROTH_SLOT_ARITY_UNKNOWN means "unknown"
+  uint8_t in_arity; /* FROTH_SLOT_ARITY_UNKNOWN means unknown. */
   uint8_t out_arity;
 } froth_slot_t;
 
-// find_name should return an erorr if not found, otherwise write to the result
-// pointer.
 froth_error_t froth_slot_find_name_or_create(froth_heap_t *froth_heap,
                                              const char *name,
                                              froth_cell_u_t *slot_index);
@@ -61,3 +59,4 @@ froth_cell_u_t froth_slot_high_water(void);
 void froth_slot_debug_reset_high_water(void);
 bool froth_slot_is_overlay(froth_cell_u_t slot_index);
 froth_error_t froth_slot_reset_overlay(void);
+void froth_slot_reset_all(void);

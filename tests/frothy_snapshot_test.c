@@ -46,20 +46,12 @@ static int bootstrap_snapshot_runtime(void) {
     return 1;
   }
 
-  froth_vm.heap.pointer = 0;
-  froth_vm.boot_complete = 1;
-  froth_vm.trampoline_depth = 0;
-  froth_vm.interrupted = 0;
-  froth_vm.thrown = FROTH_OK;
-  froth_vm.last_error_slot = -1;
-  froth_vm.mark_offset = (froth_cell_u_t)-1;
-  froth_cellspace_init(&froth_vm.cellspace);
-  frothy_runtime_init(runtime(), &froth_vm.cellspace);
+  froth_vm_reset();
   if (frothy_base_image_install() != FROTH_OK) {
     fprintf(stderr, "failed to install base slots\n");
     return 0;
   }
-  froth_vm.watermark_heap_offset = froth_vm.heap.pointer;
+  froth_vm_mark_boot_complete();
   snapshot_runtime_bootstrapped = true;
   return 1;
 }
@@ -106,8 +98,6 @@ static int enter_temp_workspace(temp_workspace_t *workspace) {
   }
 
   froth_vm.interrupted = 0;
-  froth_vm.thrown = FROTH_OK;
-  froth_vm.last_error_slot = -1;
   return 1;
 }
 
@@ -937,8 +927,6 @@ static int prepare_startup_state(void) {
   }
 
   froth_vm.interrupted = 0;
-  froth_vm.thrown = FROTH_OK;
-  froth_vm.last_error_slot = -1;
   return 1;
 }
 

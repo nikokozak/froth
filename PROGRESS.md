@@ -315,15 +315,24 @@ file is wrong.
   `git diff --check`, the host build, `make --no-print-directory test-frothy`,
   `go test ./...` from `tools/cli`, both maintained ESP-IDF board builds, and
   the M10 proof on `/dev/cu.usbserial-0001`.
+- The retained VM/lifecycle audit is validated in the current working tree:
+  write-only inherited VM fields are deleted, repeated test/bench reset pokes
+  now use explicit global VM reset and boot-complete helpers, and the kept heap,
+  cellspace, slot-table, and CRC units are documented as intentional retained
+  substrate; overlay reset also preserves later non-overlay slots instead of
+  relying on allocation ordering. Validation passed with `git diff --check`,
+  the host build,
+  `make --no-print-directory test-frothy`, both maintained ESP-IDF board
+  builds, and the M10 proof on `/dev/cu.usbserial-0001`.
 
 ## Remaining Gates
 
 - Pre-thesis publishability prune is the active non-workshop gate: the
   project-format, generated-PDF, and VS Code/Node policy decisions are captured
   by Frothy ADR-124; the old Python hardware-proof holdouts are gone; and the
-  legacy board/project FFI export path is retired under Frothy ADR-125. The
-  remaining work is any next small prune tranche that still materially
-  simplifies the repo before publication.
+  legacy board/project FFI export path is retired under Frothy ADR-125. With
+  the retained substrate audit closed, the next useful cleanup line is the
+  test-speed split.
 - Workshop-operational closeout is explicitly deferred behind the thesis-facing
   prune:
   clean-machine validation and room-side hardware/recovery prep still need to

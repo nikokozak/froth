@@ -270,6 +270,10 @@ keep each item's description and references so deferral does not erase context.
   `froth_stack`, `froth_tbuf`, `froth_snapshot`, `froth_transport`, and
   `froth_console` retained units from the maintained path where Frothy-owned
   owners now exist or no live owner remained.
+  Include: the retained VM/lifecycle audit keeps the single global VM policy,
+  removes write-only inherited VM fields, centralizes fresh VM reset, and
+  documents the remaining heap/cellspace/slot-table/CRC units as intentional
+  substrate.
 - [x] Publishability reset tranche 5: docs front door and archive pass
   Deliverable: keep one front door, shorten extension docs to extension-owned
   behavior, and archive historical proof evidence and duplicated release prose

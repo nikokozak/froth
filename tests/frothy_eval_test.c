@@ -20,16 +20,8 @@ static void release_value(frothy_value_t *value) {
 }
 
 static void reset_frothy_state(void) {
-  frothy_runtime_free(runtime());
-  (void)froth_slot_reset_overlay();
-  froth_vm.heap.pointer = 0;
-  froth_vm.boot_complete = 1;
-  froth_vm.trampoline_depth = 0;
-  froth_vm.interrupted = 0;
-  froth_vm.thrown = FROTH_OK;
-  froth_vm.last_error_slot = -1;
-  froth_cellspace_init(&froth_vm.cellspace);
-  frothy_runtime_init(runtime(), &froth_vm.cellspace);
+  froth_vm_reset();
+  froth_vm_mark_boot_complete();
 }
 
 static int eval_source(const char *source, frothy_value_t *out,
@@ -101,6 +93,34 @@ static int bind_native_slot(const char *name, frothy_native_fn_t fn,
     return 0;
   }
   return 1;
+}
+
+static int test_slot_overlay_reset_preserves_late_base_slots(void) {
+  froth_cell_u_t base_slot = 0;
+  froth_cell_u_t overlay_slot = 0;
+  froth_cell_u_t late_base_slot = 0;
+  froth_cell_u_t found_slot = 0;
+  int ok = 1;
+
+  reset_frothy_state();
+  ok &= froth_slot_create("base.one", &froth_vm.heap, &base_slot) == FROTH_OK;
+  ok &= froth_slot_create("overlay.one", &froth_vm.heap, &overlay_slot) ==
+        FROTH_OK;
+  ok &= froth_slot_set_overlay(overlay_slot, 1) == FROTH_OK;
+  ok &= froth_slot_create("base.two", &froth_vm.heap, &late_base_slot) ==
+        FROTH_OK;
+  ok &= froth_slot_reset_overlay() == FROTH_OK;
+  ok &= froth_slot_find_name("base.one", &found_slot) == FROTH_OK &&
+        found_slot == base_slot;
+  ok &= froth_slot_find_name("base.two", &found_slot) == FROTH_OK &&
+        found_slot == late_base_slot;
+  ok &= froth_slot_find_name("overlay.one", &found_slot) ==
+        FROTH_ERROR_UNDEFINED_WORD;
+  if (!ok) {
+    fprintf(stderr, "overlay reset should preserve non-overlay slots after "
+                    "interleaved overlay slots\n");
+  }
+  return ok;
 }
 
 static int find_call_depth_limit(const char *name, size_t max_probe,
@@ -1181,6 +1201,7 @@ int main(void) {
   int ok = 1;
 
   ok &= test_function_calls_and_blocks();
+  ok &= test_slot_overlay_reset_preserves_late_base_slots();
   ok &= test_eval_scratch_limits_and_nested_calls();
   ok &= test_explicit_eval_frame_stack_tranche();
   ok &= test_stable_rebinding_and_reclamation();
