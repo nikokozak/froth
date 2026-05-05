@@ -1,6 +1,7 @@
 set(FROTH_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../..")
 
 include(${FROTH_ROOT}/cmake/froth_board_assets.cmake)
+include(${FROTH_ROOT}/cmake/frothy_runtime_sources.cmake)
 
 if(NOT DEFINED FROTH_BOARD OR FROTH_BOARD STREQUAL "")
   get_property(FROTH_BOARD_CACHE_VALUE CACHE FROTH_BOARD PROPERTY VALUE)
@@ -146,45 +147,19 @@ endif()
 
 frothy_resolve_board_sources(FROTHY_BOARD_SRCS "${FROTH_ROOT}" "${FROTH_BOARD}")
 
-set(FROTHY_KERNEL_PRODUCT_SRCS
-    ${FROTH_ROOT}/src/frothy_boot.c
-    ${FROTH_ROOT}/src/frothy_base_image.c
-    ${FROTH_ROOT}/src/frothy_control.c
-    ${FROTH_ROOT}/src/frothy_shell.c
-    ${FROTH_ROOT}/src/frothy_ffi.c
-    ${FROTH_ROOT}/src/frothy_inspect.c
-    ${FROTH_ROOT}/src/frothy_ir.c
-    ${FROTH_ROOT}/src/frothy_parser.c
-    ${FROTH_ROOT}/src/frothy_snapshot.c
-    ${FROTH_ROOT}/src/frothy_snapshot_codec.c
-    ${FROTH_ROOT}/src/frothy_value.c
-    ${FROTH_ROOT}/src/frothy_eval.c
-    ${FROTHY_BOARD_SRCS}
-)
-
-set(FROTHY_KERNEL_RETAINED_SUBSTRATE_SRCS
-    ${FROTH_ROOT}/src/froth_stack.c
-    ${FROTH_ROOT}/src/froth_fmt.c
-    ${FROTH_ROOT}/src/froth_console.c
-    ${FROTH_ROOT}/src/froth_tbuf.c
-    ${FROTH_ROOT}/src/froth_vm.c
-    ${FROTH_ROOT}/src/froth_heap.c
-    ${FROTH_ROOT}/src/froth_slot_table.c
-    ${FROTH_ROOT}/src/froth_cellspace.c
-    ${FROTH_ROOT}/src/froth_snapshot.c
-    ${FROTH_ROOT}/src/froth_crc32.c
-    ${FROTH_ROOT}/src/froth_transport.c
-)
-
-set(FROTHY_KERNEL_COMPAT_LAYER_SRCS
-    ${FROTH_ROOT}/src/compat/frothy_console_compat.c
-    ${FROTH_ROOT}/src/compat/frothy_link_stub.c
+frothy_runtime_sources(
+    FROTHY_KERNEL_PRODUCT_SRCS
+    FROTHY_KERNEL_RETAINED_SUBSTRATE_SRCS
+    FROTHY_KERNEL_SNAPSHOT_SRCS
+    FROTHY_KERNEL_SUPPORT_SRCS
+    "${FROTH_ROOT}"
+    FROTHY_BOARD_SRCS
 )
 
 set(FROTHY_KERNEL_SRCS
     ${FROTHY_KERNEL_PRODUCT_SRCS}
     ${FROTHY_KERNEL_RETAINED_SUBSTRATE_SRCS}
-    ${FROTHY_KERNEL_COMPAT_LAYER_SRCS}
+    ${FROTHY_KERNEL_SNAPSHOT_SRCS}
 )
 
 idf_component_register(

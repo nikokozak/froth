@@ -1,6 +1,6 @@
 # Frothy Timeline
 
-*Last updated: 2026-05-04*
+*Last updated: 2026-05-05*
 
 This file is the movable milestone and queue ledger for Frothy.
 The roadmap current-state block in
@@ -80,7 +80,11 @@ keep each item's description and references so deferral does not erase context.
   proof. The retained internal `froth_ffi.*` substrate audit found no live
   runtime owner, so the old stack-oriented FFI unit/header and its build knobs
   are removed from the maintained tree and have a passing `esp32-devkit-v1`
-  M10 device proof.
+  M10 device proof. The source-inventory cut now removes the final
+  `src/compat/*` C shims and unused inherited link-dispatch header, moves host
+  and ESP-IDF runtime source ownership into one CMake helper, and prunes stale
+  Go protocol helpers that described no maintained control path; it is green
+  through host, CLI, ESP-IDF, and `esp32-devkit-v1` M10 proof gates.
   References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
   `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, Frothy ADR-125,
   `tools/frothy/`,
@@ -237,7 +241,7 @@ keep each item's description and references so deferral does not erase context.
   References: `docs/audit/Frothy_Repo_Audit_2026-04.md`, `Makefile`,
   `tools/frothy/proof.sh`, and `tools/package-firmware-release.sh`.
 - [x] Publishability reset tranche 4: runtime boundary tightening
-  Deliverable: make the retained Froth substrate set explicit, quarantine
+  Deliverable: make the retained Froth substrate set explicit, remove
   compatibility shims, and remove false placeholder labeling from kept runtime
   files without starting a speculative rewrite.
   References: `docs/audit/Frothy_Repo_Audit_2026-04.md`,

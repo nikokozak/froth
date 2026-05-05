@@ -5,6 +5,7 @@ project(Frothy)
 enable_testing()
 
 include(${CMAKE_SOURCE_DIR}/cmake/froth_board_assets.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/frothy_runtime_sources.cmake)
 
 set(FROTH_BOARD "posix" CACHE STRING "Target board (directory name under boards/)")
 set(FROTH_PLATFORM "posix" CACHE STRING "Target platform (directory name under platforms/)")
@@ -195,25 +196,13 @@ set(FROTH_PROJECT_FFI_CONFIG "" CACHE FILEPATH "Optional project FFI config frag
 
 frothy_resolve_board_sources(FROTHY_BOARD_SRCS "${CMAKE_SOURCE_DIR}" "${FROTH_BOARD}")
 
-set(FROTHY_RETAINED_FROTH_SUBSTRATE_SRCS
-  src/froth_console.c
-  src/froth_stack.c
-  src/froth_fmt.c
-  src/froth_tbuf.c
-)
-
-set(FROTHY_PRODUCT_FFI_SRCS
-  src/frothy_ffi.c
-  ${FROTHY_BOARD_SRCS}
-)
-
-set(FROTHY_COMPAT_LAYER_SRCS
-  src/compat/frothy_link_stub.c
-)
-
-set(FROTH_RUNTIME_SUPPORT_SRCS
-  ${FROTHY_RETAINED_FROTH_SUBSTRATE_SRCS}
-  ${FROTHY_PRODUCT_FFI_SRCS}
+frothy_runtime_sources(
+  FROTHY_RUNTIME_PRODUCT_SRCS
+  FROTHY_RUNTIME_SUBSTRATE_SRCS
+  FROTHY_RUNTIME_SNAPSHOT_SRCS
+  FROTH_RUNTIME_SUPPORT_SRCS
+  "${CMAKE_SOURCE_DIR}"
+  FROTHY_BOARD_SRCS
 )
 
 set(FROTH_COMMON_INCLUDE_DIRS
@@ -321,29 +310,12 @@ if(FROTHY_BUILD_HOST)
   target_sources(Frothy
     PRIVATE
       src/frothy_main.c
-      src/frothy_boot.c
-      src/frothy_base_image.c
-      src/frothy_control.c
-      src/frothy_shell.c
-      src/frothy_inspect.c
-      src/frothy_ir.c
-      src/frothy_parser.c
-      src/frothy_snapshot.c
-      src/frothy_snapshot_codec.c
-      src/frothy_value.c
-      src/frothy_eval.c
-      src/froth_vm.c
-      src/froth_heap.c
-      src/froth_cellspace.c
-      src/froth_slot_table.c
-      src/froth_transport.c
-      src/froth_crc32.c
-      ${FROTHY_COMPAT_LAYER_SRCS}
-      ${FROTH_RUNTIME_SUPPORT_SRCS}
+      ${FROTHY_RUNTIME_PRODUCT_SRCS}
+      ${FROTHY_RUNTIME_SUBSTRATE_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
   )
   if(FROTH_HAS_SNAPSHOTS)
-    target_sources(Frothy PRIVATE src/froth_snapshot.c)
+    target_sources(Frothy PRIVATE ${FROTHY_RUNTIME_SNAPSHOT_SRCS})
   endif()
   frothy_apply_project_ffi_config(Frothy "${FROTH_PROJECT_FFI_CONFIG}")
   frothy_configure_target(Frothy)
@@ -388,26 +360,9 @@ if(FROTHY_BUILD_HOST)
   if(EXISTS "${CMAKE_SOURCE_DIR}/tests/frothy_snapshot_test.c")
     add_executable(frothy_snapshot_tests
       tests/frothy_snapshot_test.c
-      src/frothy_boot.c
-      src/frothy_base_image.c
-      src/frothy_control.c
-      src/frothy_shell.c
-      src/frothy_ir.c
-      src/frothy_parser.c
-      src/frothy_inspect.c
-      src/frothy_snapshot.c
-      src/frothy_snapshot_codec.c
-      src/frothy_value.c
-      src/frothy_eval.c
-      src/froth_vm.c
-      src/froth_heap.c
-      src/froth_cellspace.c
-      src/froth_slot_table.c
-      src/froth_transport.c
-      src/froth_crc32.c
-      ${FROTHY_COMPAT_LAYER_SRCS}
-      ${FROTH_RUNTIME_SUPPORT_SRCS}
-      src/froth_snapshot.c
+      ${FROTHY_RUNTIME_PRODUCT_SRCS}
+      ${FROTHY_RUNTIME_SUBSTRATE_SRCS}
+      ${FROTHY_RUNTIME_SNAPSHOT_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
     )
     frothy_configure_target(frothy_snapshot_tests)
@@ -420,25 +375,9 @@ if(FROTHY_BUILD_HOST)
   if(EXISTS "${CMAKE_SOURCE_DIR}/tests/frothy_shell_test.c")
     add_executable(frothy_shell_tests
       tests/frothy_shell_test.c
-      src/frothy_base_image.c
-      src/frothy_control.c
-      src/frothy_shell.c
-      src/frothy_inspect.c
-      src/frothy_ir.c
-      src/frothy_parser.c
-      src/frothy_snapshot.c
-      src/frothy_snapshot_codec.c
-      src/frothy_value.c
-      src/frothy_eval.c
-      src/froth_vm.c
-      src/froth_heap.c
-      src/froth_cellspace.c
-      src/froth_slot_table.c
-      src/froth_transport.c
-      src/froth_crc32.c
-      ${FROTHY_COMPAT_LAYER_SRCS}
-      ${FROTH_RUNTIME_SUPPORT_SRCS}
-      src/froth_snapshot.c
+      ${FROTHY_RUNTIME_PRODUCT_SRCS}
+      ${FROTHY_RUNTIME_SUBSTRATE_SRCS}
+      ${FROTHY_RUNTIME_SNAPSHOT_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
     )
     frothy_configure_target(frothy_shell_tests)
@@ -485,23 +424,9 @@ if(FROTHY_BUILD_HOST)
      EXISTS "${CMAKE_SOURCE_DIR}/tests/frothy_tm1629_board_test.c")
     add_executable(frothy_tm1629_board_tests
       tests/frothy_tm1629_board_test.c
-      src/frothy_base_image.c
-      src/frothy_ir.c
-      src/frothy_parser.c
-      src/frothy_inspect.c
-      src/frothy_snapshot.c
-      src/frothy_snapshot_codec.c
-      src/frothy_value.c
-      src/frothy_eval.c
-      src/froth_vm.c
-      src/froth_heap.c
-      src/froth_cellspace.c
-      src/froth_slot_table.c
-      src/froth_transport.c
-      src/froth_crc32.c
-      ${FROTHY_COMPAT_LAYER_SRCS}
-      ${FROTH_RUNTIME_SUPPORT_SRCS}
-      src/froth_snapshot.c
+      ${FROTHY_RUNTIME_PRODUCT_SRCS}
+      ${FROTHY_RUNTIME_SUBSTRATE_SRCS}
+      ${FROTHY_RUNTIME_SNAPSHOT_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
     )
     frothy_configure_target(frothy_tm1629_board_tests)
@@ -515,26 +440,9 @@ if(FROTHY_BUILD_HOST)
      EXISTS "${CMAKE_SOURCE_DIR}/tests/frothy_workshop_memory_test.c")
     add_executable(frothy_workshop_memory_tests
       tests/frothy_workshop_memory_test.c
-      src/frothy_base_image.c
-      src/frothy_boot.c
-      src/frothy_control.c
-      src/frothy_shell.c
-      src/frothy_inspect.c
-      src/frothy_ir.c
-      src/frothy_parser.c
-      src/frothy_snapshot.c
-      src/frothy_snapshot_codec.c
-      src/frothy_value.c
-      src/frothy_eval.c
-      src/froth_vm.c
-      src/froth_heap.c
-      src/froth_cellspace.c
-      src/froth_slot_table.c
-      src/froth_transport.c
-      src/froth_crc32.c
-      ${FROTHY_COMPAT_LAYER_SRCS}
-      ${FROTH_RUNTIME_SUPPORT_SRCS}
-      src/froth_snapshot.c
+      ${FROTHY_RUNTIME_PRODUCT_SRCS}
+      ${FROTHY_RUNTIME_SUBSTRATE_SRCS}
+      ${FROTHY_RUNTIME_SNAPSHOT_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
     )
     frothy_configure_target(frothy_workshop_memory_tests)
@@ -612,26 +520,9 @@ if(FROTHY_BUILD_HOST)
   if(EXISTS "${CMAKE_SOURCE_DIR}/benchmarks/frothy_runtime_bench.c")
     add_executable(frothy_runtime_bench
       benchmarks/frothy_runtime_bench.c
-      src/frothy_boot.c
-      src/frothy_base_image.c
-      src/frothy_control.c
-      src/frothy_shell.c
-      src/frothy_ir.c
-      src/frothy_parser.c
-      src/frothy_inspect.c
-      src/frothy_snapshot.c
-      src/frothy_snapshot_codec.c
-      src/frothy_value.c
-      src/frothy_eval.c
-      src/froth_vm.c
-      src/froth_heap.c
-      src/froth_cellspace.c
-      src/froth_slot_table.c
-      src/froth_transport.c
-      src/froth_crc32.c
-      ${FROTHY_COMPAT_LAYER_SRCS}
-      ${FROTH_RUNTIME_SUPPORT_SRCS}
-      src/froth_snapshot.c
+      ${FROTHY_RUNTIME_PRODUCT_SRCS}
+      ${FROTHY_RUNTIME_SUBSTRATE_SRCS}
+      ${FROTHY_RUNTIME_SNAPSHOT_SRCS}
       platforms/${FROTH_PLATFORM}/platform.c
     )
     frothy_configure_target(frothy_runtime_bench)

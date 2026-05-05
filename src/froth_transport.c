@@ -1,6 +1,5 @@
 #include "froth_transport.h"
 #include "froth_crc32.h"
-#include "froth_link.h"
 #include "platform.h"
 #include <stdbool.h>
 
@@ -280,17 +279,4 @@ froth_error_t froth_link_frame_decode(froth_link_header_t *header,
   }
 
   return FROTH_OK;
-}
-
-/* Decode, parse, and dispatch in one shot. Old all-in-one path. */
-froth_error_t froth_link_frame_complete(froth_vm_t *vm) {
-  froth_link_header_t header;
-  const uint8_t *payload;
-  froth_error_t err = froth_link_frame_decode(&header, &payload);
-  if (err != FROTH_OK)
-    return FROTH_OK; /* junk frame, silently dropped */
-
-  err = froth_link_dispatch(vm, &header, payload);
-  froth_link_frame_reset();
-  return err;
 }

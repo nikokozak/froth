@@ -1,6 +1,6 @@
 # Frothy Progress
 
-*Last updated: 2026-05-04*
+*Last updated: 2026-05-05*
 
 This file is the thin operational note for Frothy.
 The current-state block in `docs/roadmap/Frothy_Development_Roadmap_v0_1.md`
@@ -259,6 +259,11 @@ file is wrong.
   with `make test-frothy`, `go test ./...` from `tools/cli`, the maintained
   `esp32-devkit-v1` ESP-IDF build, and the M10 proof on
   `/dev/cu.usbserial-0001`.
+- The source-inventory and compatibility-boundary prune is validated: host and
+  ESP-IDF now share `cmake/frothy_runtime_sources.cmake`, the unused
+  `src/compat/*` shims and `src/froth_link.h` dispatcher header are gone,
+  transport exposes decode/send only, and the Go protocol package no longer
+  carries stale attach/eval/info/error payload helpers from the old link path.
 
 ## Remaining Gates
 

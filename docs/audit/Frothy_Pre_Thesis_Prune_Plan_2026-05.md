@@ -63,9 +63,10 @@ Remaining cleanup pressure:
 - The VS Code extension keeps Node/TypeScript as an explicit extension-local
   exception under Frothy ADR-124.
 - Retained `src/froth_*` substrate is documented but still interleaved with
-  product runtime code and compatibility shims; after Frothy ADR-125, the
-  internal `froth_ffi.*` substrate audit found no live owner, so those units
-  and their manifest build knob were removed.
+  product runtime code; after Frothy ADR-125, the internal `froth_ffi.*`
+  substrate audit found no live owner, and the follow-on source inventory
+  removed the final `src/compat/*` C shims and unused inherited link-dispatch
+  header.
 
 ## Authority Tensions
 
@@ -195,8 +196,8 @@ Do not blind-rename retained `froth_*` files. Instead:
   FFI is fully on `frothy_ffi_entry_t`
 - keep retired `froth_ffi.*` substrate out of the maintained build now that
   the audit found no live runtime owner
-- remove `src/compat/*` once no retained substrate requires it
-- make one CMake source list the shared host/ESP-IDF runtime inventory
+- keep `src/compat/*` deleted now that no retained substrate requires it
+- keep one CMake source list as the shared host/ESP-IDF runtime inventory
 - move retained substrate into an explicit directory only if it reduces reader
   confusion without hiding ownership
 

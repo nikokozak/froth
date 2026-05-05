@@ -32,36 +32,6 @@ func configuredMaxPayload() int {
 	return n
 }
 
-// Message types (ADR-048 v2). 0x00 reserved (COBS delimiter).
-const (
-	HelloReq     = 0x01
-	HelloRes     = 0x02
-	AttachReq    = 0x03
-	AttachRes    = 0x04
-	DetachReq    = 0x05
-	DetachRes    = 0x06
-	InfoReq      = 0x07
-	InfoRes      = 0x08
-	ResetReq     = 0x09
-	ResetRes     = 0x0A
-	EvalReq      = 0x0B
-	EvalRes      = 0x0C
-	InterruptReq = 0x0D
-	Keepalive    = 0x0E
-	InputData    = 0x0F
-	InputWait    = 0x10
-	OutputData   = 0x11
-	Error        = 0xFF
-)
-
-// Attach response status codes (ADR-048 section 3).
-const (
-	AttachStatusOK          = 0
-	AttachStatusBusy        = 1
-	AttachStatusUnsupported = 2
-	AttachStatusInvalid     = 3
-)
-
 // Header represents a parsed FROTH-LINK/2 frame header.
 type Header struct {
 	Magic         [2]byte

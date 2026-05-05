@@ -16,26 +16,6 @@
 #define FROTH_LINK_COBS_MAX                                                    \
   (FROTH_LINK_MAX_FRAME + (FROTH_LINK_MAX_FRAME / 254) + 1)
 
-/* Message types (V2) */
-#define FROTH_LINK_HELLO_REQ 0x01
-#define FROTH_LINK_HELLO_RES 0x02
-#define FROTH_LINK_ATTACH_REQ 0x03
-#define FROTH_LINK_ATTACH_RES 0x04
-#define FROTH_LINK_DETACH_REQ 0x05
-#define FROTH_LINK_DETACH_RES 0x06
-#define FROTH_LINK_INFO_REQ 0x07
-#define FROTH_LINK_INFO_RES 0x08
-#define FROTH_LINK_RESET_REQ 0x09
-#define FROTH_LINK_RESET_RES 0x0A
-#define FROTH_LINK_EVAL_REQ 0x0B
-#define FROTH_LINK_EVAL_RES 0x0C
-#define FROTH_LINK_INTERRUPT_REQ 0x0D
-#define FROTH_LINK_KEEPALIVE 0x0E
-#define FROTH_LINK_INPUT_DATA 0x0F
-#define FROTH_LINK_INPUT_WAIT 0x10
-#define FROTH_LINK_OUTPUT_DATA 0x11
-#define FROTH_LINK_ERROR 0xFF
-
 typedef struct {
   uint8_t magic[2];
   uint8_t version;
@@ -83,11 +63,9 @@ froth_error_t froth_link_send_frame(uint64_t session_id, uint8_t message_type,
 
 /* ── Inbound frame accumulation ─────────────────────────────────────
  * frame_reset/frame_byte accumulate bytes between 0x00 delimiters.
- * frame_decode does COBS decode + header parse (no dispatch).
- * frame_complete does decode + dispatch (all-in-one convenience).   */
+ * frame_decode does COBS decode + header parse (no dispatch).       */
 
 void froth_link_frame_reset(void);
 froth_error_t froth_link_frame_byte(uint8_t byte);
 froth_error_t froth_link_frame_decode(froth_link_header_t *header,
                                       const uint8_t **payload);
-froth_error_t froth_link_frame_complete(froth_vm_t *vm);

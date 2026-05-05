@@ -2,17 +2,15 @@
 
 Status: active reference
 Date: 2026-05-05
-Authority: `docs/reference/Froth_Substrate_References.md`, Frothy ADR-125, `CMakeLists.txt`, `targets/esp-idf/main/CMakeLists.txt`
+Authority: `docs/reference/Froth_Substrate_References.md`, Frothy ADR-125, `cmake/frothy_runtime_sources.cmake`, `CMakeLists.txt`, `targets/esp-idf/main/CMakeLists.txt`
 
-This manifest names the retained Froth substrate and the temporary
-compatibility seams that still ship in the maintained Frothy tree.
+This manifest names the retained Froth substrate that still ships in the
+maintained Frothy tree.
 
 It exists to keep the boundary explicit:
 
 - retained `froth_*` units are still live substrate, not accidental leftovers
 - Frothy-owned runtime code remains the maintained product surface
-- temporary compatibility shims stay visible and bounded until they can be
-  deleted cleanly
 - retired legacy board/project authoring surfaces stay out of the active path
 
 ## Retained Froth Substrate
@@ -39,7 +37,6 @@ The corresponding retained public headers are:
 - `src/froth_crc32.h`
 - `src/froth_fmt.h`
 - `src/froth_heap.h`
-- `src/froth_link.h`
 - `src/froth_slot_table.h`
 - `src/froth_snapshot.h`
 - `src/froth_stack.h`
@@ -61,13 +58,13 @@ These are Frothy-owned runtime or board-facing sources on the maintained path:
 New board and project FFI code must use the maintained `frothy_ffi_entry_t`
 path declared in `src/frothy_ffi.h`.
 
-## Temporary Compatibility Layer
+## Compatibility Layer
 
-These files are deliberate temporary compatibility seams, not product-center
-runtime modules:
-
-- `src/compat/frothy_console_compat.c`
-- `src/compat/frothy_link_stub.c`
+No source-level C compatibility shims remain on the maintained build path.
+The prior `src/compat/*` shims and the unused `src/froth_link.h` dispatcher
+header were removed after source inventory found no retained call sites.
+Inbound transport now stops at decode/header parse in `src/froth_transport.c`;
+Frothy-owned dispatch lives in `src/frothy_control.c`.
 
 Per Frothy ADR-125, active board and project FFI code must not export
 `froth_board_bindings` or `froth_project_bindings`, and must not call a legacy
@@ -78,4 +75,5 @@ binding-table installer.
 No active board or project legacy FFI exports remain in the maintained tree.
 The retained internal `src/froth_ffi.c` / `src/froth_ffi.h` substrate was
 audited, found to have no live runtime owner, and removed from host, ESP-IDF,
-and project-manifest build configuration.
+and project-manifest build configuration. The former compatibility sources are
+also removed from host and ESP-IDF source inventories.
