@@ -10,7 +10,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "froth_console.h"
-#include "froth_fmt.h"
 #include "froth_types.h"
 #include "froth_vm.h"
 #include "frothy_ffi.h"
@@ -993,15 +992,15 @@ static froth_error_t esp32_console_info(frothy_runtime_t *runtime,
   (void)args;
   FROTH_TRY(platform_console_uart_info(&info));
 
-  FROTH_TRY(emit_string("console uart"));
-  FROTH_TRY(emit_string(format_number(info.port)));
-  FROTH_TRY(emit_string(" tx="));
-  FROTH_TRY(emit_string(format_number(info.tx)));
-  FROTH_TRY(emit_string(" rx="));
-  FROTH_TRY(emit_string(format_number(info.rx)));
-  FROTH_TRY(emit_string(" baud="));
-  FROTH_TRY(emit_string(format_number(info.baud)));
-  FROTH_TRY(emit_string("\n"));
+  FROTH_TRY(froth_console_emit_string("console uart"));
+  FROTH_TRY(froth_console_emit_string(froth_console_format_number(info.port)));
+  FROTH_TRY(froth_console_emit_string(" tx="));
+  FROTH_TRY(froth_console_emit_string(froth_console_format_number(info.tx)));
+  FROTH_TRY(froth_console_emit_string(" rx="));
+  FROTH_TRY(froth_console_emit_string(froth_console_format_number(info.rx)));
+  FROTH_TRY(froth_console_emit_string(" baud="));
+  FROTH_TRY(froth_console_emit_string(froth_console_format_number(info.baud)));
+  FROTH_TRY(froth_console_emit_string("\n"));
   return frothy_ffi_return_nil(out);
 }
 

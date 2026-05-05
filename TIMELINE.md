@@ -84,7 +84,11 @@ keep each item's description and references so deferral does not erase context.
   `src/compat/*` C shims and unused inherited link-dispatch header, moves host
   and ESP-IDF runtime source ownership into one CMake helper, and prunes stale
   Go protocol helpers that described no maintained control path; it is green
-  through host, CLI, ESP-IDF, and `esp32-devkit-v1` M10 proof gates.
+  through host, CLI, ESP-IDF, and `esp32-devkit-v1` M10 proof gates. The
+  retained utility-helper cut now removes the dead `froth_stack_*` helper API
+  and `src/froth_stack.c`, folds `froth_fmt` into `froth_console`, updates the
+  retained-substrate manifest, and is green through host, ESP-IDF, and
+  `esp32-devkit-v1` M10 proof gates.
   References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
   `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, Frothy ADR-125,
   `tools/frothy/`,

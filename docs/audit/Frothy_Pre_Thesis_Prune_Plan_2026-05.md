@@ -25,12 +25,12 @@ maintained tree.
 Tracked source after the first immediate prune slice, counting files still
 present in the working tree:
 
-- `C` and headers: 46 `.c`, 33 `.h`
-- Go: 79 `.go`
+- `C` and headers: 40 `.c`, 30 `.h`
+- Go: 80 `.go`
 - Frothy source and parser fixtures: 39 `.frothy`, 29 `.ir`
 - Shell glue: 25 `.sh`
 - VS Code extension: 8 `.ts`, 9 `.js`
-- Python holdouts: 2 `.py`
+- Python holdouts: none
 - Generated/reference artifact holdout: none in the active guide path
 
 Immediate issue already cut in this pass:
@@ -66,7 +66,9 @@ Remaining cleanup pressure:
   product runtime code; after Frothy ADR-125, the internal `froth_ffi.*`
   substrate audit found no live owner, and the follow-on source inventory
   removed the final `src/compat/*` C shims and unused inherited link-dispatch
-  header.
+  header. The next utility cut removes the unowned `froth_stack_*` helper API
+  and emptyable `src/froth_stack.c` unit while keeping the VM stack structs;
+  it also folds the two-function `froth_fmt` helper into `froth_console`.
 
 ## Authority Tensions
 
@@ -198,6 +200,10 @@ Do not blind-rename retained `froth_*` files. Instead:
   the audit found no live runtime owner
 - keep `src/compat/*` deleted now that no retained substrate requires it
 - keep one CMake source list as the shared host/ESP-IDF runtime inventory
+- keep `froth_stack.h` only as the VM stack-struct declaration until a later
+  runtime-layout pass proves that boundary can be simplified further
+- keep console formatting helpers with the console substrate instead of a
+  separate unowned formatting source/header pair
 - move retained substrate into an explicit directory only if it reduces reader
   confusion without hiding ownership
 

@@ -264,6 +264,13 @@ file is wrong.
   `src/compat/*` shims and `src/froth_link.h` dispatcher header are gone,
   transport exposes decode/send only, and the Go protocol package no longer
   carries stale attach/eval/info/error payload helpers from the old link path.
+- The retained utility-substrate prune is validated: the unowned
+  `froth_stack_*` helper API and `src/froth_stack.c` unit are gone while the
+  VM-owned stack structs remain, and the two-function `froth_fmt` helper unit
+  is folded into `froth_console`. Validation passed with the host build,
+  `make --no-print-directory test-frothy`, the maintained
+  `esp32-devkit-v1` ESP-IDF build, and the M10 proof on
+  `/dev/cu.usbserial-0001`.
 
 ## Remaining Gates
 

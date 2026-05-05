@@ -2,7 +2,6 @@
 
 #include "ffi.h"
 #include "froth_slot_table.h"
-#include "froth_stack.h"
 #include "froth_tbuf.h"
 #include "froth_vm.h"
 

@@ -1,5 +1,4 @@
 #include "froth_slot_table.h"
-#include "froth_stack.h"
 #include "froth_tbuf.h"
 #include "froth_vm.h"
 #include "frothy_eval.h"
@@ -1291,23 +1290,10 @@ static int test_board_embedded_tool_surface(void) {
 
 static int test_wrap_uptime_ms_payload(void) {
   froth_cell_t wrapped = frothy_ffi_wrap_uptime_ms(UINT32_C(0xffffffff));
-  froth_cell_t round_trip = 0;
   frothy_value_t value = frothy_value_make_nil();
   int ok = 1;
 
   reset_frothy_state();
-  if (froth_stack_push(&froth_vm.ds, wrapped) != FROTH_OK) {
-    fprintf(stderr, "wrapped uptime should fit the Froth payload range\n");
-    return 0;
-  }
-  if (froth_stack_pop(&froth_vm.ds, &round_trip) != FROTH_OK) {
-    fprintf(stderr, "wrapped uptime should round-trip through the Froth stack\n");
-    return 0;
-  }
-  if (round_trip != wrapped) {
-    fprintf(stderr, "wrapped uptime should preserve its payload value\n");
-    ok = 0;
-  }
   if (frothy_value_make_int((int32_t)wrapped, &value) != FROTH_OK) {
     fprintf(stderr, "wrapped uptime should fit the Frothy int range\n");
     ok = 0;

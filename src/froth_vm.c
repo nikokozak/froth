@@ -1,5 +1,4 @@
 #include "froth_vm.h"
-#include "froth_stack.h"
 #include "froth_tbuf.h"
 #include "froth_types.h"
 

@@ -33,9 +33,3 @@ typedef struct froth_cs_t {
   froth_cell_u_t capacity;
   froth_cs_frame_t *data;
 } froth_cs_t;
-
-froth_error_t froth_stack_push(froth_stack_t *stack, froth_cell_t value);
-froth_error_t froth_stack_pop(froth_stack_t *stack, froth_cell_t *return_value);
-froth_error_t froth_stack_peek(froth_stack_t *stack,
-                               froth_cell_t *return_value);
-froth_cell_u_t froth_stack_depth(froth_stack_t *stack);

@@ -19,8 +19,6 @@ These retained source files still build on maintained Frothy paths because the
 current runtime still reuses them directly:
 
 - `src/froth_console.c`
-- `src/froth_stack.c`
-- `src/froth_fmt.c`
 - `src/froth_tbuf.c`
 - `src/froth_vm.c`
 - `src/froth_heap.c`
@@ -35,7 +33,6 @@ The corresponding retained public headers are:
 - `src/froth_cellspace.h`
 - `src/froth_console.h`
 - `src/froth_crc32.h`
-- `src/froth_fmt.h`
 - `src/froth_heap.h`
 - `src/froth_slot_table.h`
 - `src/froth_snapshot.h`

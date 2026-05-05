@@ -26,8 +26,6 @@ function(frothy_runtime_sources out_product out_substrate out_snapshot
     ${source_root}/src/froth_transport.c
     ${source_root}/src/froth_crc32.c
     ${source_root}/src/froth_console.c
-    ${source_root}/src/froth_stack.c
-    ${source_root}/src/froth_fmt.c
     ${source_root}/src/froth_tbuf.c
   )
 
@@ -37,8 +35,6 @@ function(frothy_runtime_sources out_product out_substrate out_snapshot
 
   set(support_sources
     ${source_root}/src/froth_console.c
-    ${source_root}/src/froth_stack.c
-    ${source_root}/src/froth_fmt.c
     ${source_root}/src/froth_tbuf.c
     ${source_root}/src/frothy_ffi.c
     ${board_sources}

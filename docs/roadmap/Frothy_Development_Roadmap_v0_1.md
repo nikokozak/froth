@@ -24,12 +24,12 @@ It is a sequencing and control document.
 This block is the live control surface for repo status.
 
 Current milestone: `pre-thesis publishability prune`
-Today's goal: finish the source-inventory and compatibility-boundary prune by
-removing dead `src/compat/*` shims, deleting the unused inherited link
-dispatcher header, centralizing host/ESP-IDF runtime source lists, and pruning
-stale Go protocol helpers
-Next artifact: next small C-runtime readability prune after the retained
-transport/control boundary is stable
+Today's goal: finish the C-runtime readability prune by deleting the dead
+stack-helper source/API and folding the tiny unowned `froth_fmt` helper unit
+into the console substrate
+Next artifact: next retained-substrate audit, starting with whether the
+remaining console/tbuf utilities can be made clearer without hiding platform
+ownership
 Blocked by: none
 Next proof command: for the next tranche, start with the smallest focused gate
 that exercises the changed surface, then finish sign-off with a real
