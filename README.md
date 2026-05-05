@@ -128,6 +128,15 @@ make test-all
 make test-publishability
 ```
 
+Focused Frothy lanes:
+
+```sh
+make test-frothy
+make test-frothy-slow
+make test-frothy-proofs
+make test-frothy-full
+```
+
 Optional deferred or extension lanes:
 
 ```sh
@@ -143,6 +152,10 @@ The host build produces:
 The maintained test contract is:
 
 - `make test`: fast self-contained local gate (`C`, `Go`, `Shell`)
+- `make test-frothy`: fast Frothy host CTest lane for runtime/language edits
+- `make test-frothy-slow`: slower Frothy CMake/config smoke CTests
+- `make test-frothy-proofs`: Frothy host proof-script rehearsal
+- `make test-frothy-full`: all Frothy host CTests plus host proofs
 - `make test-all`: exhaustive local gate (`C`, `Go`, `Shell`)
 - `make test-publishability`: full shipped-surface local gate (`make test-all` plus `make test-vscode`)
 - `make test-vscode`: explicit extension-local `Node` lane

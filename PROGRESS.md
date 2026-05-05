@@ -11,6 +11,10 @@ file is wrong.
 
 ## Landed And Still Relevant
 
+Historical validation notes before 2026-05-05 use the old broad
+`make test-frothy` contract. After Frothy ADR-126, use
+`make test-frothy-full` when that previous full-host breadth is needed.
+
 - Frothy `v0.1` is closed through M10; the dated ladder is done.
 - The first embedded tool-surface tranche is now landed: Frothy no longer
   treats the accepted `v0.1` spec as the whole present-day user-facing
@@ -324,6 +328,22 @@ file is wrong.
   the host build,
   `make --no-print-directory test-frothy`, both maintained ESP-IDF board
   builds, and the M10 proof on `/dev/cu.usbserial-0001`.
+- The Frothy test-speed split is active in the current working tree:
+  Frothy ADR-126 narrows `make test-frothy` to the fast Frothy CTest lane,
+  adds explicit `make test-frothy-slow`, `make test-frothy-proofs`, and
+  `make test-frothy-full` targets, and keeps `make test-all` as the extended
+  local C/Go/shell gate. CI now runs the slower Frothy lanes as separate jobs,
+  and the previous disguised `test-frothy` proof bundle is still available as
+  `test-frothy-full`; existing scripts that used `make test-frothy` for full
+  host coverage should move to `make test-frothy-full`. Validation passed with
+  `git diff --check`, `make --no-print-directory test-list`,
+  `make --no-print-directory test-frothy`,
+  `make --no-print-directory test-frothy-slow`,
+  `make --no-print-directory test-frothy-proofs`,
+  `make --no-print-directory test-frothy-full`,
+  `make --no-print-directory test`, `make --no-print-directory test-all`,
+  `go test ./...` from `tools/cli`, and the M10 proof on
+  `/dev/cu.usbserial-0001`.
 
 ## Remaining Gates
 
@@ -331,8 +351,9 @@ file is wrong.
   project-format, generated-PDF, and VS Code/Node policy decisions are captured
   by Frothy ADR-124; the old Python hardware-proof holdouts are gone; and the
   legacy board/project FFI export path is retired under Frothy ADR-125. With
-  the retained substrate audit closed, the next useful cleanup line is the
-  test-speed split.
+  the retained substrate audit closed and the Frothy host test lanes split, the
+  next useful cleanup line is measuring whether CLI integration/proof breadth
+  can be replaced by focused C or Go coverage.
 - Workshop-operational closeout is explicitly deferred behind the thesis-facing
   prune:
   clean-machine validation and room-side hardware/recovery prep still need to

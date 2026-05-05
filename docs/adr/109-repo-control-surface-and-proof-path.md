@@ -1,7 +1,7 @@
 # Frothy ADR-109: Repo Control Surface And Proof Path
 
 **Date**: 2026-04-12
-**Status**: Accepted
+**Status**: Accepted; amended by Frothy ADR-126
 **Spec sections**: `docs/spec/Frothy_Language_Spec_v0_1.md`, sections 1, 8, Appendix B
 **Roadmap milestone(s)**: post-M10 control-surface cleanup
 **Inherited Froth references**: `docs/adr/058-developer-surface-build-directory-and-root-makefile.md`, `docs/adr/059-version-spine.md`
@@ -71,8 +71,8 @@ Frothy adopts a Frothy-first repo control surface:
 - root `make run` launches `build/Frothy`
 - root `make test` is the fast self-contained local gate
 - root `make test-all` is the exhaustive local gate
-- root `make test-frothy` runs Frothy host `ctest` coverage plus the single
-  `tools/frothy/proof.sh` host proof path
+- root `make test-frothy` exposes the Frothy host test lane directly; Frothy
+  ADR-126 later splits this into fast, slow, proof, and full Frothy targets
 - root `make test-cli`, `make test-cli-local`, and `make test-integration`
   expose the maintained CLI lanes directly
 - historical Froth docs move under `docs/archive/`

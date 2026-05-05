@@ -47,9 +47,10 @@ Immediate issue already cut in this pass:
   reducing local SDK payload generation from about 35 seconds / 62 MB to under
   1 second / 130 KB on this checkout
 - full host smoke proofs moved out of the default `make test` edit-loop gate;
-  slow CMake/config smokes are labeled `frothy_slow`; `make test` is now
-  fast CTest plus CLI unit tests, while `make test-all` and `make test-frothy`
-  still carry slow CTest and the host proof rehearsal lane
+  slow CMake/config smokes are labeled `frothy_slow`; `make test` is fast
+  CTest plus CLI unit tests; and Frothy ADR-126 now splits
+  `make test-frothy` from `make test-frothy-slow`,
+  `make test-frothy-proofs`, and `make test-frothy-full`
 - legacy board/project FFI exports retired under Frothy ADR-125; POSIX and
   `esp32-devkit-v1` now use `frothy_ffi_entry_t`, the public legacy installer
   is gone, and the legacy project-FFI fixture has been deleted
@@ -185,19 +186,30 @@ Exit proof:
 
 ### 3a. Keep Test Gates Proportional
 
-Current measured local shape after the first test-collapse cut:
+Current measured local shape after the Frothy test-speed split on this
+checkout. These are warm-cache validation observations; cold Go or CMake
+caches can add time.
 
-- `make test`: about 7.5 seconds on this checkout
-- `make test-all`: about 101 seconds on this checkout
-- remaining extended costs: slow CTest around 14 seconds, host smoke proofs
-  around 46 seconds, CLI integration around 34 seconds
+- `make test-frothy`: under half a second after the host profile is current
+- `make test-frothy-slow`: about 8 seconds on this checkout
+- `make test-frothy-proofs`: about 45 seconds on this checkout
+- `make test-all`: about 84 seconds on this checkout in the warm-cache split
+  validation, with CLI integration still around 28 seconds; prior 101-second
+  `test-all` and 34-second CLI integration observations were from an earlier
+  mixed-cache pass
 
 Policy:
 
 - `make test` should stay the edit-loop gate: fast host CTest plus CLI unit
   tests
+- `make test-frothy` should stay the tight Frothy runtime/language lane:
+  fast host CTests only
+- `make test-frothy-full` should preserve the previous Frothy-specific
+  full-host breadth
 - `make test-all` should stay the extended local gate: fast gate plus slow
   CTest, host smoke proofs, local-runtime tests, and integration tests
+- CI should run the slow Frothy CTest and host-proof lanes as separate jobs so
+  the coverage is explicit instead of local-only
 - deferred workshop docs/export checks should stay out of the default
   non-workshop gates and remain explicit through `make test-workshop`
 - real-device proofs should remain explicit and named, not hidden inside local

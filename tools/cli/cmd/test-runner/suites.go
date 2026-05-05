@@ -51,6 +51,10 @@ func runPublishability() error {
 }
 
 func runFrothy() error {
+	return runFrothyCore()
+}
+
+func runFrothyFull() error {
 	if err := runFrothyCore(); err != nil {
 		return err
 	}
@@ -270,7 +274,13 @@ func printList() {
 	fmt.Println("  full shipped-surface local gate")
 	fmt.Println("  includes: all, vscode")
 	fmt.Println("frothy")
-	fmt.Println("  host ctest, slow ctest, and proof.sh host lane")
+	fmt.Println("  fast Frothy host ctests")
+	fmt.Println("frothy-slow")
+	fmt.Println("  slower Frothy CMake/config smoke ctests")
+	fmt.Println("frothy-proofs")
+	fmt.Println("  proof.sh host lane")
+	fmt.Println("frothy-full")
+	fmt.Println("  includes: frothy, frothy-slow, frothy-proofs")
 	fmt.Println("cli")
 	fmt.Println("  CLI unit tests")
 	fmt.Println("cli-local")

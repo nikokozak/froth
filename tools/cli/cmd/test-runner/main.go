@@ -14,6 +14,9 @@ var commands = map[string]commandFunc{
 	"all":               commandAll,
 	"publishability":    commandPublishability,
 	"frothy":            commandFrothy,
+	"frothy-slow":       commandFrothySlow,
+	"frothy-proofs":     commandFrothyProofs,
+	"frothy-full":       commandFrothyFull,
 	"cli":               commandCLIUnit,
 	"cli-local":         commandCLILocal,
 	"vscode":            commandVSCode,
@@ -57,6 +60,18 @@ func commandPublishability(_ []string) error {
 
 func commandFrothy(_ []string) error {
 	return runFrothy()
+}
+
+func commandFrothySlow(_ []string) error {
+	return runFrothySlowCtests()
+}
+
+func commandFrothyProofs(_ []string) error {
+	return runFrothyProofs()
+}
+
+func commandFrothyFull(_ []string) error {
+	return runFrothyFull()
 }
 
 func commandCLIUnit(_ []string) error {

@@ -101,10 +101,15 @@ keep each item's description and references so deferral does not erase context.
   separate retained `src/froth_snapshot.[ch]` unit, keeps header
   construction/parsing and A/B slot selection beside Frothy save/restore/wipe,
   and is green through `git diff --check`, host, CLI, both ESP-IDF board
-  builds, and `esp32-devkit-v1` M10 proof gates.
+  builds, and `esp32-devkit-v1` M10 proof gates. The Frothy test-speed split
+  is now captured by Frothy ADR-126: `make test-frothy` is the fast Frothy
+  host CTest lane, while `make test-frothy-slow`,
+  `make test-frothy-proofs`, and `make test-frothy-full` make the slower
+  lanes explicit without changing the extended `make test-all` gate, and CI
+  runs the slow/proof lanes as separate jobs.
   References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
   `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, Frothy ADR-125,
-  `tools/frothy/`,
+  Frothy ADR-126, `tools/frothy/`,
   `tools/cli/cmd/test-runner/`, and `docs/audit/Frothy_Repo_Audit_2026-04.md`.
 - [x] Prompt-facing record surface matches the landed implementation
   Deliverable: the prompt-facing shell accepts the maintained `record ...`

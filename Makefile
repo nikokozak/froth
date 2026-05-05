@@ -7,7 +7,7 @@ TEST_RUNNER_SOURCES := $(shell find tools/cli/cmd/test-runner -type f -name '*.g
 
 .PHONY: help \
 	build build-kernel build-cli release run clean clean-kernel clean-cli \
-	test test-all test-publishability test-frothy test-cli test-cli-local test-vscode test-vscode-board test-integration test-workshop test-list test-runner-bin sdk-payload version version-bump version-check \
+	test test-all test-publishability test-frothy test-frothy-slow test-frothy-proofs test-frothy-full test-cli test-cli-local test-vscode test-vscode-board test-integration test-workshop test-list test-runner-bin sdk-payload version version-bump version-check \
 	check-cmake check-make check-go
 
 help:
@@ -57,8 +57,17 @@ test-all: version-check test-runner-bin ## Run the exhaustive local test gate (C
 test-publishability: version-check test-runner-bin ## Run the full shipped-surface local gate (adds VS Code host smoke)
 	@FROTHY_EDITOR_SMOKE_PORT="$(PORT)" $(TEST_RUNNER) publishability
 
-test-frothy: version-check test-runner-bin ## Run Frothy host ctests and proofs
+test-frothy: version-check test-runner-bin ## Run fast Frothy host ctests
 	@$(TEST_RUNNER) frothy
+
+test-frothy-slow: version-check test-runner-bin ## Run slower Frothy CMake/config smoke ctests
+	@$(TEST_RUNNER) frothy-slow
+
+test-frothy-proofs: version-check test-runner-bin ## Run Frothy host proof scripts
+	@$(TEST_RUNNER) frothy-proofs
+
+test-frothy-full: version-check test-runner-bin ## Run all Frothy host ctests and host proofs
+	@$(TEST_RUNNER) frothy-full
 
 test-cli: version-check test-runner-bin ## Run CLI unit and fake-daemon tests
 	@$(TEST_RUNNER) cli
