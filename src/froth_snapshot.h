@@ -111,11 +111,6 @@ froth_snapshot_parse_header(const uint8_t *header,
 
 uint32_t froth_snapshot_abi_hash(void);
 
-#ifdef FROTH_HAS_SNAPSHOTS
-#include "froth_ffi.h"
-extern const froth_ffi_entry_t froth_snapshot_prims[];
-#endif
-
 /* A/B slot selection.
  * slot_out receives 0 or 1. generation_out receives the winning generation.
  * Returns FROTH_OK if a valid slot was found, FROTH_ERROR_SNAPSHOT_NO_SNAPSHOT

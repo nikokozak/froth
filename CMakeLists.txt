@@ -191,7 +191,6 @@ set(FROTH_SNAPSHOT_PATH_B "froth_b.snap" CACHE STRING "Snapshot B file path (def
 set(FROTH_STRING_MAX_LEN 256 CACHE STRING "Maximum string length in bytes (all creation paths).")
 set(FROTH_TBUF_SIZE 1024 CACHE STRING "Transient string scratch ring size in bytes.")
 set(FROTH_TDESC_MAX 32 CACHE STRING "Maximum concurrent transient string descriptors.")
-set(FROTH_FFI_MAX_TABLES 8 CACHE STRING "Maximum number of FFI binding tables.")
 set(FROTH_PROJECT_FFI_CONFIG "" CACHE FILEPATH "Optional project FFI config fragment")
 
 frothy_resolve_board_sources(FROTHY_BOARD_SRCS "${CMAKE_SOURCE_DIR}" "${FROTH_BOARD}")
@@ -200,7 +199,6 @@ set(FROTHY_RETAINED_FROTH_SUBSTRATE_SRCS
   src/froth_console.c
   src/froth_stack.c
   src/froth_fmt.c
-  src/froth_ffi.c
   src/froth_tbuf.c
 )
 
@@ -244,7 +242,6 @@ function(froth_configure_common_target target)
   target_compile_definitions(${target} PRIVATE FROTH_STRING_MAX_LEN=${FROTH_STRING_MAX_LEN})
   target_compile_definitions(${target} PRIVATE FROTH_TBUF_SIZE=${FROTH_TBUF_SIZE})
   target_compile_definitions(${target} PRIVATE FROTH_TDESC_MAX=${FROTH_TDESC_MAX})
-  target_compile_definitions(${target} PRIVATE FROTH_FFI_MAX_TABLES=${FROTH_FFI_MAX_TABLES})
 
   if(FROTH_HAS_SNAPSHOTS)
     target_compile_definitions(${target} PRIVATE FROTH_HAS_SNAPSHOTS)

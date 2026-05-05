@@ -166,7 +166,6 @@ set(FROTHY_KERNEL_RETAINED_SUBSTRATE_SRCS
     ${FROTH_ROOT}/src/froth_stack.c
     ${FROTH_ROOT}/src/froth_fmt.c
     ${FROTH_ROOT}/src/froth_console.c
-    ${FROTH_ROOT}/src/froth_ffi.c
     ${FROTH_ROOT}/src/froth_tbuf.c
     ${FROTH_ROOT}/src/froth_vm.c
     ${FROTH_ROOT}/src/froth_heap.c

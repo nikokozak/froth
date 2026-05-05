@@ -240,8 +240,8 @@ file is wrong.
 - The FFI-boundary prune is now the current C-runtime cut: Frothy ADR-125
   retires legacy board/project FFI exports, the POSIX and
   `esp32-devkit-v1` board tables are on `frothy_ffi_entry_t`, the public
-  legacy installer and legacy project-FFI smoke fixture are removed, and
-  remaining `froth_ffi.*` work is scoped to internal retained substrate.
+  legacy installer and legacy project-FFI smoke fixture are removed, and the
+  retained internal `froth_ffi.*` substrate audit is complete.
 - The FFI installer rollback hardening cut follows that boundary prune:
   staged native values now have an explicit slot-transfer ownership contract,
   successful table replacement retires prior native bindings at the table
@@ -251,6 +251,14 @@ file is wrong.
   failure path without adding hooks to the maintained runtime build. Validation
   passed with `make test-frothy`, the maintained `esp32-devkit-v1` ESP-IDF
   build, and the M10 proof on `/dev/cu.usbserial-0001`.
+- The retained internal `froth_ffi.*` substrate audit found no live call sites
+  for the old stack-oriented registration, lookup, push/pop, or binding macro
+  surface. `src/froth_ffi.c`, `src/froth_ffi.h`, the dead
+  `FROTH_FFI_MAX_TABLES` CMake define, and the project-manifest
+  `ffi_max_tables` knob are removed from the maintained tree. Validation passed
+  with `make test-frothy`, `go test ./...` from `tools/cli`, the maintained
+  `esp32-devkit-v1` ESP-IDF build, and the M10 proof on
+  `/dev/cu.usbserial-0001`.
 
 ## Remaining Gates
 

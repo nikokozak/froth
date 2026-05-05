@@ -39,7 +39,6 @@ type BuildConfig struct {
 	LineBufferSize *int `toml:"line_buffer_size"`
 	TbufSize       *int `toml:"tbuf_size"`
 	TdescMax       *int `toml:"tdesc_max"`
-	FFIMaxTables   *int `toml:"ffi_max_tables"`
 }
 
 type FFIConfig struct {
@@ -167,9 +166,6 @@ func (b *BuildConfig) CMakeArgs() []string {
 	}
 	if b.TdescMax != nil {
 		args = append(args, fmt.Sprintf("-DFROTH_TDESC_MAX=%d", *b.TdescMax))
-	}
-	if b.FFIMaxTables != nil {
-		args = append(args, fmt.Sprintf("-DFROTH_FFI_MAX_TABLES=%d", *b.FFIMaxTables))
 	}
 	return args
 }

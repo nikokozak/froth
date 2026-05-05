@@ -209,7 +209,6 @@ slot_table_size = 256
 line_buffer_size = 2048
 tbuf_size = 4096
 tdesc_max = 16
-ffi_max_tables = 12
 `)
 	mustWriteFile(t, filepath.Join(projectRoot, "src", "main.froth"), ": autorun ;")
 
@@ -229,7 +228,6 @@ ffi_max_tables = 12
 		"-DFROTH_LINE_BUFFER_SIZE=2048",
 		"-DFROTH_TBUF_SIZE=4096",
 		"-DFROTH_TDESC_MAX=16",
-		"-DFROTH_FFI_MAX_TABLES=12",
 	} {
 		if !strings.Contains(log, want) {
 			t.Fatalf("build log = %q, want %q", log, want)

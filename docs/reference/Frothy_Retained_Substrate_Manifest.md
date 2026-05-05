@@ -1,7 +1,7 @@
 # Frothy Retained Substrate Manifest
 
 Status: active reference
-Date: 2026-05-04
+Date: 2026-05-05
 Authority: `docs/reference/Froth_Substrate_References.md`, Frothy ADR-125, `CMakeLists.txt`, `targets/esp-idf/main/CMakeLists.txt`
 
 This manifest names the retained Froth substrate and the temporary
@@ -23,7 +23,6 @@ current runtime still reuses them directly:
 - `src/froth_console.c`
 - `src/froth_stack.c`
 - `src/froth_fmt.c`
-- `src/froth_ffi.c`
 - `src/froth_tbuf.c`
 - `src/froth_vm.c`
 - `src/froth_heap.c`
@@ -38,7 +37,6 @@ The corresponding retained public headers are:
 - `src/froth_cellspace.h`
 - `src/froth_console.h`
 - `src/froth_crc32.h`
-- `src/froth_ffi.h`
 - `src/froth_fmt.h`
 - `src/froth_heap.h`
 - `src/froth_link.h`
@@ -71,9 +69,6 @@ runtime modules:
 - `src/compat/frothy_console_compat.c`
 - `src/compat/frothy_link_stub.c`
 
-The retained `src/froth_ffi.c` / `src/froth_ffi.h` units remain internal
-substrate. They are not a maintained board or project authoring surface.
-
 Per Frothy ADR-125, active board and project FFI code must not export
 `froth_board_bindings` or `froth_project_bindings`, and must not call a legacy
 binding-table installer.
@@ -81,7 +76,6 @@ binding-table installer.
 ## Current Legacy Holdouts
 
 No active board or project legacy FFI exports remain in the maintained tree.
-
-The remaining C-boundary cleanup is narrower: audit retained `froth_ffi.*`
-internal substrate users, then retire or relocate that substrate only when no
-live runtime owner depends on it.
+The retained internal `src/froth_ffi.c` / `src/froth_ffi.h` substrate was
+audited, found to have no live runtime owner, and removed from host, ESP-IDF,
+and project-manifest build configuration.

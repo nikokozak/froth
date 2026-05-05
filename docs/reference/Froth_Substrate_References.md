@@ -11,8 +11,6 @@ Use the following files when Frothy intentionally reuses substrate behavior:
 - `docs/spec/Froth_Snapshot_Overlay_Spec_v0_5.md`
 - `src/froth_slot_table.h`
 - `src/froth_slot_table.c`
-- `src/froth_ffi.h`
-- `src/froth_ffi.c`
 - `src/froth_boot.c`
 - `src/froth_snapshot.c`
 - `src/froth_cellspace.h`

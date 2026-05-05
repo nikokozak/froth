@@ -77,7 +77,10 @@ keep each item's description and references so deferral does not erase context.
   prior native bindings only after table commit, rejects duplicate table names
   before allocation, and proves application-phase install rollback does not
   leak or partially rebind; the cut has a passing `esp32-devkit-v1` M10 device
-  proof.
+  proof. The retained internal `froth_ffi.*` substrate audit found no live
+  runtime owner, so the old stack-oriented FFI unit/header and its build knobs
+  are removed from the maintained tree and have a passing `esp32-devkit-v1`
+  M10 device proof.
   References: `docs/audit/Frothy_Pre_Thesis_Prune_Plan_2026-05.md`,
   `AGENTS.md`, Frothy ADR-120, Frothy ADR-124, Frothy ADR-125,
   `tools/frothy/`,

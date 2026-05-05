@@ -330,7 +330,7 @@ src/froth_link_dispatch.h   request dispatch, response building
 src/froth_link_dispatch.c   ^^
 ```
 
-The dispatcher calls existing VM functions: `froth_evaluate_input`, `froth_slot_find_name`, `froth_slot_get_impl`, `froth_slot_get_prim`, `froth_ffi_find_entry`, etc. It does not duplicate evaluator or inspector logic.
+The dispatcher calls existing VM functions: `froth_evaluate_input`, `froth_slot_find_name`, `froth_slot_get_impl`, `froth_slot_get_prim`, etc. It does not duplicate evaluator or inspector logic.
 
 The link layer is gated behind `FROTH_HAS_LINK` (CMake, default ON for POSIX and ESP32, default OFF for minimal builds). When disabled, the console mux is a no-op passthrough: all bytes go to the REPL.
 

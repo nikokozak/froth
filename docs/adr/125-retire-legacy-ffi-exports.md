@@ -80,6 +80,11 @@ Rules:
   owner still needs it, such as retained snapshot primitives or other explicit
   substrate code.
 
+Implementation note, 2026-05-05: the follow-on internal substrate audit found
+no live owner for `src/froth_ffi.c`, `src/froth_ffi.h`, `FROTH_FFI_MAX_TABLES`,
+or the project-manifest `ffi_max_tables` build knob. Those paths are no longer
+part of the maintained Frothy tree.
+
 ## Consequences
 
 - The public FFI story becomes one value-oriented Frothy ABI.

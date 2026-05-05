@@ -24,13 +24,11 @@ It is a sequencing and control document.
 This block is the live control surface for repo status.
 
 Current milestone: `pre-thesis publishability prune`
-Today's goal: harden the maintained FFI installer after the legacy-export
-prune by making rollback ownership explicit, retiring replaced native bindings
-at table commit, rejecting duplicate table names before allocation, proving
-application-phase install failure cleanup, and revalidating the maintained
-`esp32-devkit-v1` path
-Next artifact: next small non-workshop C-runtime prune after FFI installer
-rollback hardening lands
+Today's goal: finish the internal FFI substrate audit after ADR-125 by removing
+dead `froth_ffi.*` registration/lookup/helper code and its build knobs now that
+no live runtime owner depends on it
+Next artifact: next small non-workshop C-runtime prune after internal FFI
+substrate removal lands
 Blocked by: none
 Next proof command: for the next tranche, start with the smallest focused gate
 that exercises the changed surface, then finish sign-off with a real
