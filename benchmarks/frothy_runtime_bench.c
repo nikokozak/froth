@@ -1,6 +1,3 @@
-#include "froth_ffi.h"
-#include "froth_slot_table.h"
-#include "froth_tbuf.h"
 #include "froth_vm.h"
 #include "frothy_base_image.h"
 #include "frothy_eval.h"
@@ -88,40 +85,17 @@ static froth_error_t ensure_platform_runtime(void) {
 }
 
 static froth_error_t reset_frothy_state(bool install_base_image) {
-  frothy_runtime_free(runtime());
-  (void)froth_slot_reset_overlay();
-  froth_vm.ds.pointer = 0;
-  froth_vm.rs.pointer = 0;
-  froth_vm.cs.pointer = 0;
-  froth_vm.heap.pointer = 0;
-  froth_vm.boot_complete = 1;
-  froth_vm.trampoline_depth = 0;
-  froth_vm.interrupted = 0;
-  froth_vm.thrown = FROTH_OK;
-  froth_vm.last_error_slot = -1;
-  froth_vm.mark_offset = (froth_cell_u_t)-1;
-  froth_vm.watermark_heap_offset = 0;
-  froth_cellspace_init(&froth_vm.cellspace);
-  froth_tbuf_init(&froth_vm);
-  frothy_runtime_init(runtime(), &froth_vm.cellspace);
+  froth_vm_reset();
+  froth_vm_mark_boot_complete();
   if (install_base_image) {
     FROTH_TRY(frothy_base_image_install());
-    froth_vm.watermark_heap_offset = froth_vm.heap.pointer;
+    froth_vm_mark_boot_complete();
   }
   return FROTH_OK;
 }
 
 static froth_error_t reset_snapshot_state(void) {
-  froth_vm.ds.pointer = 0;
-  froth_vm.rs.pointer = 0;
-  froth_vm.cs.pointer = 0;
-  froth_vm.boot_complete = 1;
-  froth_vm.trampoline_depth = 0;
   froth_vm.interrupted = 0;
-  froth_vm.thrown = FROTH_OK;
-  froth_vm.last_error_slot = -1;
-  froth_vm.mark_offset = (froth_cell_u_t)-1;
-  froth_tbuf_init(&froth_vm);
 
   if (!bench_snapshot_runtime_ready) {
     FROTH_TRY(reset_frothy_state(true));
@@ -232,15 +206,35 @@ static void leave_workspace(bench_workspace_t *workspace) {
   workspace->active = false;
 }
 
-FROTH_FFI_ARITY(bench_echo_int, "echo.int", "( value -- value )", 1, 1,
-                "Benchmark integer echo binding") {
-  FROTH_POP(value);
-  FROTH_PUSH(value);
-  return FROTH_OK;
+static const frothy_ffi_param_t bench_echo_int_params[] = {
+    FROTHY_FFI_PARAM_INT("value"),
+};
+
+static froth_error_t bench_echo_int(frothy_runtime_t *runtime,
+                                    const void *context,
+                                    const frothy_value_t *args,
+                                    size_t arg_count, frothy_value_t *out) {
+  int32_t value = 0;
+
+  (void)runtime;
+  (void)context;
+  (void)arg_count;
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &value));
+  return frothy_ffi_return_int(value, out);
 }
 
-static const froth_ffi_entry_t bench_bindings[] = {
-    FROTH_BIND(bench_echo_int),
+static const frothy_ffi_entry_t bench_bindings[] = {
+    {
+        .name = "echo.int",
+        .params = bench_echo_int_params,
+        .param_count = FROTHY_FFI_PARAM_COUNT(bench_echo_int_params),
+        .arity = 1,
+        .result_type = FROTHY_FFI_VALUE_INT,
+        .help = "Benchmark integer echo binding.",
+        .flags = FROTHY_FFI_FLAG_NONE,
+        .callback = bench_echo_int,
+        .stack_effect = "( value -- value )",
+    },
     {0},
 };
 
@@ -248,7 +242,7 @@ static froth_error_t prepare_program_case(bench_case_t *bench_case) {
   FROTH_TRY(reset_frothy_state(false));
 
   if (bench_case->install_test_ffi) {
-    FROTH_TRY(frothy_ffi_install_binding_table(bench_bindings));
+    FROTH_TRY(frothy_ffi_install_table(bench_bindings));
   }
   FROTH_TRY(eval_setup_lines(bench_case->setup_source));
 

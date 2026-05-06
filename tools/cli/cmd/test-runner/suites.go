@@ -47,17 +47,14 @@ func runPublishability() error {
 	if err := runAll(); err != nil {
 		return err
 	}
-	paths, err := detectPaths()
-	if err != nil {
-		return err
-	}
-	if err := runCommand(paths, "publishability:workshop-export", baseTestEnv(paths), paths.Root, "sh", filepath.Join(paths.Root, "tools", "frothy", "export_workshop_repo.sh"), "check"); err != nil {
-		return err
-	}
 	return runVSCode()
 }
 
 func runFrothy() error {
+	return runFrothyCore()
+}
+
+func runFrothyFull() error {
 	if err := runFrothyCore(); err != nil {
 		return err
 	}
@@ -118,11 +115,7 @@ func runCLILocal() error {
 	if err != nil {
 		return err
 	}
-	if err := ensureProfile(paths, "host-default", false); err != nil {
-		return err
-	}
 	env := baseTestEnv(paths)
-	env["FROTH_TEST_LOCAL_RUNTIME"] = filepath.Join(profileBuildDir(paths, "host-default"), "Frothy")
 	return runCommand(paths, "cli:localruntime", env, paths.Root, "make", "--no-print-directory", "-C", filepath.Join(paths.Root, "tools", "cli"), "test-localruntime")
 }
 
@@ -254,6 +247,18 @@ func runCLIIntegration() error {
 	return runCommand(paths, "cli:integration", baseTestEnv(paths), paths.Root, "make", "--no-print-directory", "-C", filepath.Join(paths.Root, "tools", "cli"), "test-integration")
 }
 
+func runWorkshop() error {
+	paths, err := detectPaths()
+	if err != nil {
+		return err
+	}
+	env := baseTestEnv(paths)
+	if err := runCommand(paths, "workshop:export", env, paths.Root, "sh", filepath.Join(paths.Root, "tools", "frothy", "export_workshop_repo.sh"), "check"); err != nil {
+		return err
+	}
+	return runCommand(paths, "workshop:docs", env, paths.Root, "sh", filepath.Join(paths.Root, "tools", "frothy", "proof.sh"), "workshop-docs")
+}
+
 func printList() {
 	fmt.Println("fast")
 	fmt.Println("  core local gate (C, Go, shell)")
@@ -265,13 +270,22 @@ func printList() {
 	fmt.Println("  full shipped-surface local gate")
 	fmt.Println("  includes: all, vscode")
 	fmt.Println("frothy")
-	fmt.Println("  host ctest, slow ctest, and proof.sh host lane")
+	fmt.Println("  fast Frothy host ctests")
+	fmt.Println("frothy-slow")
+	fmt.Println("  slower Frothy CMake/config smoke ctests")
+	fmt.Println("frothy-proofs")
+	fmt.Println("  proof.sh host lane")
+	fmt.Println("frothy-full")
+	fmt.Println("  includes: frothy, frothy-slow, frothy-proofs")
 	fmt.Println("cli")
 	fmt.Println("  CLI unit tests")
 	fmt.Println("cli-local")
-	fmt.Println("  CLI local-runtime tests")
+	fmt.Println("  focused CLI local-runtime integration tests")
 	fmt.Println("integration")
-	fmt.Println("  CLI integration tests")
+	fmt.Println("  CLI build/project integration tests")
+	fmt.Println("workshop")
+	fmt.Println("  deferred workshop-only local checks")
+	fmt.Println("  includes: workshop export, workshop docs")
 	fmt.Println("vscode")
 	fmt.Println("  extension-local Node lane: npm test, npm run test:package, host editor smoke")
 	fmt.Println("vscode-board --port <PORT>")

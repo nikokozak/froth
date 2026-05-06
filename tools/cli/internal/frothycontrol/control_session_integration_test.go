@@ -10,7 +10,7 @@ import (
 func TestControlSessionServerLocalRuntime(t *testing.T) {
 	runtimePath := findLocalRuntimeBinary(t)
 	if runtimePath == "" {
-		t.Skip("local Frothy runtime not built")
+		t.Skip("local Froth runtime not built")
 	}
 
 	manager := NewManager(ManagerConfig{LocalRuntimePath: runtimePath})
@@ -105,7 +105,7 @@ func TestControlSessionServerLocalRuntime(t *testing.T) {
 func TestManagerReconnectsExitedLocalRuntime(t *testing.T) {
 	runtimePath := findLocalRuntimeBinary(t)
 	if runtimePath == "" {
-		t.Skip("local Frothy runtime not built")
+		t.Skip("local Froth runtime not built")
 	}
 
 	manager := NewManager(ManagerConfig{LocalRuntimePath: runtimePath})
@@ -255,6 +255,8 @@ func findLocalRuntimeBinary(t *testing.T) string {
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", ".."))
 	candidates := []string{
+		filepath.Join(root, "build", "froth"),
+		filepath.Join(root, "build", "froth.exe"),
 		filepath.Join(root, "build", "Frothy"),
 		filepath.Join(root, "build", "Frothy.exe"),
 	}

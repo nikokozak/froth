@@ -7,7 +7,7 @@ TEST_RUNNER_SOURCES := $(shell find tools/cli/cmd/test-runner -type f -name '*.g
 
 .PHONY: help \
 	build build-kernel build-cli release run clean clean-kernel clean-cli \
-	test test-all test-publishability test-frothy test-cli test-cli-local test-vscode test-vscode-board test-integration test-list test-runner-bin workshop-export-check sdk-payload version version-bump version-check \
+	test test-all test-publishability test-frothy test-frothy-slow test-frothy-proofs test-frothy-full test-cli test-cli-local test-vscode test-vscode-board test-integration test-workshop test-list test-runner-bin sdk-payload version version-bump version-check \
 	check-cmake check-make check-go
 
 help:
@@ -17,26 +17,26 @@ help:
 
 ##@ Build
 build: build-kernel build-cli ## Build everything (kernel + CLI)
-	@echo "==> Done. Frothy: build/Frothy, repo-local frothy-cli: tools/cli/frothy-cli"
+	@echo "==> Done. host runtime: build/froth, repo-local CLI: tools/cli/frothy-cli"
 
-build-kernel: check-cmake check-make ## Build the Frothy host runtime
-	@echo "==> Building Frothy host runtime (POSIX, 32-bit)..."
+build-kernel: check-cmake check-make ## Build the Froth host runtime
+	@echo "==> Building Froth host runtime (POSIX, 32-bit)..."
 	@cmake -S . -B build -U 'FROTH_*' -U 'FROTHY_*' -DFROTH_CELL_SIZE_BITS=32 -DFROTHY_BUILD_HOST=ON
 	@cmake --build build
-	@echo "==> Host runtime ready: build/Frothy"
+	@echo "==> Host runtime ready: build/froth"
 
 build-cli: check-go ## Build CLI tool
 	@mkdir -p "$(GO_CACHE_DIR)"
 	@rm -f tools/cli/froth-cli
-	@echo "==> Building repo-local frothy-cli..."
+	@echo "==> Building repo-local CLI..."
 	@$(MAKE) --no-print-directory -C tools/cli build GOCACHE="$(GO_CACHE_DIR)"
-	@echo "==> Repo-local frothy-cli ready: tools/cli/frothy-cli"
+	@echo "==> Repo-local CLI ready: tools/cli/frothy-cli"
 
 release: version-check build-cli ## Build release tarball (current platform)
 	@tools/package-release.sh
 
-run: build-kernel ## Build host runtimes and launch Frothy
-	@exec ./build/Frothy
+run: build-kernel ## Build host runtime and launch Froth
+	@exec ./build/froth
 
 clean: clean-kernel clean-cli ## Remove all build artifacts
 	@rm -rf .cache
@@ -44,7 +44,7 @@ clean: clean-kernel clean-cli ## Remove all build artifacts
 clean-kernel: ## Remove kernel build directory
 	@rm -rf build
 
-clean-cli: ## Remove repo-local Frothy CLI binaries (not SDK mirror)
+clean-cli: ## Remove repo-local CLI binaries (not SDK mirror)
 	@rm -f tools/cli/frothy-cli tools/cli/froth-cli
 
 ##@ Test
@@ -57,16 +57,22 @@ test-all: version-check test-runner-bin ## Run the exhaustive local test gate (C
 test-publishability: version-check test-runner-bin ## Run the full shipped-surface local gate (adds VS Code host smoke)
 	@FROTHY_EDITOR_SMOKE_PORT="$(PORT)" $(TEST_RUNNER) publishability
 
-workshop-export-check: ## Verify workshop/starter.frothy matches the canonical starter export
-	@sh tools/frothy/export_workshop_repo.sh check
-
-test-frothy: version-check test-runner-bin ## Run Frothy host ctests and proofs
+test-frothy: version-check test-runner-bin ## Run fast Frothy host ctests
 	@$(TEST_RUNNER) frothy
+
+test-frothy-slow: version-check test-runner-bin ## Run slower Frothy CMake/config smoke ctests
+	@$(TEST_RUNNER) frothy-slow
+
+test-frothy-proofs: version-check test-runner-bin ## Run Frothy host proof scripts
+	@$(TEST_RUNNER) frothy-proofs
+
+test-frothy-full: version-check test-runner-bin ## Run all Frothy host ctests and host proofs
+	@$(TEST_RUNNER) frothy-full
 
 test-cli: version-check test-runner-bin ## Run CLI unit and fake-daemon tests
 	@$(TEST_RUNNER) cli
 
-test-cli-local: version-check test-runner-bin ## Run CLI local-runtime tests
+test-cli-local: version-check test-runner-bin ## Run focused CLI local-runtime integration tests
 	@$(TEST_RUNNER) cli-local
 
 test-vscode: version-check test-runner-bin ## Run VS Code extension tests, package smoke, and host editor smoke
@@ -75,8 +81,11 @@ test-vscode: version-check test-runner-bin ## Run VS Code extension tests, packa
 test-vscode-board: version-check test-runner-bin ## Run VS Code board editor smoke on a real device (use PORT=/dev/...)
 	@$(TEST_RUNNER) vscode-board --port "$(PORT)"
 
-test-integration: version-check test-runner-bin ## Run CLI project integration tests
+test-integration: version-check test-runner-bin ## Run CLI build/project integration tests
 	@$(TEST_RUNNER) integration
+
+test-workshop: version-check test-runner-bin ## Run deferred workshop-only local checks
+	@$(TEST_RUNNER) workshop
 
 test-list: version-check test-runner-bin ## List maintained test suites and profiles
 	@$(TEST_RUNNER) list

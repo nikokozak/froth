@@ -66,7 +66,7 @@ func runBuildManifest(manifest *project.Manifest, root string) error {
 		return fmt.Errorf("write resolved source: %w", err)
 	}
 	runtimeSource := project.StripBoundaryMarkers(result.Source)
-	runtimePath := filepath.Join(buildDir, "runtime.frothy")
+	runtimePath := filepath.Join(buildDir, runtimeSourceFilename)
 	if err := os.WriteFile(runtimePath, []byte(runtimeSource), 0644); err != nil {
 		return fmt.Errorf("write runtime source: %w", err)
 	}
@@ -176,11 +176,11 @@ func buildPosixManifest(manifest *project.Manifest, root string, runtimeSourcePa
 		return fmt.Errorf("make: %w", err)
 	}
 
-	if err := seedBuiltImage(filepath.Join(firmwareDir, "Frothy"), root, runtimeSourcePath); err != nil {
+	if err := seedBuiltImage(filepath.Join(firmwareDir, hostRuntimeBinaryName), root, runtimeSourcePath); err != nil {
 		return err
 	}
 
-	fmt.Printf("\nFirmware ready: %s\n", filepath.Join(firmwareDir, "Frothy"))
+	fmt.Printf("\nFirmware ready: %s\n", filepath.Join(firmwareDir, hostRuntimeBinaryName))
 	return nil
 }
 
@@ -394,7 +394,7 @@ func seedFrothyImage(binaryPath string, runDir string, runtimeSourcePath string)
 		LocalRuntimeDir:  runDir,
 	})
 	if _, err := manager.Connect(""); err != nil {
-		return fmt.Errorf("start local Frothy runtime: %w", err)
+		return fmt.Errorf("start local Froth runtime: %w", err)
 	}
 	defer manager.Disconnect()
 
@@ -513,7 +513,7 @@ func buildPosix(root string, board string) error {
 		return fmt.Errorf("make: %w", err)
 	}
 
-	fmt.Printf("\nbinary: %s\n", filepath.Join(buildDir, "Frothy"))
+	fmt.Printf("\nbinary: %s\n", filepath.Join(buildDir, hostRuntimeBinaryName))
 	return nil
 }
 
@@ -596,8 +596,9 @@ func findExecutableKernelRoot() (string, error) {
 		exePath = resolvedPath
 	}
 
-	if launchName != "frothy" && filepath.Base(exePath) != "frothy" {
-		return "", fmt.Errorf("executable name is not frothy")
+	if launchName != cliCommandName && launchName != "frothy" &&
+		filepath.Base(exePath) != cliCommandName && filepath.Base(exePath) != "frothy" {
+		return "", fmt.Errorf("executable name is not %s", cliCommandName)
 	}
 
 	cliDir := filepath.Dir(exePath)
@@ -643,7 +644,7 @@ func isShellSafe(s string) bool {
 }
 
 func espIDFExportPath() (string, error) {
-	home, err := sdk.FrothyHome()
+	home, err := sdk.FrothHome()
 	if err != nil {
 		return "", err
 	}

@@ -16,7 +16,7 @@ func runInfo() error {
 	}
 	defer manager.Disconnect()
 
-	fmt.Printf("Frothy %s on %s\n", info.Version, info.Board)
+	fmt.Printf("Froth %s on %s\n", info.Version, info.Board)
 	fmt.Printf("%d-bit cells, max payload %d\n", info.CellBits, info.MaxPayload)
 	fmt.Printf("heap: %d / %d bytes\n", info.HeapUsed, info.HeapSize)
 	fmt.Printf("slots: %d\n", info.SlotCount)

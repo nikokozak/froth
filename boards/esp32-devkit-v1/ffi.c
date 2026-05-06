@@ -1,84 +1,127 @@
 /* Maintained ESP32 DevKit V1 board FFI bindings. */
 
 #include "ffi.h"
-#include "driver/adc.h"
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "driver/ledc.h"
 #include "driver/uart.h"
+#include "esp_adc/adc_oneshot.h"
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "froth_console.h"
-#include "froth_fmt.h"
 #include "froth_types.h"
+#include "froth_vm.h"
 #include "frothy_ffi.h"
 #include "platform.h"
 
 static froth_error_t throw_program_interrupted(froth_vm_t *froth_vm) {
   froth_vm->interrupted = 0;
-  froth_vm->thrown = FROTH_ERROR_PROGRAM_INTERRUPTED;
-  return FROTH_ERROR_THROW;
+  return FROTH_ERROR_PROGRAM_INTERRUPTED;
 }
 
 static froth_error_t poll_interruptible_wait(froth_vm_t *froth_vm) {
-  froth_console_poll(froth_vm);
+  frothy_ffi_poll(froth_vm);
   if (froth_vm->interrupted) {
     return throw_program_interrupted(froth_vm);
   }
   return FROTH_OK;
 }
 
-#if defined(ADC_ATTEN_DB_12)
 #define FROTH_BOARD_ADC_ATTEN ADC_ATTEN_DB_12
-#else
-#define FROTH_BOARD_ADC_ATTEN ADC_ATTEN_DB_11
-#endif
 
+static adc_oneshot_unit_handle_t esp32_adc1_handle;
 static uint8_t esp32_gpio_output_shadow_valid[GPIO_NUM_MAX];
 static froth_cell_t esp32_gpio_output_shadow_levels[GPIO_NUM_MAX];
 static uint32_t esp32_random_state = 1;
 
 static bool esp32_adc1_channel_for_pin(froth_cell_t pin,
-                                       adc1_channel_t *channel_out) {
+                                       adc_channel_t *channel_out) {
   switch (pin) {
   case 32:
-    *channel_out = ADC1_CHANNEL_4;
+    *channel_out = ADC_CHANNEL_4;
     return true;
   case 33:
-    *channel_out = ADC1_CHANNEL_5;
+    *channel_out = ADC_CHANNEL_5;
     return true;
   case 34:
-    *channel_out = ADC1_CHANNEL_6;
+    *channel_out = ADC_CHANNEL_6;
     return true;
   case 35:
-    *channel_out = ADC1_CHANNEL_7;
+    *channel_out = ADC_CHANNEL_7;
     return true;
   case 36:
-    *channel_out = ADC1_CHANNEL_0;
+    *channel_out = ADC_CHANNEL_0;
     return true;
   case 37:
-    *channel_out = ADC1_CHANNEL_1;
+    *channel_out = ADC_CHANNEL_1;
     return true;
   case 38:
-    *channel_out = ADC1_CHANNEL_2;
+    *channel_out = ADC_CHANNEL_2;
     return true;
   case 39:
-    *channel_out = ADC1_CHANNEL_3;
+    *channel_out = ADC_CHANNEL_3;
     return true;
   default:
     return false;
   }
 }
 
+static froth_error_t esp32_adc1_ensure(adc_oneshot_unit_handle_t *out) {
+  if (esp32_adc1_handle == NULL) {
+    const adc_oneshot_unit_init_cfg_t init = {
+        .unit_id = ADC_UNIT_1,
+        .clk_src = ADC_RTC_CLK_SRC_DEFAULT,
+        .ulp_mode = ADC_ULP_MODE_DISABLE,
+    };
+
+    if (adc_oneshot_new_unit(&init, &esp32_adc1_handle) != ESP_OK) {
+      return FROTH_ERROR_IO;
+    }
+  }
+
+  *out = esp32_adc1_handle;
+  return FROTH_OK;
+}
+
+static froth_error_t esp32_adc1_read_channel(adc_channel_t channel,
+                                             int *sample_out) {
+  adc_oneshot_unit_handle_t handle = NULL;
+  const adc_oneshot_chan_cfg_t config = {
+      .atten = FROTH_BOARD_ADC_ATTEN,
+      .bitwidth = ADC_BITWIDTH_12,
+  };
+
+  FROTH_TRY(esp32_adc1_ensure(&handle));
+  if (adc_oneshot_config_channel(handle, channel, &config) != ESP_OK) {
+    return FROTH_ERROR_IO;
+  }
+  if (adc_oneshot_read(handle, channel, sample_out) != ESP_OK) {
+    return FROTH_ERROR_IO;
+  }
+  return FROTH_OK;
+}
+
 static bool esp32_gpio_pin_valid(froth_cell_t pin) {
   return pin >= 0 && GPIO_IS_VALID_GPIO((gpio_num_t)pin);
 }
 
-FROTH_FFI_ARITY(esp32_gpio_mode, "gpio.mode", "( pin mode -- )", 2, 0,
-                "Set pin mode (1=output)") {
-  FROTH_POP(mode);
-  FROTH_POP(pin);
+#define ESP32_UNUSED_CALLBACK_CONTEXT()                                        \
+  do {                                                                         \
+    (void)runtime;                                                             \
+    (void)context;                                                             \
+    (void)arg_count;                                                           \
+  } while (0)
+
+static froth_error_t esp32_gpio_mode(frothy_runtime_t *runtime,
+                                     const void *context,
+                                     const frothy_value_t *args,
+                                     size_t arg_count, frothy_value_t *out) {
+  int32_t pin = 0;
+  int32_t mode = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &pin));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &mode));
 
   if (!esp32_gpio_pin_valid(pin)) {
     return FROTH_ERROR_BOUNDS;
@@ -96,14 +139,21 @@ FROTH_FFI_ARITY(esp32_gpio_mode, "gpio.mode", "( pin mode -- )", 2, 0,
   } else {
     esp32_gpio_output_shadow_valid[pin] = 0;
   }
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_gpio_write, "gpio.write", "( pin level -- )", 2, 0,
-                "Set pin level (1=high)") {
-  FROTH_POP(level);
-  FROTH_POP(pin);
-  froth_cell_t normalized = level ? 1 : 0;
+static froth_error_t esp32_gpio_write(frothy_runtime_t *runtime,
+                                      const void *context,
+                                      const frothy_value_t *args,
+                                      size_t arg_count, frothy_value_t *out) {
+  int32_t pin = 0;
+  int32_t level = 0;
+  int32_t normalized = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &pin));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &level));
+  normalized = level ? 1 : 0;
 
   if (!esp32_gpio_pin_valid(pin)) {
     return FROTH_ERROR_BOUNDS;
@@ -116,126 +166,145 @@ FROTH_FFI_ARITY(esp32_gpio_write, "gpio.write", "( pin level -- )", 2, 0,
 
   esp32_gpio_output_shadow_valid[pin] = 1;
   esp32_gpio_output_shadow_levels[pin] = normalized;
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(
-    esp32_gpio_read, "gpio.read", "( pin -- level )", 1, 1,
-    "Read the last written level for outputs, otherwise sample the live pin.") {
-  FROTH_POP(pin);
+static froth_error_t esp32_gpio_read(frothy_runtime_t *runtime,
+                                     const void *context,
+                                     const frothy_value_t *args,
+                                     size_t arg_count, frothy_value_t *out) {
+  int32_t pin = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &pin));
 
   if (!esp32_gpio_pin_valid(pin)) {
     return FROTH_ERROR_BOUNDS;
   }
 
-  froth_cell_t level = 0;
+  int32_t level = 0;
   if (esp32_gpio_output_shadow_valid[pin]) {
-    level = esp32_gpio_output_shadow_levels[pin];
+    level = (int32_t)esp32_gpio_output_shadow_levels[pin];
   } else {
     level = gpio_get_level(pin) ? 1 : 0;
   }
-  FROTH_PUSH(level);
-  return FROTH_OK;
+  return frothy_ffi_return_int(level, out);
 }
 
-FROTH_FFI_ARITY(esp32_ms, "ms", "( ms -- )", 1, 0,
-                "Sleep for a given amount of ms.") {
-  FROTH_POP(ms);
+static froth_error_t esp32_ms(frothy_runtime_t *runtime, const void *context,
+                              const frothy_value_t *args, size_t arg_count,
+                              frothy_value_t *out) {
+  int32_t ms = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &ms));
 
   if (ms <= 0) {
-    return FROTH_OK;
+    return frothy_ffi_return_nil(out);
   }
 
   while (ms > 0) {
-    froth_cell_t chunk = ms > 10 ? 10 : ms;
+    int32_t chunk = ms > 10 ? 10 : ms;
     vTaskDelay(pdMS_TO_TICKS(chunk));
     ms -= chunk;
-    FROTH_TRY(poll_interruptible_wait(froth_vm));
+    FROTH_TRY(poll_interruptible_wait(&froth_vm));
   }
 
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_millis, "millis", "( -- n )", 0, 1,
-                "Return wrapped monotonic uptime in milliseconds.") {
-  FROTH_PUSH(frothy_ffi_wrap_uptime_ms(platform_uptime_ms()));
-  return FROTH_OK;
+static froth_error_t esp32_millis(frothy_runtime_t *runtime,
+                                  const void *context,
+                                  const frothy_value_t *args,
+                                  size_t arg_count, frothy_value_t *out) {
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  (void)args;
+  return frothy_ffi_return_int(
+      (int32_t)frothy_ffi_wrap_uptime_ms(platform_uptime_ms()), out);
 }
 
-FROTH_FFI_ARITY(esp32_adc_read, "adc.read", "( pin -- value )", 1, 1,
-                "Read a 12-bit ADC1 sample from a GPIO pin.") {
-  adc1_channel_t channel;
-  esp_err_t err;
-  int sample;
+static froth_error_t esp32_adc_read(frothy_runtime_t *runtime,
+                                    const void *context,
+                                    const frothy_value_t *args,
+                                    size_t arg_count, frothy_value_t *out) {
+  adc_channel_t channel;
+  int sample = 0;
+  int32_t pin = 0;
 
-  FROTH_POP(pin);
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &pin));
 
   if (!esp32_adc1_channel_for_pin(pin, &channel)) {
     return FROTH_ERROR_BOUNDS;
   }
 
-  err = adc1_config_width(ADC_WIDTH_BIT_12);
-  if (err != ESP_OK) {
-    return FROTH_ERROR_IO;
-  }
+  FROTH_TRY(esp32_adc1_read_channel(channel, &sample));
 
-  err = adc1_config_channel_atten(channel, FROTH_BOARD_ADC_ATTEN);
-  if (err != ESP_OK) {
-    return FROTH_ERROR_IO;
-  }
-
-  sample = adc1_get_raw(channel);
-  if (sample < 0) {
-    return FROTH_ERROR_IO;
-  }
-
-  FROTH_PUSH(sample);
-  return FROTH_OK;
+  return frothy_ffi_return_int(sample, out);
 }
 
-FROTH_FFI_ARITY(esp32_random_seed, "random.seed!", "( seed -- )", 1, 0,
-                "Seed the board pseudo-random generator.") {
-  FROTH_POP(seed);
+static froth_error_t esp32_random_seed(frothy_runtime_t *runtime,
+                                       const void *context,
+                                       const frothy_value_t *args,
+                                       size_t arg_count, frothy_value_t *out) {
+  int32_t seed = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &seed));
   esp32_random_state = frothy_ffi_random_seed((uint32_t)seed);
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_random_seed_from_millis, "random.seedFromMillis!",
-                "( -- )", 0, 0,
-                "Seed the board pseudo-random generator from millis.") {
+static froth_error_t esp32_random_seed_from_millis(
+    frothy_runtime_t *runtime, const void *context, const frothy_value_t *args,
+    size_t arg_count, frothy_value_t *out) {
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  (void)args;
   esp32_random_state = frothy_ffi_random_seed(platform_uptime_ms());
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_random_next, "random.next", "( -- n )", 0, 1,
-                "Return the next non-negative pseudo-random integer.") {
-  FROTH_PUSH(frothy_ffi_random_next_int(&esp32_random_state));
-  return FROTH_OK;
+static froth_error_t esp32_random_next(frothy_runtime_t *runtime,
+                                       const void *context,
+                                       const frothy_value_t *args,
+                                       size_t arg_count, frothy_value_t *out) {
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  (void)args;
+  return frothy_ffi_return_int(frothy_ffi_random_next_int(&esp32_random_state),
+                               out);
 }
 
-FROTH_FFI_ARITY(esp32_random_below, "random.below", "( limit -- n )", 1, 1,
-                "Return a pseudo-random integer in [0, limit).") {
+static froth_error_t esp32_random_below(frothy_runtime_t *runtime,
+                                        const void *context,
+                                        const frothy_value_t *args,
+                                        size_t arg_count, frothy_value_t *out) {
+  int32_t limit = 0;
   uint32_t value = 0;
 
-  FROTH_POP(limit);
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &limit));
   if (limit <= 0) {
     return FROTH_ERROR_BOUNDS;
   }
   FROTH_TRY(frothy_ffi_random_below(&esp32_random_state, (uint32_t)limit,
                                     &value));
-  FROTH_PUSH((froth_cell_t)value);
-  return FROTH_OK;
+  return frothy_ffi_return_int((int32_t)value, out);
 }
 
-FROTH_FFI_ARITY(esp32_random_range, "random.range", "( lo hi -- n )", 2, 1,
-                "Return a pseudo-random integer between lo and hi inclusive.") {
+static froth_error_t esp32_random_range(frothy_runtime_t *runtime,
+                                        const void *context,
+                                        const frothy_value_t *args,
+                                        size_t arg_count, frothy_value_t *out) {
+  int32_t lo = 0;
+  int32_t hi = 0;
   uint32_t offset = 0;
   int64_t span = 0;
 
-  FROTH_POP(hi);
-  FROTH_POP(lo);
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &lo));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &hi));
   if (lo > hi) {
-    froth_cell_t tmp = lo;
+    int32_t tmp = lo;
     lo = hi;
     hi = tmp;
   }
@@ -246,19 +315,26 @@ FROTH_FFI_ARITY(esp32_random_range, "random.range", "( lo hi -- n )", 2, 1,
   }
   FROTH_TRY(
       frothy_ffi_random_below(&esp32_random_state, (uint32_t)span, &offset));
-  FROTH_PUSH((froth_cell_t)((int64_t)lo + (int64_t)offset));
-  return FROTH_OK;
+  return frothy_ffi_return_int((int32_t)((int64_t)lo + (int64_t)offset), out);
 }
 
 /*----------------- LEDC FUNCTIONS -----------------*/
 
-FROTH_FFI_ARITY(esp32_ledc_timer_config, "ledc.timer-config",
-                "( speed_mode timer freq resolution -- )", 4, 0,
-                "LEDC timer configuration.") {
-  FROTH_POP(resolution);
-  FROTH_POP(freq);
-  FROTH_POP(timer);
-  FROTH_POP(speed_mode);
+static froth_error_t esp32_ledc_timer_config(frothy_runtime_t *runtime,
+                                             const void *context,
+                                             const frothy_value_t *args,
+                                             size_t arg_count,
+                                             frothy_value_t *out) {
+  int32_t speed_mode = 0;
+  int32_t timer = 0;
+  int32_t freq = 0;
+  int32_t resolution = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &speed_mode));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &timer));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &freq));
+  FROTH_TRY(frothy_ffi_expect_int(args, 3, &resolution));
   esp_err_t err =
       ledc_timer_config(&(ledc_timer_config_t){.speed_mode = speed_mode,
                                                .timer_num = timer,
@@ -270,17 +346,26 @@ FROTH_FFI_ARITY(esp32_ledc_timer_config, "ledc.timer-config",
   if (err != ESP_OK) {
     return FROTH_ERROR_IO;
   }
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_ledc_channel_config, "ledc.channel-config",
-                "( pin speed_mode channel timer duty -- )", 5, 0,
-                "LEDC channel configuration") {
-  FROTH_POP(duty);
-  FROTH_POP(timer);
-  FROTH_POP(channel);
-  FROTH_POP(speed_mode);
-  FROTH_POP(gpio_num);
+static froth_error_t esp32_ledc_channel_config(frothy_runtime_t *runtime,
+                                               const void *context,
+                                               const frothy_value_t *args,
+                                               size_t arg_count,
+                                               frothy_value_t *out) {
+  int32_t gpio_num = 0;
+  int32_t speed_mode = 0;
+  int32_t channel = 0;
+  int32_t timer = 0;
+  int32_t duty = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &gpio_num));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &speed_mode));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &channel));
+  FROTH_TRY(frothy_ffi_expect_int(args, 3, &timer));
+  FROTH_TRY(frothy_ffi_expect_int(args, 4, &duty));
   esp_err_t err = ledc_channel_config(&(ledc_channel_config_t){
       .speed_mode = speed_mode,
       .channel = channel,
@@ -295,136 +380,196 @@ FROTH_FFI_ARITY(esp32_ledc_channel_config, "ledc.channel-config",
   if (err != ESP_OK) {
     return FROTH_ERROR_IO;
   }
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_ledc_set_duty, "ledc.set-duty",
-                "( speed_mode channel duty -- )", 3, 0,
-                "Set LEDC duty. Call ledc.update_duty after to apply.") {
-  FROTH_POP(duty);
-  FROTH_POP(channel);
-  FROTH_POP(speed_mode);
+static froth_error_t esp32_ledc_set_duty(frothy_runtime_t *runtime,
+                                         const void *context,
+                                         const frothy_value_t *args,
+                                         size_t arg_count,
+                                         frothy_value_t *out) {
+  int32_t speed_mode = 0;
+  int32_t channel = 0;
+  int32_t duty = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &speed_mode));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &channel));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &duty));
   esp_err_t err = ledc_set_duty(speed_mode, channel, duty);
 
   if (err != ESP_OK) {
     return FROTH_ERROR_IO;
   }
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_ledc_update_duty, "ledc.update-duty",
-                "( speed_mode channel -- )", 2, 0, "Apply LEDC duty change") {
-  FROTH_POP(channel);
-  FROTH_POP(speed_mode);
+static froth_error_t esp32_ledc_update_duty(frothy_runtime_t *runtime,
+                                            const void *context,
+                                            const frothy_value_t *args,
+                                            size_t arg_count,
+                                            frothy_value_t *out) {
+  int32_t speed_mode = 0;
+  int32_t channel = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &speed_mode));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &channel));
   esp_err_t err = ledc_update_duty(speed_mode, channel);
 
   if (err != ESP_OK) {
     return FROTH_ERROR_IO;
   }
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_ledc_get_duty, "ledc.get-duty",
-                "( speed_mode channel -- duty )", 2, 1, "Get LEDC duty") {
-  FROTH_POP(channel);
-  FROTH_POP(speed_mode);
-  froth_cell_t duty = ledc_get_duty(speed_mode, channel);
+static froth_error_t esp32_ledc_get_duty(frothy_runtime_t *runtime,
+                                         const void *context,
+                                         const frothy_value_t *args,
+                                         size_t arg_count,
+                                         frothy_value_t *out) {
+  int32_t speed_mode = 0;
+  int32_t channel = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &speed_mode));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &channel));
+  uint32_t duty = ledc_get_duty(speed_mode, channel);
 
   if (duty == LEDC_ERR_DUTY) {
     return FROTH_ERROR_IO;
   }
 
-  FROTH_PUSH(duty);
-  return FROTH_OK;
+  return frothy_ffi_return_int((int32_t)duty, out);
 }
 
-FROTH_FFI_ARITY(esp32_ledc_set_frequency, "ledc.set-freq",
-                "( speed_mode timer freq -- )", 3, 0,
-                "Set LEDC frequency. Call ledc.update_duty after to apply.") {
-  FROTH_POP(freq);
-  FROTH_POP(timer);
-  FROTH_POP(speed_mode);
+static froth_error_t esp32_ledc_set_frequency(frothy_runtime_t *runtime,
+                                              const void *context,
+                                              const frothy_value_t *args,
+                                              size_t arg_count,
+                                              frothy_value_t *out) {
+  int32_t speed_mode = 0;
+  int32_t timer = 0;
+  int32_t freq = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &speed_mode));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &timer));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &freq));
   esp_err_t err = ledc_set_freq(speed_mode, timer, freq);
 
   if (err != ESP_OK) {
     return FROTH_ERROR_IO;
   }
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_ledc_get_frequency, "ledc.get-freq",
-                "( speed_mode timer -- freq )", 2, 1, "Get LEDC frequency") {
-  FROTH_POP(timer);
-  FROTH_POP(speed_mode);
+static froth_error_t esp32_ledc_get_frequency(frothy_runtime_t *runtime,
+                                              const void *context,
+                                              const frothy_value_t *args,
+                                              size_t arg_count,
+                                              frothy_value_t *out) {
+  int32_t speed_mode = 0;
+  int32_t timer = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &speed_mode));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &timer));
   uint32_t freq = ledc_get_freq(speed_mode, timer);
 
   if (freq == 0) { // Error is explicitly considered an error.
     return FROTH_ERROR_IO;
   }
 
-  FROTH_PUSH(freq);
-  return FROTH_OK;
+  return frothy_ffi_return_int((int32_t)freq, out);
 }
 
-FROTH_FFI_ARITY(esp32_ledc_stop, "ledc.stop",
-                "( speed_mode channel idle_level -- )", 3, 0,
-                "Stop LEDC output") {
-  FROTH_POP(idle_level);
-  FROTH_POP(channel);
-  FROTH_POP(speed_mode);
+static froth_error_t esp32_ledc_stop(frothy_runtime_t *runtime,
+                                     const void *context,
+                                     const frothy_value_t *args,
+                                     size_t arg_count, frothy_value_t *out) {
+  int32_t speed_mode = 0;
+  int32_t channel = 0;
+  int32_t idle_level = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &speed_mode));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &channel));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &idle_level));
   esp_err_t err = ledc_stop(speed_mode, channel, idle_level);
 
   if (err != ESP_OK) {
     return FROTH_ERROR_IO;
   }
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_ledc_fade_func_install, "ledc.fade-install", "( -- )", 0,
-                0, "Install LEDC fade function") {
+static froth_error_t esp32_ledc_fade_func_install(
+    frothy_runtime_t *runtime, const void *context, const frothy_value_t *args,
+    size_t arg_count, frothy_value_t *out) {
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  (void)args;
   esp_err_t err = ledc_fade_func_install(0);
 
   if (err != ESP_OK) {
     return FROTH_ERROR_IO;
   }
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_ledc_fade_func_uninstall, "ledc.fade-uninstall", "( -- )",
-                0, 0, "Uninstall LEDC fade function") {
+static froth_error_t esp32_ledc_fade_func_uninstall(
+    frothy_runtime_t *runtime, const void *context, const frothy_value_t *args,
+    size_t arg_count, frothy_value_t *out) {
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  (void)args;
   ledc_fade_func_uninstall();
 
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_ledc_fade_with_time, "ledc.fade-with-time",
-                "( speed_mode channel target_duty time_ms -- )", 4, 0,
-                "Start LEDC Fade.") {
-  FROTH_POP(time_ms);
-  FROTH_POP(target_duty);
-  FROTH_POP(channel);
-  FROTH_POP(speed_mode);
+static froth_error_t esp32_ledc_fade_with_time(frothy_runtime_t *runtime,
+                                               const void *context,
+                                               const frothy_value_t *args,
+                                               size_t arg_count,
+                                               frothy_value_t *out) {
+  int32_t speed_mode = 0;
+  int32_t channel = 0;
+  int32_t target_duty = 0;
+  int32_t time_ms = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &speed_mode));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &channel));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &target_duty));
+  FROTH_TRY(frothy_ffi_expect_int(args, 3, &time_ms));
   esp_err_t err =
       ledc_set_fade_with_time(speed_mode, channel, target_duty, time_ms);
 
   if (err != ESP_OK) {
     return FROTH_ERROR_IO;
   }
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_ledc_fade_start, "ledc.fade-start",
-                "( speed_mode channel fade_mode -- )", 3, 0,
-                "Start LEDC Fade. Call ledc.update_duty after to apply.") {
-  FROTH_POP(fade_mode);
-  FROTH_POP(channel);
-  FROTH_POP(speed_mode);
+static froth_error_t esp32_ledc_fade_start(frothy_runtime_t *runtime,
+                                           const void *context,
+                                           const frothy_value_t *args,
+                                           size_t arg_count,
+                                           frothy_value_t *out) {
+  int32_t speed_mode = 0;
+  int32_t channel = 0;
+  int32_t fade_mode = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &speed_mode));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &channel));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &fade_mode));
   esp_err_t err = ledc_fade_start(speed_mode, channel, fade_mode);
 
   if (err != ESP_OK) {
     return FROTH_ERROR_IO;
   }
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
 /* -----------------  I2C BINDINGS --------------------- */
@@ -434,11 +579,18 @@ FROTH_FFI_ARITY(esp32_ledc_fade_start, "ledc.fade-start",
 static i2c_master_bus_handle_t bus_handles[I2C_MAX_BUSES];
 static i2c_master_dev_handle_t dev_handles[I2C_MAX_DEVICES];
 
-FROTH_FFI_ARITY(esp32_i2c_init, "i2c.init", "( sda scl freq -- bus )", 3, 1,
-                "Initialize an I2C master bus. Returns a bus handle (0-1).") {
-  FROTH_POP(freq);
-  FROTH_POP(scl);
-  FROTH_POP(sda);
+static froth_error_t esp32_i2c_init(frothy_runtime_t *runtime,
+                                    const void *context,
+                                    const frothy_value_t *args,
+                                    size_t arg_count, frothy_value_t *out) {
+  int32_t sda = 0;
+  int32_t scl = 0;
+  int32_t freq = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &sda));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &scl));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &freq));
 
   for (int i = 0; i < I2C_MAX_BUSES; i++) {
     if (bus_handles[i] != NULL)
@@ -461,19 +613,25 @@ FROTH_FFI_ARITY(esp32_i2c_init, "i2c.init", "( sda scl freq -- bus )", 3, 1,
       return FROTH_ERROR_IO;
 
     bus_handles[i] = handle;
-    FROTH_PUSH(i);
-    return FROTH_OK;
+    return frothy_ffi_return_int(i, out);
   }
 
   return FROTH_ERROR_BOUNDS; /* no free bus slot */
 }
 
-FROTH_FFI_ARITY(esp32_i2c_add_device, "i2c.add-device",
-                "( bus addr speed -- device )", 3, 1,
-                "Add an I2C device to a bus. Returns a device handle (0-7).") {
-  FROTH_POP(speed);
-  FROTH_POP(addr);
-  FROTH_POP(bus);
+static froth_error_t esp32_i2c_add_device(frothy_runtime_t *runtime,
+                                          const void *context,
+                                          const frothy_value_t *args,
+                                          size_t arg_count,
+                                          frothy_value_t *out) {
+  int32_t bus = 0;
+  int32_t addr = 0;
+  int32_t speed = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &bus));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &addr));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &speed));
 
   if (bus < 0 || bus >= I2C_MAX_BUSES || bus_handles[bus] == NULL)
     return FROTH_ERROR_BOUNDS;
@@ -497,16 +655,21 @@ FROTH_FFI_ARITY(esp32_i2c_add_device, "i2c.add-device",
       return FROTH_ERROR_IO;
 
     dev_handles[i] = handle;
-    FROTH_PUSH(i);
-    return FROTH_OK;
+    return frothy_ffi_return_int(i, out);
   }
 
   return FROTH_ERROR_BOUNDS; /* no free device slot */
 }
 
-FROTH_FFI_ARITY(esp32_i2c_rm_device, "i2c.rm-device", "( device -- )", 1, 0,
-                "Remove an I2C device and release its handle.") {
-  FROTH_POP(idx);
+static froth_error_t esp32_i2c_rm_device(frothy_runtime_t *runtime,
+                                         const void *context,
+                                         const frothy_value_t *args,
+                                         size_t arg_count,
+                                         frothy_value_t *out) {
+  int32_t idx = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &idx));
 
   if (idx < 0 || idx >= I2C_MAX_DEVICES || dev_handles[idx] == NULL)
     return FROTH_ERROR_BOUNDS;
@@ -515,12 +678,17 @@ FROTH_FFI_ARITY(esp32_i2c_rm_device, "i2c.rm-device", "( device -- )", 1, 0,
   dev_handles[idx] = NULL;
   if (err != ESP_OK)
     return FROTH_ERROR_IO;
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_i2c_del_bus, "i2c.del-bus", "( bus -- )", 1, 0,
-                "Delete an I2C master bus and release its handle.") {
-  FROTH_POP(idx);
+static froth_error_t esp32_i2c_del_bus(frothy_runtime_t *runtime,
+                                       const void *context,
+                                       const frothy_value_t *args,
+                                       size_t arg_count, frothy_value_t *out) {
+  int32_t idx = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &idx));
 
   if (idx < 0 || idx >= I2C_MAX_BUSES || bus_handles[idx] == NULL)
     return FROTH_ERROR_BOUNDS;
@@ -529,26 +697,38 @@ FROTH_FFI_ARITY(esp32_i2c_del_bus, "i2c.del-bus", "( bus -- )", 1, 0,
   bus_handles[idx] = NULL;
   if (err != ESP_OK)
     return FROTH_ERROR_IO;
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_i2c_probe, "i2c.probe", "( bus addr -- flag )", 2, 1,
-                "Probe for a device at addr. Returns true (-1) or false (0).") {
-  FROTH_POP(addr);
-  FROTH_POP(bus);
+static froth_error_t esp32_i2c_probe(frothy_runtime_t *runtime,
+                                     const void *context,
+                                     const frothy_value_t *args,
+                                     size_t arg_count, frothy_value_t *out) {
+  int32_t bus = 0;
+  int32_t addr = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &bus));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &addr));
 
   if (bus < 0 || bus >= I2C_MAX_BUSES || bus_handles[bus] == NULL)
     return FROTH_ERROR_BOUNDS;
 
   esp_err_t err = i2c_master_probe(bus_handles[bus], addr, 100);
-  FROTH_PUSH(err == ESP_OK ? -1 : 0);
-  return FROTH_OK;
+  return frothy_ffi_return_int(err == ESP_OK ? -1 : 0, out);
 }
 
-FROTH_FFI_ARITY(esp32_i2c_write_byte, "i2c.write-byte", "( device byte -- )", 2,
-                0, "Transmit one byte to an I2C device.") {
-  FROTH_POP(byte);
-  FROTH_POP(dev);
+static froth_error_t esp32_i2c_write_byte(frothy_runtime_t *runtime,
+                                          const void *context,
+                                          const frothy_value_t *args,
+                                          size_t arg_count,
+                                          frothy_value_t *out) {
+  int32_t dev = 0;
+  int32_t byte = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &dev));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &byte));
 
   if (dev < 0 || dev >= I2C_MAX_DEVICES || dev_handles[dev] == NULL)
     return FROTH_ERROR_BOUNDS;
@@ -557,12 +737,18 @@ FROTH_FFI_ARITY(esp32_i2c_write_byte, "i2c.write-byte", "( device byte -- )", 2,
   esp_err_t err = i2c_master_transmit(dev_handles[dev], buf, 1, 1000);
   if (err != ESP_OK)
     return FROTH_ERROR_IO;
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_i2c_read_byte, "i2c.read-byte", "( device -- byte )", 1,
-                1, "Receive one byte from an I2C device.") {
-  FROTH_POP(dev);
+static froth_error_t esp32_i2c_read_byte(frothy_runtime_t *runtime,
+                                         const void *context,
+                                         const frothy_value_t *args,
+                                         size_t arg_count,
+                                         frothy_value_t *out) {
+  int32_t dev = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &dev));
 
   if (dev < 0 || dev >= I2C_MAX_DEVICES || dev_handles[dev] == NULL)
     return FROTH_ERROR_BOUNDS;
@@ -572,15 +758,22 @@ FROTH_FFI_ARITY(esp32_i2c_read_byte, "i2c.read-byte", "( device -- byte )", 1,
   if (err != ESP_OK)
     return FROTH_ERROR_IO;
 
-  FROTH_PUSH(buf[0]);
-  return FROTH_OK;
+  return frothy_ffi_return_int(buf[0], out);
 }
 
-FROTH_FFI_ARITY(esp32_i2c_write_reg, "i2c.write-reg", "( byte device reg -- )",
-                3, 0, "Write a byte to a register on an I2C device.") {
-  FROTH_POP(reg);
-  FROTH_POP(dev);
-  FROTH_POP(byte);
+static froth_error_t esp32_i2c_write_reg(frothy_runtime_t *runtime,
+                                         const void *context,
+                                         const frothy_value_t *args,
+                                         size_t arg_count,
+                                         frothy_value_t *out) {
+  int32_t byte = 0;
+  int32_t dev = 0;
+  int32_t reg = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &byte));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &dev));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &reg));
 
   if (dev < 0 || dev >= I2C_MAX_DEVICES || dev_handles[dev] == NULL)
     return FROTH_ERROR_BOUNDS;
@@ -589,13 +782,19 @@ FROTH_FFI_ARITY(esp32_i2c_write_reg, "i2c.write-reg", "( byte device reg -- )",
   esp_err_t err = i2c_master_transmit(dev_handles[dev], buf, 2, 1000);
   if (err != ESP_OK)
     return FROTH_ERROR_IO;
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_i2c_read_reg, "i2c.read-reg", "( device reg -- byte )", 2,
-                1, "Read one byte from a register on an I2C device.") {
-  FROTH_POP(reg);
-  FROTH_POP(dev);
+static froth_error_t esp32_i2c_read_reg(frothy_runtime_t *runtime,
+                                        const void *context,
+                                        const frothy_value_t *args,
+                                        size_t arg_count, frothy_value_t *out) {
+  int32_t dev = 0;
+  int32_t reg = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &dev));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &reg));
 
   if (dev < 0 || dev >= I2C_MAX_DEVICES || dev_handles[dev] == NULL)
     return FROTH_ERROR_BOUNDS;
@@ -607,15 +806,20 @@ FROTH_FFI_ARITY(esp32_i2c_read_reg, "i2c.read-reg", "( device reg -- byte )", 2,
   if (err != ESP_OK)
     return FROTH_ERROR_IO;
 
-  FROTH_PUSH(rx[0]);
-  return FROTH_OK;
+  return frothy_ffi_return_int(rx[0], out);
 }
 
-FROTH_FFI_ARITY(
-    esp32_i2c_read_reg16, "i2c.read-reg16", "( device reg -- word )", 2, 1,
-    "Read two bytes (big-endian) from a register on an I2C device.") {
-  FROTH_POP(reg);
-  FROTH_POP(dev);
+static froth_error_t esp32_i2c_read_reg16(frothy_runtime_t *runtime,
+                                          const void *context,
+                                          const frothy_value_t *args,
+                                          size_t arg_count,
+                                          frothy_value_t *out) {
+  int32_t dev = 0;
+  int32_t reg = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &dev));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &reg));
 
   if (dev < 0 || dev >= I2C_MAX_DEVICES || dev_handles[dev] == NULL)
     return FROTH_ERROR_BOUNDS;
@@ -627,9 +831,8 @@ FROTH_FFI_ARITY(
   if (err != ESP_OK)
     return FROTH_ERROR_IO;
 
-  froth_cell_t word = ((froth_cell_t)rx[0] << 8) | rx[1];
-  FROTH_PUSH(word);
-  return FROTH_OK;
+  int32_t word = ((int32_t)rx[0] << 8) | rx[1];
+  return frothy_ffi_return_int(word, out);
 }
 
 /* ----------------- UART BINDINGS --------------------- */
@@ -701,11 +904,18 @@ static bool console_route_conflicts_aux(froth_cell_t port, froth_cell_t tx,
   return false;
 }
 
-FROTH_FFI_ARITY(esp32_uart_init, "uart.init", "( tx rx baud -- uart )", 3, 1,
-                "Initialize an auxiliary UART. Returns a UART handle (0-1).") {
-  FROTH_POP(baud);
-  FROTH_POP(rx);
-  FROTH_POP(tx);
+static froth_error_t esp32_uart_init(frothy_runtime_t *runtime,
+                                     const void *context,
+                                     const frothy_value_t *args,
+                                     size_t arg_count, frothy_value_t *out) {
+  int32_t tx = 0;
+  int32_t rx = 0;
+  int32_t baud = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &tx));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &rx));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &baud));
 
   if (aux_uart_conflicts_console(tx, rx)) {
     return FROTH_ERROR_BUSY;
@@ -743,8 +953,7 @@ FROTH_FFI_ARITY(esp32_uart_init, "uart.init", "( tx rx baud -- uart )", 3, 1,
       return FROTH_ERROR_IO;
     }
 
-    FROTH_PUSH(i);
-    return FROTH_OK;
+    return frothy_ffi_return_int(i, out);
   }
 
   for (int i = 0; i < UART_MAX_PORTS; i++) {
@@ -783,36 +992,41 @@ FROTH_FFI_ARITY(esp32_uart_init, "uart.init", "( tx rx baud -- uart )", 3, 1,
     uart_in_use[i] = 1;
     uart_tx_pins[i] = (int)tx;
     uart_rx_pins[i] = (int)rx;
-    FROTH_PUSH(i);
-    return FROTH_OK;
+    return frothy_ffi_return_int(i, out);
   }
 
   return FROTH_ERROR_BOUNDS;
 }
 
-FROTH_FFI_ARITY(esp32_console_info, "console.info", "( -- )", 0, 0,
-                "Print the active console UART route.") {
+static froth_error_t esp32_console_info(frothy_runtime_t *runtime,
+                                        const void *context,
+                                        const frothy_value_t *args,
+                                        size_t arg_count, frothy_value_t *out) {
   platform_console_uart_info_t info;
 
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  (void)args;
   FROTH_TRY(platform_console_uart_info(&info));
 
-  FROTH_TRY(emit_string("console uart"));
-  FROTH_TRY(emit_string(format_number(info.port)));
-  FROTH_TRY(emit_string(" tx="));
-  FROTH_TRY(emit_string(format_number(info.tx)));
-  FROTH_TRY(emit_string(" rx="));
-  FROTH_TRY(emit_string(format_number(info.rx)));
-  FROTH_TRY(emit_string(" baud="));
-  FROTH_TRY(emit_string(format_number(info.baud)));
-  FROTH_TRY(emit_string("\n"));
-  return FROTH_OK;
+  FROTH_TRY(frothy_ffi_emit_string("console uart"));
+  FROTH_TRY(frothy_ffi_emit_string(frothy_ffi_format_number(info.port)));
+  FROTH_TRY(frothy_ffi_emit_string(" tx="));
+  FROTH_TRY(frothy_ffi_emit_string(frothy_ffi_format_number(info.tx)));
+  FROTH_TRY(frothy_ffi_emit_string(" rx="));
+  FROTH_TRY(frothy_ffi_emit_string(frothy_ffi_format_number(info.rx)));
+  FROTH_TRY(frothy_ffi_emit_string(" baud="));
+  FROTH_TRY(frothy_ffi_emit_string(frothy_ffi_format_number(info.baud)));
+  FROTH_TRY(frothy_ffi_emit_string("\n"));
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_console_default, "console.default!", "( -- )", 0, 0,
-                "Restore the default console UART route.") {
-  if (froth_console_live_active()) {
-    return FROTH_ERROR_BUSY;
-  }
+static froth_error_t esp32_console_default(frothy_runtime_t *runtime,
+                                           const void *context,
+                                           const frothy_value_t *args,
+                                           size_t arg_count,
+                                           frothy_value_t *out) {
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  (void)args;
 
   if (console_route_conflicts_aux(FROTH_BOARD_CONSOLE_DEFAULT_PORT,
                                   FROTH_BOARD_CONSOLE_DEFAULT_TX_PIN,
@@ -820,51 +1034,66 @@ FROTH_FFI_ARITY(esp32_console_default, "console.default!", "( -- )", 0, 0,
     return FROTH_ERROR_BUSY;
   }
 
-  FROTH_TRY(froth_console_flush_output());
-  return platform_console_uart_default();
+  FROTH_TRY(platform_console_uart_default());
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_console_uart_bind, "console.uart!",
-                "( port tx rx baud -- )", 4, 0,
-                "Rebind the active console to a UART route.") {
-  FROTH_POP(baud);
-  FROTH_POP(rx);
-  FROTH_POP(tx);
-  FROTH_POP(port);
+static froth_error_t esp32_console_uart_bind(frothy_runtime_t *runtime,
+                                             const void *context,
+                                             const frothy_value_t *args,
+                                             size_t arg_count,
+                                             frothy_value_t *out) {
+  int32_t port = 0;
+  int32_t tx = 0;
+  int32_t rx = 0;
+  int32_t baud = 0;
 
-  if (froth_console_live_active()) {
-    return FROTH_ERROR_BUSY;
-  }
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &port));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &tx));
+  FROTH_TRY(frothy_ffi_expect_int(args, 2, &rx));
+  FROTH_TRY(frothy_ffi_expect_int(args, 3, &baud));
 
   if (console_route_conflicts_aux(port, tx, rx)) {
     return FROTH_ERROR_BUSY;
   }
 
-  FROTH_TRY(froth_console_flush_output());
-  return platform_console_uart_bind(port, tx, rx, baud);
+  FROTH_TRY(platform_console_uart_bind(port, tx, rx, baud));
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_uart_write, "uart.write", "( byte uart -- )", 2, 0,
-                "Write one byte to an auxiliary UART.") {
-  FROTH_POP(uart);
-  FROTH_POP(byte);
+static froth_error_t esp32_uart_write(frothy_runtime_t *runtime,
+                                      const void *context,
+                                      const frothy_value_t *args,
+                                      size_t arg_count, frothy_value_t *out) {
+  int32_t byte = 0;
+  int32_t uart = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &byte));
+  FROTH_TRY(frothy_ffi_expect_int(args, 1, &uart));
 
   if (uart < 0 || uart >= UART_MAX_PORTS || !uart_in_use[uart]) {
     return FROTH_ERROR_BOUNDS;
   }
 
-  uint8_t out = (uint8_t)(byte & 0xff);
-  int written = uart_write_bytes(uart_ports[uart], &out, 1);
+  uint8_t byte_out = (uint8_t)(byte & 0xff);
+  int written = uart_write_bytes(uart_ports[uart], &byte_out, 1);
   if (written != 1) {
     return FROTH_ERROR_IO;
   }
 
-  return FROTH_OK;
+  return frothy_ffi_return_nil(out);
 }
 
-FROTH_FFI_ARITY(esp32_uart_read, "uart.read", "( uart -- byte )", 1, 1,
-                "Read one byte from an auxiliary UART.") {
-  FROTH_POP(uart);
+static froth_error_t esp32_uart_read(frothy_runtime_t *runtime,
+                                     const void *context,
+                                     const frothy_value_t *args,
+                                     size_t arg_count, frothy_value_t *out) {
+  int32_t uart = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &uart));
 
   if (uart < 0 || uart >= UART_MAX_PORTS || !uart_in_use[uart]) {
     return FROTH_ERROR_BOUNDS;
@@ -877,18 +1106,22 @@ FROTH_FFI_ARITY(esp32_uart_read, "uart.read", "( uart -- byte )", 1, 1,
       return FROTH_ERROR_IO;
     }
     if (read == 1) {
-      FROTH_PUSH(in);
-      return FROTH_OK;
+      return frothy_ffi_return_int(in, out);
     }
 
-    FROTH_TRY(poll_interruptible_wait(froth_vm));
+    FROTH_TRY(poll_interruptible_wait(&froth_vm));
   }
 }
 
-FROTH_FFI_ARITY(
-    esp32_uart_available, "uart.key?", "( uart -- flag )", 1, 1,
-    "Returns true (-1) if at least one byte is in RX buffer, (0) otherwise.") {
-  FROTH_POP(uart);
+static froth_error_t esp32_uart_available(frothy_runtime_t *runtime,
+                                          const void *context,
+                                          const frothy_value_t *args,
+                                          size_t arg_count,
+                                          frothy_value_t *out) {
+  int32_t uart = 0;
+
+  ESP32_UNUSED_CALLBACK_CONTEXT();
+  FROTH_TRY(frothy_ffi_expect_int(args, 0, &uart));
 
   if (uart < 0 || uart >= UART_MAX_PORTS || !uart_in_use[uart]) {
     return FROTH_ERROR_BOUNDS;
@@ -905,31 +1138,346 @@ FROTH_FFI_ARITY(
     flag = -1;
   }
 
-  FROTH_PUSH(flag);
-  return FROTH_OK;
+  return frothy_ffi_return_int((int32_t)flag, out);
 }
 
-FROTH_BOARD_BEGIN(froth_board_bindings)
-FROTH_BIND(esp32_gpio_mode), FROTH_BIND(esp32_gpio_read),
-    FROTH_BIND(esp32_gpio_write), FROTH_BIND(esp32_ms),
-    FROTH_BIND(esp32_millis),
-    FROTH_BIND(esp32_adc_read), FROTH_BIND(esp32_random_seed),
-    FROTH_BIND(esp32_random_seed_from_millis), FROTH_BIND(esp32_random_next),
-    FROTH_BIND(esp32_random_below), FROTH_BIND(esp32_random_range),
-    FROTH_BIND(esp32_ledc_timer_config), FROTH_BIND(esp32_ledc_channel_config),
-    FROTH_BIND(esp32_ledc_set_duty), FROTH_BIND(esp32_ledc_update_duty),
-    FROTH_BIND(esp32_ledc_get_duty), FROTH_BIND(esp32_ledc_set_frequency),
-    FROTH_BIND(esp32_ledc_get_frequency), FROTH_BIND(esp32_ledc_stop),
-    FROTH_BIND(esp32_ledc_fade_func_install),
-    FROTH_BIND(esp32_ledc_fade_func_uninstall),
-    FROTH_BIND(esp32_ledc_fade_with_time), FROTH_BIND(esp32_ledc_fade_start),
-    FROTH_BIND(esp32_i2c_init), FROTH_BIND(esp32_i2c_add_device),
-    FROTH_BIND(esp32_i2c_rm_device), FROTH_BIND(esp32_i2c_del_bus),
-    FROTH_BIND(esp32_i2c_probe), FROTH_BIND(esp32_i2c_write_byte),
-    FROTH_BIND(esp32_i2c_read_byte), FROTH_BIND(esp32_i2c_write_reg),
-    FROTH_BIND(esp32_i2c_read_reg), FROTH_BIND(esp32_i2c_read_reg16),
-    FROTH_BIND(esp32_console_info), FROTH_BIND(esp32_console_default),
-    FROTH_BIND(esp32_console_uart_bind),
-    FROTH_BIND(esp32_uart_init), FROTH_BIND(esp32_uart_write),
-    FROTH_BIND(esp32_uart_read),
-    FROTH_BIND(esp32_uart_available), FROTH_BOARD_END
+static const frothy_ffi_param_t esp32_pin_mode_params[] = {
+    FROTHY_FFI_PARAM_INT("pin"),
+    FROTHY_FFI_PARAM_INT("mode"),
+};
+
+static const frothy_ffi_param_t esp32_pin_level_params[] = {
+    FROTHY_FFI_PARAM_INT("pin"),
+    FROTHY_FFI_PARAM_INT("level"),
+};
+
+static const frothy_ffi_param_t esp32_pin_params[] = {
+    FROTHY_FFI_PARAM_INT("pin"),
+};
+
+static const frothy_ffi_param_t esp32_delay_params[] = {
+    FROTHY_FFI_PARAM_INT("ms"),
+};
+
+static const frothy_ffi_param_t esp32_random_seed_params[] = {
+    FROTHY_FFI_PARAM_INT("seed"),
+};
+
+static const frothy_ffi_param_t esp32_random_below_params[] = {
+    FROTHY_FFI_PARAM_INT("limit"),
+};
+
+static const frothy_ffi_param_t esp32_random_range_params[] = {
+    FROTHY_FFI_PARAM_INT("lo"),
+    FROTHY_FFI_PARAM_INT("hi"),
+};
+
+static const frothy_ffi_param_t esp32_ledc_timer_config_params[] = {
+    FROTHY_FFI_PARAM_INT("speed_mode"),
+    FROTHY_FFI_PARAM_INT("timer"),
+    FROTHY_FFI_PARAM_INT("freq"),
+    FROTHY_FFI_PARAM_INT("resolution"),
+};
+
+static const frothy_ffi_param_t esp32_ledc_channel_config_params[] = {
+    FROTHY_FFI_PARAM_INT("pin"),
+    FROTHY_FFI_PARAM_INT("speed_mode"),
+    FROTHY_FFI_PARAM_INT("channel"),
+    FROTHY_FFI_PARAM_INT("timer"),
+    FROTHY_FFI_PARAM_INT("duty"),
+};
+
+static const frothy_ffi_param_t esp32_ledc_speed_channel_duty_params[] = {
+    FROTHY_FFI_PARAM_INT("speed_mode"),
+    FROTHY_FFI_PARAM_INT("channel"),
+    FROTHY_FFI_PARAM_INT("duty"),
+};
+
+static const frothy_ffi_param_t esp32_ledc_speed_channel_params[] = {
+    FROTHY_FFI_PARAM_INT("speed_mode"),
+    FROTHY_FFI_PARAM_INT("channel"),
+};
+
+static const frothy_ffi_param_t esp32_ledc_speed_timer_freq_params[] = {
+    FROTHY_FFI_PARAM_INT("speed_mode"),
+    FROTHY_FFI_PARAM_INT("timer"),
+    FROTHY_FFI_PARAM_INT("freq"),
+};
+
+static const frothy_ffi_param_t esp32_ledc_speed_timer_params[] = {
+    FROTHY_FFI_PARAM_INT("speed_mode"),
+    FROTHY_FFI_PARAM_INT("timer"),
+};
+
+static const frothy_ffi_param_t esp32_ledc_stop_params[] = {
+    FROTHY_FFI_PARAM_INT("speed_mode"),
+    FROTHY_FFI_PARAM_INT("channel"),
+    FROTHY_FFI_PARAM_INT("idle_level"),
+};
+
+static const frothy_ffi_param_t esp32_ledc_fade_with_time_params[] = {
+    FROTHY_FFI_PARAM_INT("speed_mode"),
+    FROTHY_FFI_PARAM_INT("channel"),
+    FROTHY_FFI_PARAM_INT("target_duty"),
+    FROTHY_FFI_PARAM_INT("time_ms"),
+};
+
+static const frothy_ffi_param_t esp32_ledc_fade_start_params[] = {
+    FROTHY_FFI_PARAM_INT("speed_mode"),
+    FROTHY_FFI_PARAM_INT("channel"),
+    FROTHY_FFI_PARAM_INT("fade_mode"),
+};
+
+static const frothy_ffi_param_t esp32_i2c_init_params[] = {
+    FROTHY_FFI_PARAM_INT("sda"),
+    FROTHY_FFI_PARAM_INT("scl"),
+    FROTHY_FFI_PARAM_INT("freq"),
+};
+
+static const frothy_ffi_param_t esp32_i2c_add_device_params[] = {
+    FROTHY_FFI_PARAM_INT("bus"),
+    FROTHY_FFI_PARAM_INT("addr"),
+    FROTHY_FFI_PARAM_INT("speed"),
+};
+
+static const frothy_ffi_param_t esp32_i2c_device_params[] = {
+    FROTHY_FFI_PARAM_INT("device"),
+};
+
+static const frothy_ffi_param_t esp32_i2c_bus_params[] = {
+    FROTHY_FFI_PARAM_INT("bus"),
+};
+
+static const frothy_ffi_param_t esp32_i2c_probe_params[] = {
+    FROTHY_FFI_PARAM_INT("bus"),
+    FROTHY_FFI_PARAM_INT("addr"),
+};
+
+static const frothy_ffi_param_t esp32_i2c_write_byte_params[] = {
+    FROTHY_FFI_PARAM_INT("device"),
+    FROTHY_FFI_PARAM_INT("byte"),
+};
+
+static const frothy_ffi_param_t esp32_i2c_write_reg_params[] = {
+    FROTHY_FFI_PARAM_INT("byte"),
+    FROTHY_FFI_PARAM_INT("device"),
+    FROTHY_FFI_PARAM_INT("reg"),
+};
+
+static const frothy_ffi_param_t esp32_i2c_read_reg_params[] = {
+    FROTHY_FFI_PARAM_INT("device"),
+    FROTHY_FFI_PARAM_INT("reg"),
+};
+
+static const frothy_ffi_param_t esp32_console_uart_params[] = {
+    FROTHY_FFI_PARAM_INT("port"),
+    FROTHY_FFI_PARAM_INT("tx"),
+    FROTHY_FFI_PARAM_INT("rx"),
+    FROTHY_FFI_PARAM_INT("baud"),
+};
+
+static const frothy_ffi_param_t esp32_uart_init_params[] = {
+    FROTHY_FFI_PARAM_INT("tx"),
+    FROTHY_FFI_PARAM_INT("rx"),
+    FROTHY_FFI_PARAM_INT("baud"),
+};
+
+static const frothy_ffi_param_t esp32_uart_write_params[] = {
+    FROTHY_FFI_PARAM_INT("byte"),
+    FROTHY_FFI_PARAM_INT("uart"),
+};
+
+static const frothy_ffi_param_t esp32_uart_params[] = {
+    FROTHY_FFI_PARAM_INT("uart"),
+};
+
+#define ESP32_ENTRY(name_text, params_value, arity_value, result_value,        \
+                    help_text, callback_value, effect_text)                   \
+  {                                                                            \
+      .name = name_text,                                                       \
+      .params = params_value,                                                  \
+      .param_count = arity_value,                                              \
+      .arity = arity_value,                                                    \
+      .result_type = result_value,                                             \
+      .help = help_text,                                                       \
+      .flags = FROTHY_FFI_FLAG_NONE,                                           \
+      .callback = callback_value,                                              \
+      .context = NULL,                                                         \
+      .stack_effect = effect_text,                                             \
+  }
+
+const frothy_ffi_entry_t frothy_board_bindings[] = {
+    ESP32_ENTRY("gpio.mode", esp32_pin_mode_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_pin_mode_params),
+                FROTHY_FFI_VALUE_NIL, "Set pin mode (1=output).",
+                esp32_gpio_mode, "( pin mode -- )"),
+    ESP32_ENTRY("gpio.read", esp32_pin_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_pin_params), FROTHY_FFI_VALUE_INT,
+                "Read the last written level for outputs, otherwise sample the live pin.",
+                esp32_gpio_read, "( pin -- level )"),
+    ESP32_ENTRY("gpio.write", esp32_pin_level_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_pin_level_params),
+                FROTHY_FFI_VALUE_NIL, "Set pin level (1=high).",
+                esp32_gpio_write, "( pin level -- )"),
+    ESP32_ENTRY("ms", esp32_delay_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_delay_params),
+                FROTHY_FFI_VALUE_NIL, "Sleep for a given amount of ms.",
+                esp32_ms, "( ms -- )"),
+    ESP32_ENTRY("millis", NULL, 0, FROTHY_FFI_VALUE_INT,
+                "Return wrapped monotonic uptime in milliseconds.",
+                esp32_millis, "( -- n )"),
+    ESP32_ENTRY("adc.read", esp32_pin_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_pin_params), FROTHY_FFI_VALUE_INT,
+                "Read a 12-bit ADC1 sample from a GPIO pin.", esp32_adc_read,
+                "( pin -- value )"),
+    ESP32_ENTRY("random.seed!", esp32_random_seed_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_random_seed_params),
+                FROTHY_FFI_VALUE_NIL,
+                "Seed the board pseudo-random generator.", esp32_random_seed,
+                "( seed -- )"),
+    ESP32_ENTRY("random.seedFromMillis!", NULL, 0, FROTHY_FFI_VALUE_NIL,
+                "Seed the board pseudo-random generator from millis.",
+                esp32_random_seed_from_millis, "( -- )"),
+    ESP32_ENTRY("random.next", NULL, 0, FROTHY_FFI_VALUE_INT,
+                "Return the next non-negative pseudo-random integer.",
+                esp32_random_next, "( -- n )"),
+    ESP32_ENTRY("random.below", esp32_random_below_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_random_below_params),
+                FROTHY_FFI_VALUE_INT,
+                "Return a pseudo-random integer in [0, limit).",
+                esp32_random_below, "( limit -- n )"),
+    ESP32_ENTRY("random.range", esp32_random_range_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_random_range_params),
+                FROTHY_FFI_VALUE_INT,
+                "Return a pseudo-random integer between lo and hi inclusive.",
+                esp32_random_range, "( lo hi -- n )"),
+    ESP32_ENTRY("ledc.timer-config", esp32_ledc_timer_config_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_ledc_timer_config_params),
+                FROTHY_FFI_VALUE_NIL, "LEDC timer configuration.",
+                esp32_ledc_timer_config,
+                "( speed_mode timer freq resolution -- )"),
+    ESP32_ENTRY("ledc.channel-config", esp32_ledc_channel_config_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_ledc_channel_config_params),
+                FROTHY_FFI_VALUE_NIL, "LEDC channel configuration.",
+                esp32_ledc_channel_config,
+                "( pin speed_mode channel timer duty -- )"),
+    ESP32_ENTRY("ledc.set-duty", esp32_ledc_speed_channel_duty_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_ledc_speed_channel_duty_params),
+                FROTHY_FFI_VALUE_NIL,
+                "Set LEDC duty. Call ledc.update_duty after to apply.",
+                esp32_ledc_set_duty, "( speed_mode channel duty -- )"),
+    ESP32_ENTRY("ledc.update-duty", esp32_ledc_speed_channel_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_ledc_speed_channel_params),
+                FROTHY_FFI_VALUE_NIL, "Apply LEDC duty change.",
+                esp32_ledc_update_duty, "( speed_mode channel -- )"),
+    ESP32_ENTRY("ledc.get-duty", esp32_ledc_speed_channel_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_ledc_speed_channel_params),
+                FROTHY_FFI_VALUE_INT, "Get LEDC duty.", esp32_ledc_get_duty,
+                "( speed_mode channel -- duty )"),
+    ESP32_ENTRY("ledc.set-freq", esp32_ledc_speed_timer_freq_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_ledc_speed_timer_freq_params),
+                FROTHY_FFI_VALUE_NIL,
+                "Set LEDC frequency. Call ledc.update_duty after to apply.",
+                esp32_ledc_set_frequency, "( speed_mode timer freq -- )"),
+    ESP32_ENTRY("ledc.get-freq", esp32_ledc_speed_timer_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_ledc_speed_timer_params),
+                FROTHY_FFI_VALUE_INT, "Get LEDC frequency.",
+                esp32_ledc_get_frequency, "( speed_mode timer -- freq )"),
+    ESP32_ENTRY("ledc.stop", esp32_ledc_stop_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_ledc_stop_params),
+                FROTHY_FFI_VALUE_NIL, "Stop LEDC output.", esp32_ledc_stop,
+                "( speed_mode channel idle_level -- )"),
+    ESP32_ENTRY("ledc.fade-install", NULL, 0, FROTHY_FFI_VALUE_NIL,
+                "Install LEDC fade function.", esp32_ledc_fade_func_install,
+                "( -- )"),
+    ESP32_ENTRY("ledc.fade-uninstall", NULL, 0, FROTHY_FFI_VALUE_NIL,
+                "Uninstall LEDC fade function.",
+                esp32_ledc_fade_func_uninstall, "( -- )"),
+    ESP32_ENTRY("ledc.fade-with-time", esp32_ledc_fade_with_time_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_ledc_fade_with_time_params),
+                FROTHY_FFI_VALUE_NIL, "Start LEDC Fade.",
+                esp32_ledc_fade_with_time,
+                "( speed_mode channel target_duty time_ms -- )"),
+    ESP32_ENTRY("ledc.fade-start", esp32_ledc_fade_start_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_ledc_fade_start_params),
+                FROTHY_FFI_VALUE_NIL,
+                "Start LEDC Fade. Call ledc.update_duty after to apply.",
+                esp32_ledc_fade_start, "( speed_mode channel fade_mode -- )"),
+    ESP32_ENTRY("i2c.init", esp32_i2c_init_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_i2c_init_params),
+                FROTHY_FFI_VALUE_INT,
+                "Initialize an I2C master bus. Returns a bus handle (0-1).",
+                esp32_i2c_init, "( sda scl freq -- bus )"),
+    ESP32_ENTRY("i2c.add-device", esp32_i2c_add_device_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_i2c_add_device_params),
+                FROTHY_FFI_VALUE_INT,
+                "Add an I2C device to a bus. Returns a device handle (0-7).",
+                esp32_i2c_add_device, "( bus addr speed -- device )"),
+    ESP32_ENTRY("i2c.rm-device", esp32_i2c_device_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_i2c_device_params),
+                FROTHY_FFI_VALUE_NIL,
+                "Remove an I2C device and release its handle.",
+                esp32_i2c_rm_device, "( device -- )"),
+    ESP32_ENTRY("i2c.del-bus", esp32_i2c_bus_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_i2c_bus_params),
+                FROTHY_FFI_VALUE_NIL,
+                "Delete an I2C master bus and release its handle.",
+                esp32_i2c_del_bus, "( bus -- )"),
+    ESP32_ENTRY("i2c.probe", esp32_i2c_probe_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_i2c_probe_params),
+                FROTHY_FFI_VALUE_INT,
+                "Probe for a device at addr. Returns true (-1) or false (0).",
+                esp32_i2c_probe, "( bus addr -- flag )"),
+    ESP32_ENTRY("i2c.write-byte", esp32_i2c_write_byte_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_i2c_write_byte_params),
+                FROTHY_FFI_VALUE_NIL, "Transmit one byte to an I2C device.",
+                esp32_i2c_write_byte, "( device byte -- )"),
+    ESP32_ENTRY("i2c.read-byte", esp32_i2c_device_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_i2c_device_params),
+                FROTHY_FFI_VALUE_INT, "Receive one byte from an I2C device.",
+                esp32_i2c_read_byte, "( device -- byte )"),
+    ESP32_ENTRY("i2c.write-reg", esp32_i2c_write_reg_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_i2c_write_reg_params),
+                FROTHY_FFI_VALUE_NIL,
+                "Write a byte to a register on an I2C device.",
+                esp32_i2c_write_reg, "( byte device reg -- )"),
+    ESP32_ENTRY("i2c.read-reg", esp32_i2c_read_reg_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_i2c_read_reg_params),
+                FROTHY_FFI_VALUE_INT,
+                "Read one byte from a register on an I2C device.",
+                esp32_i2c_read_reg, "( device reg -- byte )"),
+    ESP32_ENTRY("i2c.read-reg16", esp32_i2c_read_reg_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_i2c_read_reg_params),
+                FROTHY_FFI_VALUE_INT,
+                "Read two bytes (big-endian) from a register on an I2C device.",
+                esp32_i2c_read_reg16, "( device reg -- word )"),
+    ESP32_ENTRY("console.info", NULL, 0, FROTHY_FFI_VALUE_NIL,
+                "Print the active console UART route.", esp32_console_info,
+                "( -- )"),
+    ESP32_ENTRY("console.default!", NULL, 0, FROTHY_FFI_VALUE_NIL,
+                "Restore the default console UART route.",
+                esp32_console_default, "( -- )"),
+    ESP32_ENTRY("console.uart!", esp32_console_uart_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_console_uart_params),
+                FROTHY_FFI_VALUE_NIL,
+                "Rebind the active console to a UART route.",
+                esp32_console_uart_bind, "( port tx rx baud -- )"),
+    ESP32_ENTRY("uart.init", esp32_uart_init_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_uart_init_params),
+                FROTHY_FFI_VALUE_INT,
+                "Initialize an auxiliary UART. Returns a UART handle (0-1).",
+                esp32_uart_init, "( tx rx baud -- uart )"),
+    ESP32_ENTRY("uart.write", esp32_uart_write_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_uart_write_params),
+                FROTHY_FFI_VALUE_NIL, "Write one byte to an auxiliary UART.",
+                esp32_uart_write, "( byte uart -- )"),
+    ESP32_ENTRY("uart.read", esp32_uart_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_uart_params), FROTHY_FFI_VALUE_INT,
+                "Read one byte from an auxiliary UART.", esp32_uart_read,
+                "( uart -- byte )"),
+    ESP32_ENTRY("uart.key?", esp32_uart_params,
+                FROTHY_FFI_PARAM_COUNT(esp32_uart_params), FROTHY_FFI_VALUE_INT,
+                "Returns true (-1) if at least one byte is in RX buffer, (0) otherwise.",
+                esp32_uart_available, "( uart -- flag )"),
+    {0},
+};

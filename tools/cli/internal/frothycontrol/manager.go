@@ -15,7 +15,7 @@ var openSerialTransport func(string) (serial.Transport, error) = func(path strin
 
 var ErrNotConnected = errors.New("not connected")
 var ErrResetUnavailable = errors.New(
-	"connected Frothy kernel does not support control reset",
+	"connected Froth kernel does not support control reset",
 )
 
 type DeviceInfo struct {
@@ -44,12 +44,12 @@ type ConnectSelectionError struct {
 func (e *ConnectSelectionError) Error() string {
 	switch e.Code {
 	case "multiple_devices":
-		return "multiple Frothy devices found"
+		return "multiple Froth devices found"
 	case "no_devices":
 		if e.Err != nil {
-			return fmt.Sprintf("no Frothy device found: %v", e.Err)
+			return fmt.Sprintf("no Froth device found: %v", e.Err)
 		}
-		return "no Frothy device found"
+		return "no Froth device found"
 	default:
 		if e.Err != nil {
 			return e.Err.Error()

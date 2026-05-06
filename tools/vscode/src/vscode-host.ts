@@ -165,7 +165,7 @@ export class VSCodeHost implements ControllerHost {
         candidate,
       })),
       {
-        placeHolder: "Select a Frothy device",
+        placeHolder: "Select a Froth device",
       },
     );
     return picked?.candidate;
@@ -181,7 +181,9 @@ export class VSCodeHost implements ControllerHost {
 
   getConfiguredPort(): string {
     return (
-      vscode.workspace.getConfiguration("frothy").get<string>("port") ?? ""
+      vscode.workspace.getConfiguration("froth").get<string>("port") ??
+      vscode.workspace.getConfiguration("frothy").get<string>("port") ??
+      ""
     );
   }
 
@@ -232,9 +234,10 @@ export function createVSCodeCliPathResolver(
   host: VSCodeHost,
 ): () => Promise<string | null> {
   return async (): Promise<string | null> => {
-    const configured = vscode.workspace
-      .getConfiguration("frothy")
-      .get<string>("cliPath");
+    const configured =
+      vscode.workspace.getConfiguration("froth").get<string>("cliPath") ??
+      vscode.workspace.getConfiguration("frothy").get<string>("cliPath") ??
+      "";
     if (configured && configured.trim().length > 0) {
       const resolved = resolveCliCandidate(configured.trim(), host.getWorkspaceCwd());
       if (resolved) {
@@ -242,7 +245,7 @@ export function createVSCodeCliPathResolver(
       }
 
       host.showErrorMessage(
-        `Configured Frothy CLI not found: ${configured}. Install the Frothy CLI (\`frothy\`); legacy \`froth\` is still accepted during the transition, or update frothy.cliPath.`,
+        `Configured Froth CLI not found: ${configured}. Install the Froth CLI (\`froth\`) or update froth.cliPath.`,
       );
       return null;
     }
@@ -255,7 +258,7 @@ export function createVSCodeCliPathResolver(
     }
 
     host.showErrorMessage(
-      "Frothy CLI not found. Install the Frothy CLI (`frothy`) and ensure it is on PATH; legacy `froth` is still accepted during the transition, or set frothy.cliPath.",
+      "Froth CLI not found. Install the Froth CLI (`froth`) and ensure it is on PATH, or set froth.cliPath.",
     );
     return null;
   };

@@ -58,7 +58,7 @@ func runSetupESPIDF(args []string) error {
 	}
 
 	scriptURL := rawTaggedURL(version, "tools/setup-esp-idf.sh")
-	tempDir, err := os.MkdirTemp("", "frothy-setup-esp-idf-*")
+	tempDir, err := os.MkdirTemp("", "froth-setup-esp-idf-*")
 	if err != nil {
 		return fmt.Errorf("create temp dir: %w", err)
 	}
@@ -131,7 +131,7 @@ func releaseRepoSlug() string {
 	if slug := strings.TrimSpace(os.Getenv("RELEASE_REPO_SLUG")); slug != "" {
 		return slug
 	}
-	return releaseDefault("FROTHY_DEFAULT_RELEASE_REPO_SLUG")
+	return releaseDefault("FROTH_DEFAULT_RELEASE_REPO_SLUG")
 }
 
 func releaseDownloadBaseURL(version string) string {

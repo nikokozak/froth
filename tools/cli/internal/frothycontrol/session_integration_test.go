@@ -221,7 +221,7 @@ func TestLocalRuntimeSessionMultilineInterruptEntersControl(t *testing.T) {
 	if err := session.Interrupt(); err != nil {
 		t.Fatalf("interrupt multiline input: %v", err)
 	}
-	if _, err := session.waitForRaw([]byte("frothy> "), rawPromptTimeout); err != nil {
+	if _, err := session.waitForRaw([]byte("froth> "), rawPromptTimeout); err != nil {
 		t.Fatalf("wait for prompt after multiline interrupt: %v", err)
 	}
 
@@ -252,7 +252,7 @@ func TestLocalRuntimeSessionIdleControlInterruptReattaches(t *testing.T) {
 	if err := session.Interrupt(); err != nil {
 		t.Fatalf("interrupt idle control session: %v", err)
 	}
-	if _, err := session.waitForRaw([]byte("frothy> "), rawPromptTimeout); err != nil {
+	if _, err := session.waitForRaw([]byte("froth> "), rawPromptTimeout); err != nil {
 		t.Fatalf("wait for prompt after idle control interrupt: %v", err)
 	}
 	session.sessionID = 0
@@ -417,7 +417,7 @@ func openLocalRuntimeRaw(t *testing.T) (*LocalRuntime, *Session) {
 
 	runtimePath := findLocalRuntimeBinary(t)
 	if runtimePath == "" {
-		t.Skip("local Frothy runtime not built")
+		t.Skip("local Froth runtime not built")
 	}
 
 	runtime, err := StartLocalRuntime(runtimePath)
@@ -442,7 +442,7 @@ func seedRawDefinition(t *testing.T, session *Session, source string) {
 	if err := session.writeBytes([]byte(source + "\n")); err != nil {
 		t.Fatalf("seed raw definition: %v", err)
 	}
-	if _, err := session.waitForRaw([]byte("frothy> "), rawPromptTimeout); err != nil {
+	if _, err := session.waitForRaw([]byte("froth> "), rawPromptTimeout); err != nil {
 		t.Fatalf("wait for prompt after raw seed: %v", err)
 	}
 }

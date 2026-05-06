@@ -94,9 +94,9 @@ func (s *Session) AcquirePrompt(timeout time.Duration) error {
 
 	waitPrompt := func(limit time.Duration) error {
 		if limit <= 0 {
-			return rawWaitTimeoutError{needle: "frothy> "}
+			return rawWaitTimeoutError{needle: "froth> "}
 		}
-		_, err := s.waitForRaw([]byte("frothy> "), limit)
+		_, err := s.waitForRaw([]byte("froth> "), limit)
 		return err
 	}
 
@@ -115,7 +115,7 @@ func (s *Session) AcquirePrompt(timeout time.Duration) error {
 		{label: "ctrl-c/newline", write: []byte{0x03, '\n'}, wait: recoveryWait},
 	}
 
-	var lastErr error = rawWaitTimeoutError{needle: "frothy> "}
+	var lastErr error = rawWaitTimeoutError{needle: "froth> "}
 
 	for _, step := range steps {
 		if err := s.writeBytes(step.write); err != nil {

@@ -1,7 +1,6 @@
 #include "frothy_boot.h"
 
 #include "froth_slot_table.h"
-#include "froth_tbuf.h"
 #include "froth_vm.h"
 #include "frothy_base_image.h"
 #include "frothy_eval.h"
@@ -13,10 +12,6 @@
 
 #include <stdbool.h>
 #include <stdio.h>
-
-#ifdef FROTH_HAS_SNAPSHOTS
-#include "froth_snapshot.h"
-#endif
 
 static froth_error_t frothy_emit_text(const char *text) {
   while (*text != '\0') {
@@ -157,7 +152,7 @@ froth_error_t frothy_boot_run_startup(frothy_startup_report_t *report) {
     err = frothy_boot_test_pick_active_error;
     frothy_boot_test_pick_active_error = FROTH_OK;
     if (err == FROTH_OK) {
-      err = froth_snapshot_pick_active(&slot, &generation);
+      err = frothy_snapshot_pick_active(&slot, &generation);
     }
     if (err == FROTH_OK) {
       if (report != NULL) {
@@ -206,9 +201,7 @@ froth_error_t frothy_boot(void) {
     return err;
   }
 
-  froth_cellspace_init(&froth_vm.cellspace);
-  froth_tbuf_init(&froth_vm);
-  frothy_runtime_init(&froth_vm.frothy_runtime, &froth_vm.cellspace);
+  froth_vm_reset();
 
   err = frothy_base_image_install();
   if (err != FROTH_OK) {
@@ -216,16 +209,15 @@ froth_error_t frothy_boot(void) {
     return err;
   }
 
-  froth_vm.boot_complete = 1;
-  froth_vm.watermark_heap_offset = froth_vm.heap.pointer;
+  froth_vm_mark_boot_complete();
 
-  FROTH_TRY(frothy_emit_line("Frothy shell"));
+  FROTH_TRY(frothy_emit_line("Froth shell"));
 #ifdef FROTH_HAS_SNAPSHOTS
   {
     uint8_t slot;
     uint32_t generation;
 
-    snapshot_found = froth_snapshot_pick_active(&slot, &generation) == FROTH_OK;
+    snapshot_found = frothy_snapshot_pick_active(&slot, &generation) == FROTH_OK;
   }
 #endif
   FROTH_TRY(frothy_emit_line(snapshot_found ? "snapshot: found"

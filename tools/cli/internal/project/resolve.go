@@ -19,7 +19,7 @@ type ResolveResult struct {
 // It reads froth.toml dependencies for named includes and resolves
 // relative includes against the containing file's directory.
 // ResolveEntry resolves a single entry file path without a manifest.
-// Used by `frothy send <file>` outside a project.
+// Used by `froth send <file>` outside a project.
 func ResolveEntry(entryPath string, projectRoot string) (*ResolveResult, error) {
 	return doResolve(nil, entryPath, projectRoot)
 }
@@ -68,7 +68,7 @@ func doResolve(manifest *Manifest, entryPath string, projectRoot string) (*Resol
 }
 
 // StripBoundaryMarkers removes host-only file boundary markers before the
-// source is evaluated by a Frothy runtime.
+// source is evaluated by a Froth runtime.
 func StripBoundaryMarkers(source string) string {
 	lines := strings.Split(source, "\n")
 	filtered := lines[:0]

@@ -6,7 +6,7 @@ ROOT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 VSCODE_DIR="$ROOT_DIR/tools/vscode"
 CLI_PATH="$ROOT_DIR/tools/cli/frothy-cli"
 WRAPPER_PATH="$VSCODE_DIR/test/froth-local-runtime-cli.js"
-HOST_RUNTIME=${FROTHY_BINARY:-"$ROOT_DIR/build/Frothy"}
+HOST_RUNTIME=${FROTH_BINARY:-${FROTHY_BINARY:-"$ROOT_DIR/build/froth"}}
 
 usage() {
   cat <<'EOF'
@@ -49,7 +49,7 @@ ensure_cli_binary() {
   if [ -x "$CLI_PATH" ]; then
     return
   fi
-  echo "==> Building Frothy CLI for editor smoke"
+  echo "==> Building Froth CLI for editor smoke"
   (cd "$ROOT_DIR/tools/cli" && make build)
 }
 
@@ -65,7 +65,7 @@ ensure_cli_binary
 case "$1" in
   --host-only)
     if [ ! -x "$HOST_RUNTIME" ]; then
-      echo "error: missing Frothy runtime: $HOST_RUNTIME" >&2
+      echo "error: missing Froth runtime: $HOST_RUNTIME" >&2
       exit 1
     fi
     exec node "$VSCODE_DIR/test/run-extension-host-smoke.js" \

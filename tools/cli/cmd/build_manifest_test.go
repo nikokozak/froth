@@ -125,13 +125,13 @@ platform = "posix"
 		t.Fatalf("runBuildManifest: %v", err)
 	}
 
-	if seededBinary != filepath.Join(projectRoot, ".froth-build", "firmware", "Frothy") {
+	if seededBinary != filepath.Join(projectRoot, ".froth-build", "firmware", hostRuntimeBinaryName) {
 		t.Fatalf("seeded binary = %q", seededBinary)
 	}
 	if seededRunDir != projectRoot {
 		t.Fatalf("seeded run dir = %q, want %q", seededRunDir, projectRoot)
 	}
-	if seededSource != filepath.Join(projectRoot, ".froth-build", "runtime.frothy") {
+	if seededSource != filepath.Join(projectRoot, ".froth-build", runtimeSourceFilename) {
 		t.Fatalf("seeded source = %q", seededSource)
 	}
 }
@@ -207,9 +207,6 @@ cell_size = 64
 heap_size = 8192
 slot_table_size = 256
 line_buffer_size = 2048
-tbuf_size = 4096
-tdesc_max = 16
-ffi_max_tables = 12
 `)
 	mustWriteFile(t, filepath.Join(projectRoot, "src", "main.froth"), ": autorun ;")
 
@@ -227,9 +224,6 @@ ffi_max_tables = 12
 		"-DFROTH_HEAP_SIZE=8192",
 		"-DFROTH_SLOT_TABLE_SIZE=256",
 		"-DFROTH_LINE_BUFFER_SIZE=2048",
-		"-DFROTH_TBUF_SIZE=4096",
-		"-DFROTH_TDESC_MAX=16",
-		"-DFROTH_FFI_MAX_TABLES=12",
 	} {
 		if !strings.Contains(log, want) {
 			t.Fatalf("build log = %q, want %q", log, want)
@@ -568,7 +562,7 @@ func TestRunBuildLegacyCleanDeletesESPIDFBuildDir(t *testing.T) {
 	frothyHome := t.TempDir()
 	exportPath := filepath.Join(frothyHome, "sdk", "esp-idf", "export.sh")
 	mustWriteFile(t, exportPath, "export PATH=\""+toolsDir+":$PATH\"\n")
-	t.Setenv("FROTHY_HOME", frothyHome)
+	t.Setenv("FROTH_HOME", frothyHome)
 
 	withChdir(t, root)
 
@@ -613,7 +607,7 @@ func TestRunBuildLegacyBoardFlagPassesBoardToESPIDFAndCleansCache(t *testing.T) 
 	frothyHome := t.TempDir()
 	exportPath := filepath.Join(frothyHome, "sdk", "esp-idf", "export.sh")
 	mustWriteFile(t, exportPath, "export PATH=\""+toolsDir+":$PATH\"\n")
-	t.Setenv("FROTHY_HOME", frothyHome)
+	t.Setenv("FROTH_HOME", frothyHome)
 
 	withChdir(t, root)
 

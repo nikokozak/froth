@@ -12,6 +12,10 @@
 #define FROTHY_EVAL_FRAME_CAPACITY 128
 #endif
 
+enum {
+  FROTHY_EVAL_SCRATCH_SLOT_COUNT = 3,
+};
+
 typedef struct {
   frothy_value_t *values;
   size_t count;
@@ -32,11 +36,6 @@ static frothy_runtime_t *frothy_runtime(void) {
 
 static bool frothy_reset_epoch_matches(uint32_t reset_epoch) {
   return frothy_runtime()->reset_epoch == reset_epoch;
-}
-
-static froth_error_t frothy_eval_reset_sentinel(frothy_value_t *out) {
-  *out = frothy_value_make_nil();
-  return FROTH_ERROR_RESET;
 }
 
 static froth_error_t frothy_poll_interrupt(void) {
@@ -76,20 +75,9 @@ static void frothy_nil_array(frothy_value_t *values, size_t count) {
   }
 }
 
-static int32_t frothy_wrap_int30(int64_t raw) {
-  const uint32_t mask = ((uint32_t)1u << 30) - 1u;
-  const uint32_t sign = (uint32_t)1u << 29;
-  uint32_t bits = (uint32_t)raw & mask;
-
-  if ((bits & sign) != 0u) {
-    bits |= ~mask;
-  }
-  return (int32_t)bits;
-}
-
 static froth_error_t frothy_make_wrapped_int(int64_t raw,
                                              frothy_value_t *out) {
-  return frothy_value_make_int(frothy_wrap_int30(raw), out);
+  return frothy_value_make_int(frothy_value_wrap_int(raw), out);
 }
 
 static froth_error_t frothy_eval_buffer_init(frothy_eval_buffer_t *buffer,
@@ -180,7 +168,7 @@ typedef struct {
   uint32_t reset_epoch;
   frothy_eval_call_kind_t call_kind;
   frothy_eval_buffer_t buffer;
-  frothy_value_t values[3];
+  frothy_value_t values[FROTHY_EVAL_SCRATCH_SLOT_COUNT];
   const frothy_ir_program_t *target_program;
   frothy_ir_node_id_t target_node;
   frothy_native_fn_t native_fn;
@@ -197,6 +185,11 @@ static frothy_eval_frame_state_t
     frothy_eval_frame_stack[FROTHY_EVAL_FRAME_CAPACITY];
 static size_t frothy_eval_frame_stack_used = 0;
 static size_t frothy_eval_frame_stack_high_water = 0;
+
+static void frothy_eval_sync_frame_stack_used(
+    const frothy_eval_exec_t *exec) {
+  frothy_eval_frame_stack_used = exec->base_depth + exec->depth;
+}
 
 static froth_error_t frothy_eval_node(const frothy_ir_program_t *program,
                                       frothy_value_t *locals,
@@ -225,7 +218,7 @@ static void frothy_eval_frame_state_init(frothy_eval_frame_state_t *frame,
   frame->node_id = node_id;
   frame->out = out;
   frame->reset_epoch = frothy_runtime()->reset_epoch;
-  frothy_nil_array(frame->values, sizeof(frame->values) / sizeof(frame->values[0]));
+  frothy_nil_array(frame->values, FROTHY_EVAL_SCRATCH_SLOT_COUNT);
 }
 
 static void
@@ -234,11 +227,9 @@ frothy_eval_frame_state_cleanup(frothy_eval_frame_state_t *frame) {
 
   if (frothy_reset_epoch_matches(frame->reset_epoch)) {
     frothy_release_array_ignored(runtime, frame->values,
-                                 sizeof(frame->values) /
-                                     sizeof(frame->values[0]));
+                                 FROTHY_EVAL_SCRATCH_SLOT_COUNT);
   } else {
-    frothy_nil_array(frame->values,
-                     sizeof(frame->values) / sizeof(frame->values[0]));
+    frothy_nil_array(frame->values, FROTHY_EVAL_SCRATCH_SLOT_COUNT);
   }
   frothy_eval_buffer_free(runtime, &frame->buffer);
   memset(frame, 0, sizeof(*frame));
@@ -249,7 +240,7 @@ static void frothy_eval_exec_cleanup(frothy_eval_exec_t *exec) {
     frothy_eval_frame_state_cleanup(&exec->frames[exec->depth - 1]);
     exec->depth--;
   }
-  frothy_eval_frame_stack_used = exec->base_depth;
+  frothy_eval_sync_frame_stack_used(exec);
 }
 
 static froth_error_t
@@ -265,7 +256,7 @@ frothy_eval_push_frame(frothy_eval_exec_t *exec,
   frothy_eval_frame_state_init(&exec->frames[exec->depth], program, locals,
                                local_count, node_id, out);
   exec->depth++;
-  frothy_eval_frame_stack_used = exec->base_depth + exec->depth;
+  frothy_eval_sync_frame_stack_used(exec);
   if (frothy_eval_frame_stack_used > frothy_eval_frame_stack_high_water) {
     frothy_eval_frame_stack_high_water = frothy_eval_frame_stack_used;
   }
@@ -287,12 +278,12 @@ static void frothy_eval_pop_frame(frothy_eval_exec_t *exec) {
 
   frothy_eval_frame_state_cleanup(&exec->frames[exec->depth - 1]);
   exec->depth--;
-  frothy_eval_frame_stack_used = exec->base_depth + exec->depth;
+  frothy_eval_sync_frame_stack_used(exec);
 }
 
 static void frothy_eval_release_slot(frothy_eval_frame_state_t *frame,
                                      size_t slot_index) {
-  if (slot_index >= sizeof(frame->values) / sizeof(frame->values[0])) {
+  if (slot_index >= FROTHY_EVAL_SCRATCH_SLOT_COUNT) {
     return;
   }
 
@@ -300,6 +291,18 @@ static void frothy_eval_release_slot(frothy_eval_frame_state_t *frame,
     frothy_release_ignored(frothy_runtime(), frame->values[slot_index]);
   }
   frame->values[slot_index] = frothy_value_make_nil();
+}
+
+static froth_error_t frothy_eval_push_scratch_child(
+    frothy_eval_exec_t *exec, frothy_eval_frame_state_t *frame,
+    size_t next_phase, frothy_ir_node_id_t node_id, size_t slot_index) {
+  if (slot_index >= FROTHY_EVAL_SCRATCH_SLOT_COUNT) {
+    return FROTH_ERROR_SIGNATURE;
+  }
+
+  frame->phase = next_phase;
+  return frothy_eval_push_child(exec, frame, node_id,
+                                &frame->values[slot_index]);
 }
 
 static froth_error_t frothy_eval_complete_value(frothy_eval_exec_t *exec,
@@ -310,9 +313,29 @@ static froth_error_t frothy_eval_complete_value(frothy_eval_exec_t *exec,
   return FROTH_OK;
 }
 
+static froth_error_t frothy_eval_complete_out(frothy_eval_exec_t *exec,
+                                              frothy_eval_frame_state_t *frame,
+                                              froth_error_t err) {
+  if (err != FROTH_OK) {
+    return err;
+  }
+  return frothy_eval_complete_value(exec, frame, *frame->out);
+}
+
 static froth_error_t frothy_eval_complete_nil(frothy_eval_exec_t *exec,
                                               frothy_eval_frame_state_t *frame) {
   return frothy_eval_complete_value(exec, frame, frothy_value_make_nil());
+}
+
+static froth_error_t frothy_eval_complete_nil_after_move(
+    frothy_eval_exec_t *exec, frothy_eval_frame_state_t *frame,
+    size_t slot_index) {
+  if (slot_index >= FROTHY_EVAL_SCRATCH_SLOT_COUNT) {
+    return FROTH_ERROR_SIGNATURE;
+  }
+
+  frame->values[slot_index] = frothy_value_make_nil();
+  return frothy_eval_complete_nil(exec, frame);
 }
 
 static froth_error_t frothy_slot_read_owned(const char *slot_name,
@@ -328,7 +351,6 @@ static froth_error_t frothy_slot_read_owned(const char *slot_name,
 
 static froth_error_t frothy_slot_update_arity(froth_cell_u_t slot_index,
                                               frothy_value_t value) {
-  const char *record_name = NULL;
   size_t arity = 0;
 
   if (frothy_runtime_get_code(frothy_runtime(), value, NULL, NULL, &arity,
@@ -341,7 +363,7 @@ static froth_error_t frothy_slot_update_arity(froth_cell_u_t slot_index,
       arity < FROTH_SLOT_ARITY_UNKNOWN) {
     return froth_slot_set_arity(slot_index, (uint8_t)arity, 1);
   }
-  if (frothy_runtime_get_record_def(frothy_runtime(), value, &record_name,
+  if (frothy_runtime_get_record_def(frothy_runtime(), value, NULL,
                                     &arity) == FROTH_OK &&
       arity < FROTH_SLOT_ARITY_UNKNOWN) {
     return froth_slot_set_arity(slot_index, (uint8_t)arity, 1);
@@ -640,13 +662,11 @@ static froth_error_t frothy_eval_call(frothy_eval_exec_t *exec,
       return FROTH_OK;
     }
 
-    frame->phase = 1;
-    return frothy_eval_push_child(exec, frame, node->as.call.callee,
-                                  &frame->values[0]);
+    return frothy_eval_push_scratch_child(exec, frame, 1, node->as.call.callee,
+                                          0);
   case 1: {
     size_t arity = 0;
     size_t local_count = 0;
-    const char *record_name = NULL;
 
     err = frothy_runtime_get_code(frothy_runtime(), frame->values[0],
                                   &frame->target_program, &frame->target_node,
@@ -657,7 +677,7 @@ static froth_error_t frothy_eval_call(frothy_eval_exec_t *exec,
                                       &frame->native_context, NULL, &arity);
       if (err == FROTH_ERROR_TYPE_MISMATCH) {
         err = frothy_runtime_get_record_def(frothy_runtime(), frame->values[0],
-                                            &record_name, &arity);
+                                            NULL, &arity);
         if (err == FROTH_OK) {
           frame->call_kind = FROTHY_EVAL_CALL_RECORD_DEF;
         }
@@ -667,7 +687,6 @@ static froth_error_t frothy_eval_call(frothy_eval_exec_t *exec,
     } else if (err == FROTH_OK) {
       frame->call_kind = FROTHY_EVAL_CALL_CODE;
     }
-    (void)record_name;
 
     if (err != FROTH_OK) {
       return err;
@@ -701,34 +720,19 @@ static froth_error_t frothy_eval_call(frothy_eval_exec_t *exec,
     case FROTHY_EVAL_CALL_BUILTIN:
       err = frothy_eval_builtin(node->as.call.builtin, frame->buffer.values,
                                 node->as.call.arg_count, frame->out);
-      if (err != FROTH_OK) {
-        return err;
-      }
-      return frothy_eval_complete_value(exec, frame, *frame->out);
+      return frothy_eval_complete_out(exec, frame, err);
     case FROTHY_EVAL_CALL_NATIVE:
       err = frame->native_fn(frothy_runtime(), frame->native_context,
                              frame->buffer.values, node->as.call.arg_count,
                              frame->out);
-      if (frothy_reset_epoch_matches(frame->reset_epoch)) {
-        frothy_release_ignored(frothy_runtime(), frame->values[0]);
-        frame->values[0] = frothy_value_make_nil();
-      }
-      if (err != FROTH_OK) {
-        return err;
-      }
-      return frothy_eval_complete_value(exec, frame, *frame->out);
+      frothy_eval_release_slot(frame, 0);
+      return frothy_eval_complete_out(exec, frame, err);
     case FROTHY_EVAL_CALL_RECORD_DEF:
       err = frothy_runtime_alloc_record(frothy_runtime(), frame->values[0],
                                         frame->buffer.values,
                                         node->as.call.arg_count, frame->out);
-      if (frothy_reset_epoch_matches(frame->reset_epoch)) {
-        frothy_release_ignored(frothy_runtime(), frame->values[0]);
-        frame->values[0] = frothy_value_make_nil();
-      }
-      if (err != FROTH_OK) {
-        return err;
-      }
-      return frothy_eval_complete_value(exec, frame, *frame->out);
+      frothy_eval_release_slot(frame, 0);
+      return frothy_eval_complete_out(exec, frame, err);
     case FROTHY_EVAL_CALL_CODE:
       frame->phase = 3;
       return frothy_eval_push_frame(exec, frame->target_program,
@@ -751,9 +755,8 @@ static froth_error_t frothy_eval_if(frothy_eval_exec_t *exec,
 
   switch (frame->phase) {
   case 0:
-    frame->phase = 1;
-    return frothy_eval_push_child(exec, frame, node->as.if_expr.condition,
-                                  &frame->values[0]);
+    return frothy_eval_push_scratch_child(
+        exec, frame, 1, node->as.if_expr.condition, 0);
   case 1:
     if (!frothy_value_is_bool(frame->values[0])) {
       frothy_eval_release_slot(frame, 0);
@@ -785,9 +788,8 @@ static froth_error_t frothy_eval_while(frothy_eval_exec_t *exec,
 
   switch (frame->phase) {
   case 0:
-    frame->phase = 1;
-    return frothy_eval_push_child(exec, frame, node->as.while_expr.condition,
-                                  &frame->values[0]);
+    return frothy_eval_push_scratch_child(
+        exec, frame, 1, node->as.while_expr.condition, 0);
   case 1:
     if (!frothy_value_is_bool(frame->values[0])) {
       frothy_eval_release_slot(frame, 0);
@@ -824,8 +826,7 @@ static froth_error_t frothy_eval_seq(frothy_eval_exec_t *exec,
           frame->program->links[node->as.seq.first_item + frame->index];
 
       frame->index++;
-      frame->phase = 1;
-      return frothy_eval_push_child(exec, frame, item_node, &frame->values[0]);
+      return frothy_eval_push_scratch_child(exec, frame, 1, item_node, 0);
     }
 
     frame->phase = 2;
@@ -857,6 +858,11 @@ static froth_error_t frothy_eval_node(const frothy_ir_program_t *program,
   uint32_t reset_epoch = frothy_runtime()->reset_epoch;
   froth_error_t err = FROTH_OK;
 
+  if (program == NULL || out == NULL || node_id >= program->node_count ||
+      (local_count > 0 && locals == NULL)) {
+    return FROTH_ERROR_BOUNDS;
+  }
+
   FROTH_TRY(
       frothy_eval_push_frame(&exec, program, locals, local_count, node_id, out));
 
@@ -885,9 +891,7 @@ static froth_error_t frothy_eval_node(const frothy_ir_program_t *program,
       err = frothy_value_from_literal(
           frothy_runtime(), &frame->program->literals[node->as.lit.literal_id],
           frame->out);
-      if (err == FROTH_OK) {
-        err = frothy_eval_complete_value(&exec, frame, *frame->out);
-      }
+      err = frothy_eval_complete_out(&exec, frame, err);
       break;
     case FROTHY_IR_NODE_READ_LOCAL:
       if (node->as.read_local.local_index >= frame->local_count) {
@@ -896,9 +900,7 @@ static froth_error_t frothy_eval_node(const frothy_ir_program_t *program,
       }
       *frame->out = frame->locals[node->as.read_local.local_index];
       err = frothy_value_retain(frothy_runtime(), *frame->out);
-      if (err == FROTH_OK) {
-        err = frothy_eval_complete_value(&exec, frame, *frame->out);
-      }
+      err = frothy_eval_complete_out(&exec, frame, err);
       break;
     case FROTHY_IR_NODE_WRITE_LOCAL:
       if (node->as.write_local.local_index >= frame->local_count) {
@@ -906,9 +908,8 @@ static froth_error_t frothy_eval_node(const frothy_ir_program_t *program,
         break;
       }
       if (frame->phase == 0) {
-        frame->phase = 1;
-        err = frothy_eval_push_child(&exec, frame, node->as.write_local.value,
-                                     &frame->values[0]);
+        err = frothy_eval_push_scratch_child(
+            &exec, frame, 1, node->as.write_local.value, 0);
         break;
       }
       err = frothy_value_release(
@@ -918,28 +919,22 @@ static froth_error_t frothy_eval_node(const frothy_ir_program_t *program,
         break;
       }
       frame->locals[node->as.write_local.local_index] = frame->values[0];
-      frame->values[0] = frothy_value_make_nil();
-      err = frothy_eval_complete_nil(&exec, frame);
+      err = frothy_eval_complete_nil_after_move(&exec, frame, 0);
       break;
     case FROTHY_IR_NODE_READ_SLOT:
       err = frothy_slot_read_owned(node->as.read_slot.slot_name, frame->out);
-      if (err == FROTH_OK) {
-        err = frothy_eval_complete_value(&exec, frame, *frame->out);
-      }
+      err = frothy_eval_complete_out(&exec, frame, err);
       break;
     case FROTHY_IR_NODE_READ_SLOT_FALLBACK:
       err = frothy_slot_read_fallback_owned(
           node->as.read_slot_fallback.primary_slot_name,
           node->as.read_slot_fallback.fallback_slot_name, frame->out);
-      if (err == FROTH_OK) {
-        err = frothy_eval_complete_value(&exec, frame, *frame->out);
-      }
+      err = frothy_eval_complete_out(&exec, frame, err);
       break;
     case FROTHY_IR_NODE_WRITE_SLOT:
       if (frame->phase == 0) {
-        frame->phase = 1;
-        err = frothy_eval_push_child(&exec, frame, node->as.write_slot.value,
-                                     &frame->values[0]);
+        err = frothy_eval_push_scratch_child(
+            &exec, frame, 1, node->as.write_slot.value, 0);
         break;
       }
       err = frothy_slot_write_owned(node->as.write_slot.slot_name,
@@ -949,15 +944,12 @@ static froth_error_t frothy_eval_node(const frothy_ir_program_t *program,
         frothy_eval_release_slot(frame, 0);
         break;
       }
-      frame->values[0] = frothy_value_make_nil();
-      err = frothy_eval_complete_nil(&exec, frame);
+      err = frothy_eval_complete_nil_after_move(&exec, frame, 0);
       break;
     case FROTHY_IR_NODE_WRITE_SLOT_FALLBACK:
       if (frame->phase == 0) {
-        frame->phase = 1;
-        err = frothy_eval_push_child(
-            &exec, frame, node->as.write_slot_fallback.value,
-            &frame->values[0]);
+        err = frothy_eval_push_scratch_child(
+            &exec, frame, 1, node->as.write_slot_fallback.value, 0);
         break;
       }
       err = frothy_slot_write_fallback_owned(
@@ -968,60 +960,48 @@ static froth_error_t frothy_eval_node(const frothy_ir_program_t *program,
         frothy_eval_release_slot(frame, 0);
         break;
       }
-      frame->values[0] = frothy_value_make_nil();
-      err = frothy_eval_complete_nil(&exec, frame);
+      err = frothy_eval_complete_nil_after_move(&exec, frame, 0);
       break;
     case FROTHY_IR_NODE_SLOT_DESIGNATOR:
       err = frothy_value_make_slot_designator(
           node->as.slot_designator.slot_name, frame->out);
-      if (err == FROTH_OK) {
-        err = frothy_eval_complete_value(&exec, frame, *frame->out);
-      }
+      err = frothy_eval_complete_out(&exec, frame, err);
       break;
     case FROTHY_IR_NODE_RECORD_DEF:
       err = frothy_eval_record_def_node(frame->program, node, frame->out);
-      if (err == FROTH_OK) {
-        err = frothy_eval_complete_value(&exec, frame, *frame->out);
-      }
+      err = frothy_eval_complete_out(&exec, frame, err);
       break;
     case FROTHY_IR_NODE_READ_INDEX:
       if (frame->phase == 0) {
-        frame->phase = 1;
-        err = frothy_eval_push_child(&exec, frame, node->as.read_index.base,
-                                     &frame->values[0]);
+        err = frothy_eval_push_scratch_child(
+            &exec, frame, 1, node->as.read_index.base, 0);
         break;
       }
       if (frame->phase == 1) {
-        frame->phase = 2;
-        err = frothy_eval_push_child(&exec, frame, node->as.read_index.index,
-                                     &frame->values[1]);
+        err = frothy_eval_push_scratch_child(
+            &exec, frame, 2, node->as.read_index.index, 1);
         break;
       }
       err = frothy_read_index_owned(frame->values[0], frame->values[1],
                                     frame->out);
       frothy_eval_release_slot(frame, 1);
       frothy_eval_release_slot(frame, 0);
-      if (err == FROTH_OK) {
-        err = frothy_eval_complete_value(&exec, frame, *frame->out);
-      }
+      err = frothy_eval_complete_out(&exec, frame, err);
       break;
     case FROTHY_IR_NODE_WRITE_INDEX:
       if (frame->phase == 0) {
-        frame->phase = 1;
-        err = frothy_eval_push_child(&exec, frame, node->as.write_index.base,
-                                     &frame->values[0]);
+        err = frothy_eval_push_scratch_child(
+            &exec, frame, 1, node->as.write_index.base, 0);
         break;
       }
       if (frame->phase == 1) {
-        frame->phase = 2;
-        err = frothy_eval_push_child(&exec, frame, node->as.write_index.index,
-                                     &frame->values[1]);
+        err = frothy_eval_push_scratch_child(
+            &exec, frame, 2, node->as.write_index.index, 1);
         break;
       }
       if (frame->phase == 2) {
-        frame->phase = 3;
-        err = frothy_eval_push_child(&exec, frame, node->as.write_index.value,
-                                     &frame->values[2]);
+        err = frothy_eval_push_scratch_child(
+            &exec, frame, 3, node->as.write_index.value, 2);
         break;
       }
       err = frothy_write_index_owned(frame->values[0], frame->values[1],
@@ -1032,34 +1012,28 @@ static froth_error_t frothy_eval_node(const frothy_ir_program_t *program,
         frothy_eval_release_slot(frame, 2);
         break;
       }
-      frame->values[2] = frothy_value_make_nil();
-      err = frothy_eval_complete_nil(&exec, frame);
+      err = frothy_eval_complete_nil_after_move(&exec, frame, 2);
       break;
     case FROTHY_IR_NODE_READ_FIELD:
       if (frame->phase == 0) {
-        frame->phase = 1;
-        err = frothy_eval_push_child(&exec, frame, node->as.read_field.base,
-                                     &frame->values[0]);
+        err = frothy_eval_push_scratch_child(
+            &exec, frame, 1, node->as.read_field.base, 0);
         break;
       }
       err = frothy_read_field_owned(frame->values[0],
                                     node->as.read_field.field_name, frame->out);
       frothy_eval_release_slot(frame, 0);
-      if (err == FROTH_OK) {
-        err = frothy_eval_complete_value(&exec, frame, *frame->out);
-      }
+      err = frothy_eval_complete_out(&exec, frame, err);
       break;
     case FROTHY_IR_NODE_WRITE_FIELD:
       if (frame->phase == 0) {
-        frame->phase = 1;
-        err = frothy_eval_push_child(&exec, frame, node->as.write_field.base,
-                                     &frame->values[0]);
+        err = frothy_eval_push_scratch_child(
+            &exec, frame, 1, node->as.write_field.base, 0);
         break;
       }
       if (frame->phase == 1) {
-        frame->phase = 2;
-        err = frothy_eval_push_child(&exec, frame, node->as.write_field.value,
-                                     &frame->values[1]);
+        err = frothy_eval_push_scratch_child(
+            &exec, frame, 2, node->as.write_field.value, 1);
         break;
       }
       err = frothy_write_field_owned(frame->values[0],
@@ -1070,16 +1044,13 @@ static froth_error_t frothy_eval_node(const frothy_ir_program_t *program,
         frothy_eval_release_slot(frame, 1);
         break;
       }
-      frame->values[1] = frothy_value_make_nil();
-      err = frothy_eval_complete_nil(&exec, frame);
+      err = frothy_eval_complete_nil_after_move(&exec, frame, 1);
       break;
     case FROTHY_IR_NODE_FN:
       err = frothy_runtime_alloc_code(frothy_runtime(), frame->program,
                                       node->as.fn.body, node->as.fn.arity,
                                       node->as.fn.local_count, frame->out);
-      if (err == FROTH_OK) {
-        err = frothy_eval_complete_value(&exec, frame, *frame->out);
-      }
+      err = frothy_eval_complete_out(&exec, frame, err);
       break;
     case FROTHY_IR_NODE_CALL:
       err = frothy_eval_call(&exec, frame);
@@ -1112,7 +1083,7 @@ static froth_error_t frothy_eval_node(const frothy_ir_program_t *program,
     return err;
   }
 
-  frothy_eval_frame_stack_used = exec.base_depth;
+  frothy_eval_sync_frame_stack_used(&exec);
   return FROTH_OK;
 }
 
@@ -1120,6 +1091,10 @@ froth_error_t frothy_eval_program(const frothy_ir_program_t *program,
                                   frothy_value_t *out) {
   frothy_frame_t frame;
   froth_error_t err;
+
+  if (program == NULL || out == NULL || program->root >= program->node_count) {
+    return FROTH_ERROR_BOUNDS;
+  }
 
   FROTH_TRY(frothy_frame_init(&frame, program->root_local_count));
   err = frothy_eval_node(program, frame.locals, frame.local_count, program->root,

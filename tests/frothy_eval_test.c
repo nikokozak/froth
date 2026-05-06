@@ -20,16 +20,8 @@ static void release_value(frothy_value_t *value) {
 }
 
 static void reset_frothy_state(void) {
-  frothy_runtime_free(runtime());
-  (void)froth_slot_reset_overlay();
-  froth_vm.heap.pointer = 0;
-  froth_vm.boot_complete = 1;
-  froth_vm.trampoline_depth = 0;
-  froth_vm.interrupted = 0;
-  froth_vm.thrown = FROTH_OK;
-  froth_vm.last_error_slot = -1;
-  froth_cellspace_init(&froth_vm.cellspace);
-  frothy_runtime_init(runtime(), &froth_vm.cellspace);
+  froth_vm_reset();
+  froth_vm_mark_boot_complete();
 }
 
 static int eval_source(const char *source, frothy_value_t *out,
@@ -101,6 +93,34 @@ static int bind_native_slot(const char *name, frothy_native_fn_t fn,
     return 0;
   }
   return 1;
+}
+
+static int test_slot_overlay_reset_preserves_late_base_slots(void) {
+  froth_cell_u_t base_slot = 0;
+  froth_cell_u_t overlay_slot = 0;
+  froth_cell_u_t late_base_slot = 0;
+  froth_cell_u_t found_slot = 0;
+  int ok = 1;
+
+  reset_frothy_state();
+  ok &= froth_slot_create("base.one", &froth_vm.heap, &base_slot) == FROTH_OK;
+  ok &= froth_slot_create("overlay.one", &froth_vm.heap, &overlay_slot) ==
+        FROTH_OK;
+  ok &= froth_slot_set_overlay(overlay_slot, 1) == FROTH_OK;
+  ok &= froth_slot_create("base.two", &froth_vm.heap, &late_base_slot) ==
+        FROTH_OK;
+  ok &= froth_slot_reset_overlay() == FROTH_OK;
+  ok &= froth_slot_find_name("base.one", &found_slot) == FROTH_OK &&
+        found_slot == base_slot;
+  ok &= froth_slot_find_name("base.two", &found_slot) == FROTH_OK &&
+        found_slot == late_base_slot;
+  ok &= froth_slot_find_name("overlay.one", &found_slot) ==
+        FROTH_ERROR_UNDEFINED_WORD;
+  if (!ok) {
+    fprintf(stderr, "overlay reset should preserve non-overlay slots after "
+                    "interleaved overlay slots\n");
+  }
+  return ok;
 }
 
 static int find_call_depth_limit(const char *name, size_t max_probe,
@@ -688,6 +708,132 @@ static int test_fixed_layout_records(void) {
   return ok;
 }
 
+static int test_record_runtime_api_guards(void) {
+  static const char *const field_names[] = {"x"};
+  frothy_value_t record_def = frothy_value_make_nil();
+  frothy_value_t record = frothy_value_make_nil();
+  frothy_value_t fields[1];
+  size_t field_count = 0;
+  int ok = 1;
+
+  reset_frothy_state();
+  fields[0] = frothy_value_make_nil();
+  ok &= frothy_runtime_alloc_record_def(NULL, "Point", field_names, 1,
+                                        &record_def) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_record_def(runtime(), "Point", field_names, 1,
+                                        NULL) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_record_def(runtime(), "Point", field_names, 1,
+                                        &record_def) == FROTH_OK;
+  ok &= frothy_runtime_get_record_def(runtime(), record_def, NULL,
+                                      &field_count) == FROTH_OK &&
+        field_count == 1;
+  ok &= frothy_runtime_record_def_field_name(runtime(), record_def, 0, NULL) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_record(NULL, record_def, fields, 1, &record) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_record(runtime(), record_def, fields, 1, NULL) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_record(runtime(), record_def, fields, 1, &record) ==
+        FROTH_OK;
+  ok &= frothy_runtime_get_record(NULL, record, NULL, NULL, NULL) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_record_read_field(runtime(), record, NULL, &fields[0]) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_record_read_field(runtime(), record, "x", NULL) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_record_write_field(NULL, record, "x", fields[0]) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_record_write_field(runtime(), record, NULL, fields[0]) ==
+        FROTH_ERROR_BOUNDS;
+
+  if (!ok) {
+    fprintf(stderr, "record runtime API guards failed\n");
+  }
+  release_value(&record);
+  release_value(&record_def);
+  return ok;
+}
+
+static int test_value_runtime_api_guards(void) {
+  frothy_ir_literal_t literal = {
+      .kind = FROTHY_IR_LITERAL_NIL,
+  };
+  frothy_ir_program_t program;
+  frothy_payload_span_t span = {0};
+  frothy_value_t value = frothy_value_make_nil();
+  frothy_value_class_t value_class = FROTHY_VALUE_CLASS_INT;
+  void *payload_data = NULL;
+  char *rendered = NULL;
+  bool equal = false;
+  int ok = 1;
+
+  reset_frothy_state();
+  frothy_ir_program_init(&program);
+
+  ok &= frothy_value_class(NULL, value, &value_class) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_value_class(runtime(), value, NULL) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_value_from_literal(NULL, &literal, &value) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_value_from_literal(runtime(), NULL, &value) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_value_from_literal(runtime(), &literal, NULL) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_value_render(NULL, value, &rendered) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_value_render(runtime(), value, NULL) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_value_equals(NULL, value, value, &equal) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_value_equals(runtime(), value, value, NULL) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_value_retain(NULL, value) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_value_release(NULL, value) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_payload(NULL, 1, &span, &payload_data) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_payload(runtime(), 1, NULL, &payload_data) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_payload(runtime(), 1, &span, NULL) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_packed_code(NULL, &program, FROTHY_IR_NODE_INVALID,
+                                         0, 0, &value) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_packed_code(runtime(), NULL,
+                                         FROTHY_IR_NODE_INVALID, 0, 0,
+                                         &value) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_packed_code(runtime(), &program,
+                                         FROTHY_IR_NODE_INVALID, 0, 0,
+                                         NULL) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_code(NULL, &program, FROTHY_IR_NODE_INVALID, 0, 0,
+                                  &value) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_code(runtime(), NULL, FROTHY_IR_NODE_INVALID, 0, 0,
+                                  &value) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_alloc_code(runtime(), &program, FROTHY_IR_NODE_INVALID,
+                                  0, 0, NULL) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_runtime_get_code(NULL, value, NULL, NULL, NULL, NULL) ==
+        FROTH_ERROR_BOUNDS;
+
+  if (!ok) {
+    fprintf(stderr, "value runtime API guards failed\n");
+  }
+  frothy_ir_program_free(&program);
+  return ok;
+}
+
+static int test_eval_runtime_api_guards(void) {
+  frothy_ir_program_t program;
+  frothy_value_t value = frothy_value_make_nil();
+  int ok = 1;
+
+  reset_frothy_state();
+  frothy_ir_program_init(&program);
+
+  ok &= frothy_eval_program(NULL, &value) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_eval_program(&program, NULL) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_eval_program(&program, &value) == FROTH_ERROR_BOUNDS;
+
+  if (!ok) {
+    fprintf(stderr, "eval runtime API guards failed\n");
+  }
+  frothy_ir_program_free(&program);
+  return ok;
+}
+
 static int test_spoken_ledger_surface_and_control_forms(void) {
   frothy_value_t value = frothy_value_make_nil();
   int ok = 1;
@@ -1181,6 +1327,7 @@ int main(void) {
   int ok = 1;
 
   ok &= test_function_calls_and_blocks();
+  ok &= test_slot_overlay_reset_preserves_late_base_slots();
   ok &= test_eval_scratch_limits_and_nested_calls();
   ok &= test_explicit_eval_frame_stack_tranche();
   ok &= test_stable_rebinding_and_reclamation();
@@ -1188,6 +1335,9 @@ int main(void) {
   ok &= test_cells_sample_program();
   ok &= test_top_level_set_forms();
   ok &= test_fixed_layout_records();
+  ok &= test_record_runtime_api_guards();
+  ok &= test_value_runtime_api_guards();
+  ok &= test_eval_runtime_api_guards();
   ok &= test_spoken_ledger_surface_and_control_forms();
   ok &= test_temporary_results_release_cleanly();
   ok &= test_code_payload_reuse_with_factory_churn();

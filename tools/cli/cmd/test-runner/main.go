@@ -14,11 +14,15 @@ var commands = map[string]commandFunc{
 	"all":               commandAll,
 	"publishability":    commandPublishability,
 	"frothy":            commandFrothy,
+	"frothy-slow":       commandFrothySlow,
+	"frothy-proofs":     commandFrothyProofs,
+	"frothy-full":       commandFrothyFull,
 	"cli":               commandCLIUnit,
 	"cli-local":         commandCLILocal,
 	"vscode":            commandVSCode,
 	"vscode-board":      commandVSCodeBoard,
 	"integration":       commandCLIIntegration,
+	"workshop":          commandWorkshop,
 	"list":              commandList,
 	"ensure-profile":    commandEnsureProfile,
 	"corrupt-snapshot":  commandCorruptSnapshot,
@@ -58,6 +62,18 @@ func commandFrothy(_ []string) error {
 	return runFrothy()
 }
 
+func commandFrothySlow(_ []string) error {
+	return runFrothySlowCtests()
+}
+
+func commandFrothyProofs(_ []string) error {
+	return runFrothyProofs()
+}
+
+func commandFrothyFull(_ []string) error {
+	return runFrothyFull()
+}
+
 func commandCLIUnit(_ []string) error {
 	return runCLIUnit()
 }
@@ -84,6 +100,10 @@ func commandVSCodeBoard(args []string) error {
 
 func commandCLIIntegration(_ []string) error {
 	return runCLIIntegration()
+}
+
+func commandWorkshop(_ []string) error {
+	return runWorkshop()
 }
 
 func commandList(_ []string) error {

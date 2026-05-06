@@ -19,7 +19,7 @@ func TestSplitTopLevelFormsMultipleForms(t *testing.T) {
 	source := `note is nil
 
 to boot
-[ set note to "Hello from Frothy!" ]
+[ set note to "Hello from Froth!" ]
 `
 	forms, err := SplitTopLevelForms(source)
 	if err != nil {
@@ -27,7 +27,7 @@ to boot
 	}
 	want := []string{
 		"note is nil",
-		"to boot\n[ set note to \"Hello from Frothy!\" ]",
+		"to boot\n[ set note to \"Hello from Froth!\" ]",
 	}
 	if !reflect.DeepEqual(forms, want) {
 		t.Fatalf("forms = %#v, want %#v", forms, want)

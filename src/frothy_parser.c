@@ -1,5 +1,6 @@
 #include "frothy_parser.h"
 #include "frothy_name_rules.h"
+#include "frothy_value.h"
 
 #include <ctype.h>
 #include <stdint.h>
@@ -871,10 +872,12 @@ static froth_error_t frothy_lex_number(frothy_parser_t *parser,
   const char *start = parser->cursor;
 
   while (isdigit((unsigned char)*parser->cursor)) {
-    value = value * 10u + (uint64_t)(*parser->cursor - '0');
-    if (value > (uint64_t)FROTH_MAX_CELL_VALUE) {
+    uint64_t digit = (uint64_t)(*parser->cursor - '0');
+
+    if (value > ((uint64_t)FROTHY_VALUE_INT_MAX - digit) / 10u) {
       return FROTH_ERROR_VALUE_OVERFLOW;
     }
+    value = value * 10u + digit;
     parser->cursor++;
   }
 

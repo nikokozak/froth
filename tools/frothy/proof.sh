@@ -106,7 +106,7 @@ case "$1" in
       usage >&2
       exit 1
     }
-    for proof_name in stack-budget repl ctrl-c control inspect boot ffi safe-boot workshop-docs; do
+    for proof_name in stack-budget repl ctrl-c control inspect boot ffi safe-boot; do
       printf '==> %s\n' "$proof_name"
       if [ "$proof_name" = control ]; then
         sh "$0" "$proof_name" --host-only

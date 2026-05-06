@@ -65,12 +65,12 @@ func TestIntegrationNewBuildAndRunBoot(t *testing.T) {
 
 	projectDir := filepath.Join(workspace, "hello-posix")
 	if out, err := runIntegrationCLI(t, projectDir, env, 3*time.Minute, "build"); err != nil {
-		t.Fatalf("frothy build failed: %v\n%s", err, out)
+		t.Fatalf("froth build failed: %v\n%s", err, out)
 	}
 
-	binaryPath := filepath.Join(projectDir, ".froth-build", "firmware", "Frothy")
+	binaryPath := filepath.Join(projectDir, ".froth-build", "firmware", hostRuntimeBinaryName)
 	output := runBinaryAfterBoot(t, binaryPath, projectDir, "note\n", 20*time.Second)
-	assertContains(t, output, `"Hello from Frothy!"`)
+	assertContains(t, output, `"Hello from Froth!"`)
 }
 
 func TestIntegrationMultiFileProjectBuildsAndResolvesDependencies(t *testing.T) {
@@ -109,10 +109,10 @@ boot {
 `)
 
 	if out, err := runIntegrationCLI(t, projectDir, env, 3*time.Minute, "build"); err != nil {
-		t.Fatalf("frothy build failed: %v\n%s", err, out)
+		t.Fatalf("froth build failed: %v\n%s", err, out)
 	}
 
-	binaryPath := filepath.Join(projectDir, ".froth-build", "firmware", "Frothy")
+	binaryPath := filepath.Join(projectDir, ".froth-build", "firmware", hostRuntimeBinaryName)
 	output := runBinaryAfterBoot(t, binaryPath, projectDir, "total\n", 20*time.Second)
 	assertContains(t, output, "42")
 }
@@ -121,12 +121,12 @@ func TestIntegrationConnectLocalBuildsAndLaunchesBinary(t *testing.T) {
 	env := integrationEnv(t)
 	workspace := t.TempDir()
 
-	output := runProcessAfterReady(t, workspace, env, 3*time.Minute, "frothy> ", "quit\n", integrationCLIPath, "connect", "--local")
+	output := runProcessAfterReady(t, workspace, env, 3*time.Minute, "froth> ", "quit\n", integrationCLIPath, "connect", "--local")
 	assertContains(t, output, "Connected to posix on local")
-	assertContains(t, output, "frothy>")
+	assertContains(t, output, "froth>")
 
 	home := integrationHomeFromEnv(t, env)
-	localBinary := filepath.Join(home, "frothy-local-build", "Frothy")
+	localBinary := filepath.Join(home, "froth-local-build", hostRuntimeBinaryName)
 	if _, err := os.Stat(localBinary); err != nil {
 		t.Fatalf("local binary missing after connect --local: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestIntegrationBuildCleanRemovesArtifacts(t *testing.T) {
 		t.Fatalf("marker still exists after --clean: %v", err)
 	}
 
-	binaryPath := filepath.Join(projectDir, ".froth-build", "firmware", "Frothy")
+	binaryPath := filepath.Join(projectDir, ".froth-build", "firmware", hostRuntimeBinaryName)
 	if _, err := os.Stat(binaryPath); err != nil {
 		t.Fatalf("firmware missing after clean build: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestIntegrationDoctorShowsProjectInfo(t *testing.T) {
 	projectDir := filepath.Join(workspace, "doctor-project")
 	out, err := runIntegrationCLI(t, projectDir, env, 90*time.Second, "doctor")
 	if err != nil {
-		t.Fatalf("frothy doctor failed: %v\n%s", err, out)
+		t.Fatalf("froth doctor failed: %v\n%s", err, out)
 	}
 
 	assertContains(t, out, "project: doctor-project")
@@ -194,13 +194,13 @@ func integrationRepoRoot() (string, error) {
 func integrationEnv(t *testing.T) []string {
 	t.Helper()
 
-	home := filepath.Join(t.TempDir(), "frothy-home")
+	home := filepath.Join(t.TempDir(), "froth-home")
 	if err := os.MkdirAll(home, 0755); err != nil {
 		t.Fatalf("mkdir froth home: %v", err)
 	}
 
 	env := os.Environ()
-	env = append(env, "FROTHY_HOME="+home)
+	env = append(env, "FROTH_HOME="+home)
 	return env
 }
 
@@ -208,11 +208,11 @@ func integrationHomeFromEnv(t *testing.T, env []string) string {
 	t.Helper()
 
 	for _, entry := range env {
-		if strings.HasPrefix(entry, "FROTHY_HOME=") {
-			return strings.TrimPrefix(entry, "FROTHY_HOME=")
+		if strings.HasPrefix(entry, "FROTH_HOME=") {
+			return strings.TrimPrefix(entry, "FROTH_HOME=")
 		}
 	}
-	t.Fatal("FROTHY_HOME missing from environment")
+	t.Fatal("FROTH_HOME missing from environment")
 	return ""
 }
 

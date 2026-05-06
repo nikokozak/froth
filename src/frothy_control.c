@@ -1,7 +1,7 @@
 #include "frothy_control.h"
 
+#include "froth_crc32.h"
 #include "froth_slot_table.h"
-#include "froth_transport.h"
 #include "froth_vm.h"
 #include "frothy_base_image.h"
 #include "frothy_inspect.h"
@@ -16,6 +16,19 @@
 
 #define FROTHY_CONTROL_OUTPUT_CAP 128u
 
+#ifndef FROTH_LINK_MAX_PAYLOAD
+#define FROTH_LINK_MAX_PAYLOAD 1024
+#endif
+
+#define FROTHY_CONTROL_FRAME_HEADER_SIZE 20u
+#define FROTHY_CONTROL_FRAME_MAGIC_0 'F'
+#define FROTHY_CONTROL_FRAME_MAGIC_1 'L'
+#define FROTHY_CONTROL_FRAME_VERSION 2u
+#define FROTHY_CONTROL_FRAME_MAX_RAW                                           \
+  (FROTHY_CONTROL_FRAME_HEADER_SIZE + FROTH_LINK_MAX_PAYLOAD)
+#define FROTHY_CONTROL_FRAME_MAX_COBS                                          \
+  (FROTHY_CONTROL_FRAME_MAX_RAW + (FROTHY_CONTROL_FRAME_MAX_RAW / 254u) + 1u)
+
 typedef struct {
   uint8_t *buf;
   uint16_t cap;
@@ -27,6 +40,16 @@ typedef struct {
   uint16_t len;
   uint16_t pos;
 } frothy_control_reader_t;
+
+typedef struct {
+  uint8_t magic[2];
+  uint8_t version;
+  uint8_t message_type;
+  uint64_t session_id;
+  uint16_t seq;
+  uint16_t payload_length;
+  uint32_t crc32;
+} frothy_control_frame_header_t;
 
 typedef struct {
   bool bound;
@@ -129,13 +152,287 @@ frothy_control_reader_str_dup(frothy_control_reader_t *reader, char **out) {
   return FROTH_OK;
 }
 
+static froth_error_t frothy_control_cobs_encode(const uint8_t *in,
+                                                uint16_t in_len, uint8_t *out,
+                                                uint16_t out_cap,
+                                                uint16_t *out_len) {
+  uint16_t read_pos = 0;
+  uint16_t write_pos = 1;
+  uint16_t code_pos = 0;
+  uint8_t code = 1;
+
+  while (read_pos < in_len) {
+    if (in[read_pos] == 0) {
+      out[code_pos] = code;
+      code_pos = write_pos;
+      if (write_pos >= out_cap) {
+        return FROTH_ERROR_LINK_OVERFLOW;
+      }
+      write_pos++;
+      code = 1;
+      read_pos++;
+    } else {
+      if (write_pos >= out_cap) {
+        return FROTH_ERROR_LINK_OVERFLOW;
+      }
+      out[write_pos] = in[read_pos];
+      write_pos++;
+      code++;
+      read_pos++;
+
+      if (code == 0xffu) {
+        out[code_pos] = code;
+        code_pos = write_pos;
+        if (write_pos >= out_cap) {
+          return FROTH_ERROR_LINK_OVERFLOW;
+        }
+        write_pos++;
+        code = 1;
+      }
+    }
+  }
+
+  out[code_pos] = code;
+  *out_len = write_pos;
+  return FROTH_OK;
+}
+
+static froth_error_t frothy_control_cobs_decode(const uint8_t *in,
+                                                uint16_t in_len, uint8_t *out,
+                                                uint16_t out_cap,
+                                                uint16_t *out_len) {
+  uint16_t read_pos = 0;
+  uint16_t write_pos = 0;
+
+  while (read_pos < in_len) {
+    uint8_t code = in[read_pos++];
+    uint8_t count = 0;
+
+    if (code == 0) {
+      return FROTH_ERROR_LINK_COBS_DECODE;
+    }
+    count = code - 1u;
+    if (read_pos + count > in_len) {
+      return FROTH_ERROR_LINK_COBS_DECODE;
+    }
+
+    for (uint8_t i = 0; i < count; i++) {
+      if (write_pos >= out_cap) {
+        return FROTH_ERROR_LINK_OVERFLOW;
+      }
+      out[write_pos++] = in[read_pos++];
+    }
+
+    if (code < 0xffu && read_pos < in_len) {
+      if (write_pos >= out_cap) {
+        return FROTH_ERROR_LINK_OVERFLOW;
+      }
+      out[write_pos++] = 0;
+    }
+  }
+
+  *out_len = write_pos;
+  return FROTH_OK;
+}
+
+static uint16_t frothy_control_read_u16(const uint8_t *buffer) {
+  return (uint16_t)buffer[0] | ((uint16_t)buffer[1] << 8);
+}
+
+static uint32_t frothy_control_read_u32(const uint8_t *buffer) {
+  return (uint32_t)buffer[0] | ((uint32_t)buffer[1] << 8) |
+         ((uint32_t)buffer[2] << 16) | ((uint32_t)buffer[3] << 24);
+}
+
+static uint64_t frothy_control_read_u64(const uint8_t *buffer) {
+  return (uint64_t)buffer[0] | ((uint64_t)buffer[1] << 8) |
+         ((uint64_t)buffer[2] << 16) | ((uint64_t)buffer[3] << 24) |
+         ((uint64_t)buffer[4] << 32) | ((uint64_t)buffer[5] << 40) |
+         ((uint64_t)buffer[6] << 48) | ((uint64_t)buffer[7] << 56);
+}
+
+static void frothy_control_write_u16(uint8_t *buffer, uint16_t value) {
+  buffer[0] = (uint8_t)(value & 0xffu);
+  buffer[1] = (uint8_t)((value >> 8) & 0xffu);
+}
+
+static void frothy_control_write_u32(uint8_t *buffer, uint32_t value) {
+  buffer[0] = (uint8_t)(value & 0xffu);
+  buffer[1] = (uint8_t)((value >> 8) & 0xffu);
+  buffer[2] = (uint8_t)((value >> 16) & 0xffu);
+  buffer[3] = (uint8_t)((value >> 24) & 0xffu);
+}
+
+static void frothy_control_write_u64(uint8_t *buffer, uint64_t value) {
+  buffer[0] = (uint8_t)(value & 0xffu);
+  buffer[1] = (uint8_t)((value >> 8) & 0xffu);
+  buffer[2] = (uint8_t)((value >> 16) & 0xffu);
+  buffer[3] = (uint8_t)((value >> 24) & 0xffu);
+  buffer[4] = (uint8_t)((value >> 32) & 0xffu);
+  buffer[5] = (uint8_t)((value >> 40) & 0xffu);
+  buffer[6] = (uint8_t)((value >> 48) & 0xffu);
+  buffer[7] = (uint8_t)((value >> 56) & 0xffu);
+}
+
+static uint32_t frothy_control_frame_crc(const uint8_t *header,
+                                         const uint8_t *payload,
+                                         uint16_t payload_len) {
+  uint32_t crc = 0xffffffffu;
+
+  crc = froth_crc32_update(crc, header, 16);
+  crc = froth_crc32_update(crc, payload, payload_len);
+  return crc ^ 0xffffffffu;
+}
+
+static froth_error_t
+frothy_control_frame_parse(const uint8_t *frame, uint16_t frame_len,
+                           frothy_control_frame_header_t *header,
+                           const uint8_t **payload) {
+  const uint8_t *payload_start = NULL;
+  uint32_t expected_crc = 0;
+
+  if (frame_len < FROTHY_CONTROL_FRAME_HEADER_SIZE) {
+    return FROTH_ERROR_LINK_COBS_DECODE;
+  }
+
+  header->magic[0] = frame[0];
+  header->magic[1] = frame[1];
+  if (header->magic[0] != FROTHY_CONTROL_FRAME_MAGIC_0 ||
+      header->magic[1] != FROTHY_CONTROL_FRAME_MAGIC_1) {
+    return FROTH_ERROR_LINK_BAD_MAGIC;
+  }
+
+  header->version = frame[2];
+  if (header->version != FROTHY_CONTROL_FRAME_VERSION) {
+    return FROTH_ERROR_LINK_BAD_VERSION;
+  }
+
+  header->message_type = frame[3];
+  header->session_id = frothy_control_read_u64(frame + 4);
+  header->seq = frothy_control_read_u16(frame + 12);
+  header->payload_length = frothy_control_read_u16(frame + 14);
+  header->crc32 = frothy_control_read_u32(frame + 16);
+
+  if (header->payload_length > FROTH_LINK_MAX_PAYLOAD) {
+    return FROTH_ERROR_LINK_TOO_LARGE;
+  }
+  if ((uint16_t)(FROTHY_CONTROL_FRAME_HEADER_SIZE + header->payload_length) !=
+      frame_len) {
+    return FROTH_ERROR_LINK_COBS_DECODE;
+  }
+
+  payload_start = frame + FROTHY_CONTROL_FRAME_HEADER_SIZE;
+  expected_crc =
+      frothy_control_frame_crc(frame, payload_start, header->payload_length);
+  if (expected_crc != header->crc32) {
+    return FROTH_ERROR_LINK_BAD_CRC;
+  }
+
+  *payload = payload_start;
+  return FROTH_OK;
+}
+
+static froth_error_t frothy_control_frame_build(
+    uint64_t session_id, uint8_t message_type, uint16_t seq,
+    const uint8_t *payload, uint16_t payload_len, uint8_t *out,
+    uint16_t out_cap, uint16_t *out_len) {
+  uint16_t total = FROTHY_CONTROL_FRAME_HEADER_SIZE + payload_len;
+  uint32_t crc = 0;
+
+  if (total > out_cap) {
+    return FROTH_ERROR_LINK_OVERFLOW;
+  }
+
+  out[0] = FROTHY_CONTROL_FRAME_MAGIC_0;
+  out[1] = FROTHY_CONTROL_FRAME_MAGIC_1;
+  out[2] = FROTHY_CONTROL_FRAME_VERSION;
+  out[3] = message_type;
+  frothy_control_write_u64(out + 4, session_id);
+  frothy_control_write_u16(out + 12, seq);
+  frothy_control_write_u16(out + 14, payload_len);
+
+  for (uint16_t i = 0; i < payload_len; i++) {
+    out[FROTHY_CONTROL_FRAME_HEADER_SIZE + i] = payload[i];
+  }
+
+  crc = frothy_control_frame_crc(out, out + FROTHY_CONTROL_FRAME_HEADER_SIZE,
+                                 payload_len);
+  frothy_control_write_u32(out + 16, crc);
+
+  *out_len = total;
+  return FROTH_OK;
+}
+
+static uint8_t frothy_control_raw_frame[FROTHY_CONTROL_FRAME_MAX_RAW];
+static uint8_t frothy_control_cobs_frame[FROTHY_CONTROL_FRAME_MAX_COBS];
+static uint8_t frothy_control_rx_frame[FROTHY_CONTROL_FRAME_MAX_COBS];
+static uint16_t frothy_control_rx_pos = 0;
+static bool frothy_control_rx_overflow = false;
+
 static froth_error_t frothy_control_send_frame(uint64_t session_id,
                                                uint8_t message_type,
                                                uint16_t seq,
                                                const uint8_t *payload,
                                                uint16_t payload_len) {
-  return froth_link_send_frame(session_id, message_type, seq, payload,
-                               payload_len);
+  uint16_t raw_len = 0;
+  uint16_t cobs_len = 0;
+
+  FROTH_TRY(frothy_control_frame_build(
+      session_id, message_type, seq, payload, payload_len,
+      frothy_control_raw_frame, sizeof(frothy_control_raw_frame), &raw_len));
+  FROTH_TRY(frothy_control_cobs_encode(
+      frothy_control_raw_frame, raw_len, frothy_control_cobs_frame,
+      sizeof(frothy_control_cobs_frame), &cobs_len));
+
+  FROTH_TRY(platform_emit_raw(0));
+  for (uint16_t i = 0; i < cobs_len; i++) {
+    FROTH_TRY(platform_emit_raw(frothy_control_cobs_frame[i]));
+  }
+  return platform_emit_raw(0);
+}
+
+static void frothy_control_frame_reset(void) {
+  frothy_control_rx_pos = 0;
+  frothy_control_rx_overflow = false;
+}
+
+static void frothy_control_frame_push_byte(uint8_t byte) {
+  if (frothy_control_rx_pos >= FROTHY_CONTROL_FRAME_MAX_COBS) {
+    frothy_control_rx_overflow = true;
+    return;
+  }
+  frothy_control_rx_frame[frothy_control_rx_pos++] = byte;
+}
+
+static froth_error_t
+frothy_control_frame_decode(frothy_control_frame_header_t *header,
+                            const uint8_t **payload) {
+  uint16_t decoded_len = 0;
+  froth_error_t err;
+
+  if (frothy_control_rx_overflow || frothy_control_rx_pos == 0) {
+    frothy_control_frame_reset();
+    return FROTH_ERROR_LINK_COBS_DECODE;
+  }
+
+  err = frothy_control_cobs_decode(frothy_control_rx_frame,
+                                   frothy_control_rx_pos,
+                                   frothy_control_rx_frame,
+                                   sizeof(frothy_control_rx_frame),
+                                   &decoded_len);
+  if (err != FROTH_OK) {
+    frothy_control_frame_reset();
+    return err;
+  }
+
+  err = frothy_control_frame_parse(frothy_control_rx_frame, decoded_len, header,
+                                   payload);
+  if (err != FROTH_OK) {
+    frothy_control_frame_reset();
+    return err;
+  }
+
+  return FROTH_OK;
 }
 
 static froth_error_t frothy_control_send_idle(uint64_t session_id,
@@ -461,7 +758,8 @@ static froth_error_t frothy_control_send_see(uint64_t session_id, uint16_t seq,
 }
 
 static froth_error_t
-frothy_control_expect_empty_payload(const froth_link_header_t *header) {
+frothy_control_expect_empty_payload(
+    const frothy_control_frame_header_t *header) {
   if (header->payload_length != 0) {
     return FROTH_ERROR_SIGNATURE;
   }
@@ -469,7 +767,7 @@ frothy_control_expect_empty_payload(const froth_link_header_t *header) {
 }
 
 static froth_error_t
-frothy_control_parse_string_payload(const froth_link_header_t *header,
+frothy_control_parse_string_payload(const frothy_control_frame_header_t *header,
                                     const uint8_t *payload, char **out) {
   frothy_control_reader_t reader = {payload, header->payload_length, 0};
 
@@ -484,7 +782,7 @@ frothy_control_parse_string_payload(const froth_link_header_t *header,
 
 static froth_error_t
 frothy_control_handle_builtin_no_args(frothy_control_session_t *session,
-                                      const froth_link_header_t *header,
+                                      const frothy_control_frame_header_t *header,
                                       frothy_native_fn_t builtin,
                                       frothy_control_phase_t phase,
                                       const char *bad_detail,
@@ -535,7 +833,7 @@ frothy_control_handle_builtin_no_args(frothy_control_session_t *session,
 
 static froth_error_t
 frothy_control_handle_builtin_string_arg(frothy_control_session_t *session,
-                                         const froth_link_header_t *header,
+                                         const frothy_control_frame_header_t *header,
                                          const uint8_t *payload,
                                          frothy_native_fn_t builtin,
                                          frothy_control_phase_t phase,
@@ -608,7 +906,7 @@ frothy_control_handle_builtin_string_arg(frothy_control_session_t *session,
 
 static froth_error_t
 frothy_control_handle_eval(frothy_control_session_t *session,
-                           const froth_link_header_t *header,
+                           const frothy_control_frame_header_t *header,
                            const uint8_t *payload) {
   char *source = NULL;
   frothy_shell_eval_result_t result;
@@ -680,7 +978,7 @@ cleanup:
 
 static froth_error_t
 frothy_control_handle_words(frothy_control_session_t *session,
-                            const froth_link_header_t *header) {
+                            const frothy_control_frame_header_t *header) {
   froth_error_t err = frothy_control_expect_empty_payload(header);
 
   if (err != FROTH_OK) {
@@ -703,7 +1001,7 @@ frothy_control_handle_words(frothy_control_session_t *session,
 
 static froth_error_t
 frothy_control_handle_reset(frothy_control_session_t *session,
-                            const froth_link_header_t *header) {
+                            const frothy_control_frame_header_t *header) {
   froth_error_t err = frothy_control_expect_empty_payload(header);
   froth_error_t reset_status = FROTH_OK;
 
@@ -729,7 +1027,7 @@ frothy_control_handle_reset(frothy_control_session_t *session,
 
 static froth_error_t
 frothy_control_handle_see(frothy_control_session_t *session,
-                          const froth_link_header_t *header,
+                          const frothy_control_frame_header_t *header,
                           const uint8_t *payload) {
   char *name = NULL;
   froth_error_t err;
@@ -755,8 +1053,9 @@ frothy_control_handle_see(frothy_control_session_t *session,
 }
 
 static froth_error_t frothy_control_dispatch(
-    frothy_control_session_t *session, const froth_link_header_t *header,
-    const uint8_t *payload, frothy_control_action_t *action_out) {
+    frothy_control_session_t *session,
+    const frothy_control_frame_header_t *header, const uint8_t *payload,
+    frothy_control_action_t *action_out) {
   froth_error_t err;
 
   *action_out = FROTHY_CONTROL_ACTION_CONTINUE;
@@ -857,11 +1156,12 @@ static froth_error_t frothy_control_dispatch(
   return FROTH_OK;
 }
 
-static froth_error_t frothy_control_read_frame(froth_link_header_t *header,
-                                               const uint8_t **payload) {
+static froth_error_t
+frothy_control_read_frame(frothy_control_frame_header_t *header,
+                          const uint8_t **payload) {
   bool in_frame = false;
 
-  froth_link_frame_reset();
+  frothy_control_frame_reset();
   while (1) {
     uint8_t byte = 0;
     froth_error_t err = platform_key(&byte);
@@ -869,32 +1169,32 @@ static froth_error_t frothy_control_read_frame(froth_link_header_t *header,
     if (err != FROTH_OK) {
       if (froth_vm.interrupted) {
         froth_vm.interrupted = 0;
-        froth_link_frame_reset();
+        frothy_control_frame_reset();
         return FROTH_ERROR_PROGRAM_INTERRUPTED;
       }
       if (platform_input_closed()) {
-        froth_link_frame_reset();
+        frothy_control_frame_reset();
         return FROTH_ERROR_IO;
       }
       continue;
     }
 
     if (!in_frame && byte == 0x03) {
-      froth_link_frame_reset();
+      frothy_control_frame_reset();
       return FROTH_ERROR_PROGRAM_INTERRUPTED;
     }
 
     if (!in_frame) {
       if (byte == 0x00) {
-        froth_link_frame_reset();
+        frothy_control_frame_reset();
         in_frame = true;
       }
       continue;
     }
 
     if (byte == 0x00) {
-      err = froth_link_frame_decode(header, payload);
-      froth_link_frame_reset();
+      err = frothy_control_frame_decode(header, payload);
+      frothy_control_frame_reset();
       if (err != FROTH_OK) {
         in_frame = false;
         continue;
@@ -902,11 +1202,7 @@ static froth_error_t frothy_control_read_frame(froth_link_header_t *header,
       return FROTH_OK;
     }
 
-    err = froth_link_frame_byte(byte);
-    if (err != FROTH_OK) {
-      froth_link_frame_reset();
-      in_frame = false;
-    }
+    frothy_control_frame_push_byte(byte);
   }
 }
 
@@ -917,7 +1213,7 @@ froth_error_t frothy_control_run(void) {
   platform_clear_emit_hook();
 
   while (1) {
-    froth_link_header_t header;
+    frothy_control_frame_header_t header;
     const uint8_t *payload = NULL;
     frothy_control_action_t action = FROTHY_CONTROL_ACTION_CONTINUE;
     froth_error_t err = frothy_control_read_frame(&header, &payload);

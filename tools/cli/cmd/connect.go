@@ -101,7 +101,7 @@ func runConnectLoop(manager *frothycontrol.Manager) error {
 	scanner.Buffer(make([]byte, 0, 1024), 1024*1024)
 
 	for {
-		fmt.Print("frothy> ")
+		fmt.Print("froth> ")
 		if !scanner.Scan() {
 			fmt.Println()
 			return scanner.Err()
@@ -143,13 +143,13 @@ func formatConnectedMessage(board string, port string) string {
 }
 
 func localConnectPaths() (string, string, error) {
-	home, err := sdk.FrothyHome()
+	home, err := sdk.FrothHome()
 	if err != nil {
 		return "", "", err
 	}
 
-	buildDir := filepath.Join(home, "frothy-local-build")
-	return buildDir, filepath.Join(buildDir, "Frothy"), nil
+	buildDir := filepath.Join(home, "froth-local-build")
+	return buildDir, filepath.Join(buildDir, hostRuntimeBinaryName), nil
 }
 
 func buildLocalConnectBinary(buildDir string, kernelRoot string) error {
@@ -210,7 +210,7 @@ func localBinaryNeedsBuild(binaryPath string, kernelRoot string) (bool, error) {
 		if os.IsNotExist(err) {
 			return true, nil
 		}
-		return false, fmt.Errorf("stat local Frothy binary: %w", err)
+		return false, fmt.Errorf("stat local Froth binary: %w", err)
 	}
 
 	latestInput, err := latestLocalBuildInputModTime(kernelRoot)

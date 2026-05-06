@@ -2,7 +2,7 @@
 set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
-BINARY="${FROTHY_BINARY:-$ROOT_DIR/build/Frothy}"
+BINARY="${FROTH_BINARY:-${FROTHY_BINARY:-$ROOT_DIR/build/froth}}"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/frothy-m9-ffi.XXXXXX")"
 
 cleanup() {

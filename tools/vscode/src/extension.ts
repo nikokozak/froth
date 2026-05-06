@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import {
   ConnectionState,
   ControllerSnapshot,
-  FrothyController,
+  FrothController,
 } from "./controller";
 import { resolveSendSourceCommand } from "./send-file";
 import {
@@ -12,7 +12,7 @@ import {
   createVSCodeCliPathResolver,
 } from "./vscode-host";
 
-let activeController: FrothyController | null = null;
+let activeController: FrothController | null = null;
 
 export interface ExtensionTestApi {
   getSnapshot(): ControllerSnapshot;
@@ -27,7 +27,7 @@ export function activate(
   context: vscode.ExtensionContext,
 ): ExtensionTestApi {
   const bufferedOutput = new BufferedOutputChannel(
-    vscode.window.createOutputChannel("Frothy Console"),
+    vscode.window.createOutputChannel("Froth Console"),
   );
   const statusItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
@@ -46,7 +46,7 @@ export function activate(
     47,
   );
   const host = new VSCodeHost(context, bufferedOutput);
-  const controller = new FrothyController({
+  const controller = new FrothController({
     host,
     resolveCliPath: createVSCodeCliPathResolver(host),
     createClient: createControlSessionClient,
@@ -54,38 +54,31 @@ export function activate(
   });
   activeController = controller;
 
-  const sidebarProvider = new FrothySidebarProvider(controller);
-  const treeView = vscode.window.createTreeView("frothyDeviceView", {
+  const sidebarProvider = new FrothSidebarProvider(controller);
+  const treeView = vscode.window.createTreeView("frothDeviceView", {
     treeDataProvider: sidebarProvider,
   });
 
   const commands: Array<[string, () => Promise<void> | void]> = [
-    ["frothy.connect", async () => controller.connectToDevice()],
-    ["frothy.forceReconnect", async () => controller.forceReconnect()],
-    ["frothy.disconnect", () => controller.disconnect()],
-    ["frothy.sendSelection", () => controller.sendSelection()],
-    ["frothy.runBinding", () => controller.runBinding()],
-    ["frothy.pinRunBinding", () => controller.pinRunBinding()],
-    ["frothy.runLast", () => controller.runLast()],
-    ["frothy.runPinned", () => controller.runPinned()],
-    ["frothy.sendFile", () => controller.sendFile()],
-    ["frothy.interrupt", () => controller.interrupt()],
-    ["frothy.words", () => controller.showWords()],
-    ["frothy.see", () => controller.showSee()],
-    ["frothy.core", () => controller.showCore()],
-    ["frothy.slotInfo", () => controller.showSlotInfo()],
-    ["frothy.save", () => controller.saveSnapshot()],
-    ["frothy.restore", () => controller.restoreSnapshot()],
-    ["frothy.wipe", () => controller.wipeSnapshot()],
-    ["frothy.doctor", () => controller.runDoctor()],
-    ["frothy.showConsole", () => controller.showConsole()],
     ["froth.connect", async () => controller.connectToDevice()],
+    ["froth.forceReconnect", async () => controller.forceReconnect()],
+    ["froth.disconnect", () => controller.disconnect()],
     ["froth.sendSelection", () => controller.sendSelection()],
+    ["froth.runBinding", () => controller.runBinding()],
+    ["froth.pinRunBinding", () => controller.pinRunBinding()],
     ["froth.runLast", () => controller.runLast()],
     ["froth.runPinned", () => controller.runPinned()],
     ["froth.sendFile", () => controller.sendFile()],
     ["froth.interrupt", () => controller.interrupt()],
+    ["froth.words", () => controller.showWords()],
+    ["froth.see", () => controller.showSee()],
+    ["froth.core", () => controller.showCore()],
+    ["froth.slotInfo", () => controller.showSlotInfo()],
+    ["froth.save", () => controller.saveSnapshot()],
+    ["froth.restore", () => controller.restoreSnapshot()],
+    ["froth.wipe", () => controller.wipeSnapshot()],
     ["froth.doctor", () => controller.runDoctor()],
+    ["froth.showConsole", () => controller.showConsole()],
   ];
 
   for (const [command, handler] of commands) {
@@ -145,23 +138,23 @@ function updateStatusBar(
 ): void {
   switch (snapshot.state) {
     case "idle":
-      statusItem.text = "$(circle-large-outline) Frothy: Idle";
+      statusItem.text = "$(circle-large-outline) Froth: Idle";
       statusItem.tooltip =
-        "Open a .frothy or .froth file and connect to a Frothy device.";
-      statusItem.command = "frothy.connect";
+        "Open a .froth file and connect to a Froth device.";
+      statusItem.command = "froth.connect";
       statusItem.backgroundColor = undefined;
       break;
     case "connecting":
-      statusItem.text = "$(sync~spin) Frothy: Connecting";
-      statusItem.tooltip = "Connecting to a Frothy device";
-      statusItem.command = "frothy.connect";
+      statusItem.text = "$(sync~spin) Froth: Connecting";
+      statusItem.tooltip = "Connecting to a Froth device";
+      statusItem.command = "froth.connect";
       statusItem.backgroundColor = undefined;
       break;
     case "connected":
       if (snapshot.degradedSendFile) {
         statusItem.text = snapshot.device
-          ? `$(warning) Frothy: ${snapshot.device.board} (additive)`
-          : "$(warning) Frothy: Connected (additive)";
+          ? `$(warning) Froth: ${snapshot.device.board} (additive)`
+          : "$(warning) Froth: Connected (additive)";
         statusItem.tooltip =
           "Send File is in additive fallback mode because the connected firmware does not support control reset.";
         statusItem.backgroundColor = new vscode.ThemeColor(
@@ -169,26 +162,26 @@ function updateStatusBar(
         );
       } else {
         statusItem.text = snapshot.device
-          ? `$(plug) Frothy: ${snapshot.device.board}`
-          : "$(plug) Frothy: Connected";
+          ? `$(plug) Froth: ${snapshot.device.board}`
+          : "$(plug) Froth: Connected";
         statusItem.tooltip = snapshot.device
           ? `Connected to ${snapshot.device.board} on ${snapshot.device.port}`
-          : "Connected to a Frothy device";
+          : "Connected to a Froth device";
         statusItem.backgroundColor = undefined;
       }
-      statusItem.command = "frothy.disconnect";
+      statusItem.command = "froth.disconnect";
       break;
     case "running":
-      statusItem.text = "$(sync~spin) Frothy: Running";
+      statusItem.text = "$(sync~spin) Froth: Running";
       statusItem.tooltip =
-        "A Frothy program is running. Force reconnect if the board was reset.";
-      statusItem.command = "frothy.forceReconnect";
+        "A Froth program is running. Force reconnect if the board was reset.";
+      statusItem.command = "froth.forceReconnect";
       statusItem.backgroundColor = undefined;
       break;
     case "disconnected":
-      statusItem.text = "$(debug-disconnect) Frothy: Disconnected";
-      statusItem.tooltip = "No active Frothy control session";
-      statusItem.command = "frothy.connect";
+      statusItem.text = "$(debug-disconnect) Froth: Disconnected";
+      statusItem.tooltip = "No active Froth control session";
+      statusItem.command = "froth.connect";
       statusItem.backgroundColor = new vscode.ThemeColor(
         "statusBarItem.warningBackground",
       );
@@ -197,8 +190,8 @@ function updateStatusBar(
 
   if (snapshot.state === "running") {
     interruptItem.text = "$(debug-stop) Interrupt";
-    interruptItem.tooltip = "Interrupt the running Frothy program";
-    interruptItem.command = "frothy.interrupt";
+    interruptItem.tooltip = "Interrupt the running Froth program";
+    interruptItem.command = "froth.interrupt";
     interruptItem.backgroundColor = new vscode.ThemeColor(
       "statusBarItem.errorBackground",
     );
@@ -212,8 +205,8 @@ function updateStatusBar(
 
   if (snapshot.state === "connected" && snapshot.lastRunPreview) {
     rerunItem.text = "$(debug-rerun) Rerun";
-    rerunItem.tooltip = `Run last Frothy form: ${snapshot.lastRunPreview}`;
-    rerunItem.command = "frothy.runLast";
+    rerunItem.tooltip = `Run last Froth form: ${snapshot.lastRunPreview}`;
+    rerunItem.command = "froth.runLast";
     rerunItem.show();
   } else {
     rerunItem.hide();
@@ -221,8 +214,8 @@ function updateStatusBar(
 
   if (snapshot.state === "connected" && snapshot.pinnedRunPreview) {
     pinnedRunItem.text = "$(debug-start) Run Pin";
-    pinnedRunItem.tooltip = `Run pinned Frothy binding: ${snapshot.pinnedRunPreview}`;
-    pinnedRunItem.command = "frothy.runPinned";
+    pinnedRunItem.tooltip = `Run pinned Froth binding: ${snapshot.pinnedRunPreview}`;
+    pinnedRunItem.command = "froth.runPinned";
     pinnedRunItem.show();
   } else {
     pinnedRunItem.hide();
@@ -232,29 +225,29 @@ function updateStatusBar(
 function updateCommandContext(snapshot: ControllerSnapshot): void {
   void vscode.commands.executeCommand(
     "setContext",
-    "frothy.isRunning",
+    "froth.isRunning",
     snapshot.state === "running",
   );
   void vscode.commands.executeCommand(
     "setContext",
-    "frothy.hasLastRun",
+    "froth.hasLastRun",
     snapshot.lastRunPreview !== null,
   );
   void vscode.commands.executeCommand(
     "setContext",
-    "frothy.hasPinnedRun",
+    "froth.hasPinnedRun",
     snapshot.pinnedRunPreview !== null,
   );
 }
 
-class FrothySidebarProvider implements vscode.TreeDataProvider<SidebarItem> {
+class FrothSidebarProvider implements vscode.TreeDataProvider<SidebarItem> {
   private readonly changeEmitter = new vscode.EventEmitter<
     SidebarItem | undefined
   >();
 
   readonly onDidChangeTreeData = this.changeEmitter.event;
 
-  constructor(private readonly controller: FrothyController) {}
+  constructor(private readonly controller: FrothController) {}
 
   refresh(): void {
     this.changeEmitter.fire(undefined);
@@ -348,7 +341,7 @@ class SidebarItem extends vscode.TreeItem {
 }
 
 async function waitForState(
-  controller: FrothyController,
+  controller: FrothController,
   state: ConnectionState,
   timeoutMs: number,
 ): Promise<void> {

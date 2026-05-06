@@ -11,19 +11,19 @@ fi
 
 VERSION=$(normalize_version "$1")
 SOURCE_SHA=$2
-OUTPUT=${3:-Formula/frothy.rb}
+OUTPUT=${3:-Formula/froth.rb}
 
 mkdir -p "$(dirname "$OUTPUT")"
-TMP_FILE=$(mktemp "${TMPDIR:-/tmp}/frothy-formula.XXXXXX")
+TMP_FILE=$(mktemp "${TMPDIR:-/tmp}/froth-formula.XXXXXX")
 trap 'rm -f "$TMP_FILE"' EXIT INT TERM
 
-# Generate a Frothy-branded formula that builds the Frothy-owned CLI executable
-# from the tagged source archive. This keeps `brew install frothy` tied to the
-# public release tag without requiring per-platform URL selection in the formula.
+# Generate a Froth formula that builds the public CLI executable from the
+# tagged source archive. This keeps `brew install froth` tied to the public
+# release tag without requiring per-platform URL selection in the formula.
 cat >"$TMP_FILE" <<EOF
-class Frothy < Formula
+class Froth < Formula
   desc "Live lexical language for programmable devices"
-  homepage "https://github.com/nikokozak/frothy"
+  homepage "https://frothlang.org"
   url "https://github.com/${RELEASE_REPO_SLUG}/archive/refs/tags/v${VERSION}.tar.gz"
   sha256 "${SOURCE_SHA}"
   license "MIT"
@@ -37,13 +37,13 @@ class Frothy < Formula
       system "go", "run", "./internal/sdk/cmd/generate",
              "-repo", buildpath.to_s,
              "-out", "internal/sdk/generated"
-      system "go", "build", "-o", bin/"frothy", "."
+      system "go", "build", "-o", bin/"froth", "."
     end
   end
 
   test do
-    output = shell_output("#{bin}/frothy --version")
-    assert_match "frothy ", output
+    output = shell_output("#{bin}/froth --version")
+    assert_match "froth ", output
   end
 end
 EOF

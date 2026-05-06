@@ -1,5 +1,4 @@
 #include "froth_slot_table.h"
-#include "froth_snapshot.h"
 #include "froth_vm.h"
 #include "frothy_base_image.h"
 #include "frothy_boot.h"
@@ -8,6 +7,7 @@
 #include "frothy_ir.h"
 #include "frothy_parser.h"
 #include "frothy_snapshot.h"
+#include "frothy_snapshot_codec.h"
 #include "frothy_value.h"
 #include "platform.h"
 
@@ -47,20 +47,12 @@ static int bootstrap_snapshot_runtime(void) {
     return 1;
   }
 
-  froth_vm.heap.pointer = 0;
-  froth_vm.boot_complete = 1;
-  froth_vm.trampoline_depth = 0;
-  froth_vm.interrupted = 0;
-  froth_vm.thrown = FROTH_OK;
-  froth_vm.last_error_slot = -1;
-  froth_vm.mark_offset = (froth_cell_u_t)-1;
-  froth_cellspace_init(&froth_vm.cellspace);
-  frothy_runtime_init(runtime(), &froth_vm.cellspace);
+  froth_vm_reset();
   if (frothy_base_image_install() != FROTH_OK) {
     fprintf(stderr, "failed to install base slots\n");
     return 0;
   }
-  froth_vm.watermark_heap_offset = froth_vm.heap.pointer;
+  froth_vm_mark_boot_complete();
   snapshot_runtime_bootstrapped = true;
   return 1;
 }
@@ -107,8 +99,6 @@ static int enter_temp_workspace(temp_workspace_t *workspace) {
   }
 
   froth_vm.interrupted = 0;
-  froth_vm.thrown = FROTH_OK;
-  froth_vm.last_error_slot = -1;
   return 1;
 }
 
@@ -334,7 +324,7 @@ static int expect_binding_render_view(const char *name,
 static int expect_snapshot_present(bool expected, const char *label) {
   uint8_t slot = 0;
   uint32_t generation = 0;
-  froth_error_t err = froth_snapshot_pick_active(&slot, &generation);
+  froth_error_t err = frothy_snapshot_pick_active(&slot, &generation);
 
   if (expected && err != FROTH_OK) {
     fprintf(stderr, "%s expected active snapshot, got %d\n", label, (int)err);
@@ -355,11 +345,11 @@ static int patch_active_snapshot_payload(size_t payload_offset,
   const char *path;
   FILE *file = NULL;
   uint8_t header[FROTH_SNAPSHOT_HEADER_SIZE];
-  froth_snapshot_header_info_t info;
+  frothy_snapshot_header_info_t info;
   uint8_t *payload = NULL;
   int ok = 0;
 
-  if (froth_snapshot_pick_active(&slot, &generation) != FROTH_OK) {
+  if (frothy_snapshot_pick_active(&slot, &generation) != FROTH_OK) {
     fprintf(stderr, "no active snapshot to patch\n");
     return 0;
   }
@@ -376,7 +366,7 @@ static int patch_active_snapshot_payload(size_t payload_offset,
     perror("fread");
     goto done;
   }
-  if (froth_snapshot_parse_header(header, &info) != FROTH_OK) {
+  if (frothy_snapshot_parse_header(header, &info) != FROTH_OK) {
     fprintf(stderr, "failed to parse snapshot header for patch\n");
     goto done;
   }
@@ -403,8 +393,8 @@ static int patch_active_snapshot_payload(size_t payload_offset,
       perror("fread");
       goto done;
     }
-    if (froth_snapshot_build_header(header, info.payload_len, payload,
-                                    info.generation) != FROTH_OK) {
+    if (frothy_snapshot_build_header(header, info.payload_len, payload,
+                                     info.generation) != FROTH_OK) {
       fprintf(stderr, "failed to rebuild snapshot header\n");
       goto done;
     }
@@ -437,13 +427,13 @@ static int load_active_snapshot_payload(uint8_t **payload_out,
   const char *path;
   FILE *file = NULL;
   uint8_t header[FROTH_SNAPSHOT_HEADER_SIZE];
-  froth_snapshot_header_info_t info;
+  frothy_snapshot_header_info_t info;
   uint8_t *payload = NULL;
   int ok = 0;
 
   *payload_out = NULL;
   *payload_length_out = 0;
-  if (froth_snapshot_pick_active(&slot, &generation) != FROTH_OK) {
+  if (frothy_snapshot_pick_active(&slot, &generation) != FROTH_OK) {
     fprintf(stderr, "no active snapshot to load\n");
     return 0;
   }
@@ -458,7 +448,7 @@ static int load_active_snapshot_payload(uint8_t **payload_out,
     perror("fread");
     goto done;
   }
-  if (froth_snapshot_parse_header(header, &info) != FROTH_OK) {
+  if (frothy_snapshot_parse_header(header, &info) != FROTH_OK) {
     fprintf(stderr, "failed to parse snapshot header for load\n");
     goto done;
   }
@@ -746,8 +736,8 @@ static int write_test_snapshot_payload(const test_snapshot_payload_t *payload) {
   FILE *file = NULL;
   int ok = 0;
 
-  if (froth_snapshot_build_header(header, (uint32_t)payload->length,
-                                  payload->bytes, 1) != FROTH_OK) {
+  if (frothy_snapshot_build_header(header, (uint32_t)payload->length,
+                                   payload->bytes, 1) != FROTH_OK) {
     fprintf(stderr, "failed to build test snapshot header\n");
     return 0;
   }
@@ -938,8 +928,6 @@ static int prepare_startup_state(void) {
   }
 
   froth_vm.interrupted = 0;
-  froth_vm.thrown = FROTH_OK;
-  froth_vm.last_error_slot = -1;
   return 1;
 }
 
@@ -968,6 +956,58 @@ static int expect_startup_report(const frothy_startup_report_t *report,
   }
 
   return 1;
+}
+
+static int test_snapshot_api_guards(void) {
+  temp_workspace_t workspace = {{0}};
+  uint8_t header[FROTH_SNAPSHOT_HEADER_SIZE];
+  uint8_t payload[1] = {0};
+  const uint8_t *payload_out = NULL;
+  frothy_snapshot_header_info_t info;
+  uint32_t payload_length = 0;
+  uint32_t generation = 0;
+  uint8_t slot = 0;
+  int ok = 1;
+
+  memset(&info, 0, sizeof(info));
+  ok &= frothy_snapshot_build_header(NULL, 0, payload, 1) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_build_header(header, 1, NULL, 1) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_build_header(header, 0, NULL, 1) == FROTH_OK;
+  ok &= frothy_snapshot_parse_header(NULL, &info) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_parse_header(header, NULL) == FROTH_ERROR_BOUNDS;
+
+  ok &= frothy_snapshot_codec_write_payload(NULL, &payload_out,
+                                            &payload_length) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_codec_write_payload(runtime(), NULL, &payload_length) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_codec_write_payload(runtime(), &payload_out, NULL) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_codec_validate_payload(NULL, 0) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_codec_restore_payload(NULL, 0) == FROTH_ERROR_BOUNDS;
+
+  ok &= frothy_builtin_save(runtime(), NULL, NULL, 0, NULL) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_builtin_restore(runtime(), NULL, NULL, 0, NULL) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_builtin_wipe(runtime(), NULL, NULL, 0, NULL) ==
+        FROTH_ERROR_BOUNDS;
+
+  if (!enter_temp_workspace(&workspace)) {
+    return 0;
+  }
+  ok &= frothy_snapshot_pick_active(NULL, &generation) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_pick_active(&slot, NULL) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_pick_inactive(NULL, &generation) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_pick_inactive(&slot, NULL) == FROTH_ERROR_BOUNDS;
+  leave_temp_workspace(&workspace);
+
+  if (!ok) {
+    fprintf(stderr, "snapshot API guards failed\n");
+  }
+  return ok;
 }
 
 static int test_native_dispatch_and_roundtrip(void) {
@@ -2616,6 +2656,7 @@ static int test_non_persistable_rejection(void) {
 int main(void) {
   int ok = 1;
 
+  ok &= test_snapshot_api_guards();
   ok &= test_native_dispatch_and_roundtrip();
   ok &= test_readability_snapshot_roundtrip();
   ok &= test_overlay_reset_semantics();

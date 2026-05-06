@@ -1,16 +1,16 @@
 {
-  "name": "frothy",
-  "displayName": "Frothy",
-  "description": "Live board control for Frothy devices",
+  "name": "froth",
+  "displayName": "Froth",
+  "description": "Live board control for Froth devices",
   "version": "0.1.1",
   "publisher": "NikolaiKozak",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nikokozak/frothy.git"
+    "url": "https://github.com/nikokozak/froth.git"
   },
-  "homepage": "https://github.com/nikokozak/frothy",
+  "homepage": "https://frothlang.org",
   "bugs": {
-    "url": "https://github.com/nikokozak/frothy/issues"
+    "url": "https://github.com/nikokozak/froth/issues"
   },
   "license": "MIT",
   "engines": {
@@ -36,15 +36,14 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onLanguage:frothy"
+    "onLanguage:froth"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [
       {
-        "id": "frothy",
+        "id": "froth",
         "extensions": [
-          ".frothy",
           ".froth"
         ],
         "configuration": "./language-configuration.json"
@@ -52,302 +51,302 @@
     ],
     "grammars": [
       {
-        "language": "frothy",
-        "scopeName": "source.frothy",
+        "language": "froth",
+        "scopeName": "source.froth",
         "path": "./syntaxes/froth.tmLanguage.json"
       }
     ],
     "commands": [
       {
-        "command": "frothy.connect",
-        "title": "Frothy: Connect Device",
+        "command": "froth.connect",
+        "title": "Froth: Connect Device",
         "icon": "$(plug)"
       },
       {
-        "command": "frothy.forceReconnect",
-        "title": "Frothy: Force Reconnect",
+        "command": "froth.forceReconnect",
+        "title": "Froth: Force Reconnect",
         "icon": "$(debug-restart)"
       },
       {
-        "command": "frothy.disconnect",
-        "title": "Frothy: Disconnect",
+        "command": "froth.disconnect",
+        "title": "Froth: Disconnect",
         "icon": "$(debug-disconnect)"
       },
       {
-        "command": "frothy.sendSelection",
-        "title": "Frothy: Send Selection / Form",
+        "command": "froth.sendSelection",
+        "title": "Froth: Send Selection / Form",
         "icon": "$(play)"
       },
       {
-        "command": "frothy.runBinding",
-        "title": "Frothy: Run Binding",
+        "command": "froth.runBinding",
+        "title": "Froth: Run Binding",
         "icon": "$(run)"
       },
       {
-        "command": "frothy.pinRunBinding",
-        "title": "Frothy: Pin Run Binding",
+        "command": "froth.pinRunBinding",
+        "title": "Froth: Pin Run Binding",
         "icon": "$(pinned)"
       },
       {
-        "command": "frothy.runLast",
-        "title": "Frothy: Rerun Last Form",
+        "command": "froth.runLast",
+        "title": "Froth: Rerun Last Form",
         "icon": "$(debug-rerun)"
       },
       {
-        "command": "frothy.runPinned",
-        "title": "Frothy: Run Pinned Binding",
+        "command": "froth.runPinned",
+        "title": "Froth: Run Pinned Binding",
         "icon": "$(debug-start)"
       },
       {
-        "command": "frothy.sendFile",
-        "title": "Frothy: Send File",
+        "command": "froth.sendFile",
+        "title": "Froth: Send File",
         "icon": "$(file-code)"
       },
       {
-        "command": "frothy.interrupt",
-        "title": "Frothy: Interrupt",
+        "command": "froth.interrupt",
+        "title": "Froth: Interrupt",
         "icon": "$(debug-stop)"
       },
       {
-        "command": "frothy.words",
-        "title": "Frothy: Words",
+        "command": "froth.words",
+        "title": "Froth: Words",
         "icon": "$(list-unordered)"
       },
       {
-        "command": "frothy.see",
-        "title": "Frothy: See Binding",
+        "command": "froth.see",
+        "title": "Froth: See Binding",
         "icon": "$(symbol-field)"
       },
       {
-        "command": "frothy.core",
-        "title": "Frothy: Show Core Binding",
+        "command": "froth.core",
+        "title": "Froth: Show Core Binding",
         "icon": "$(symbol-structure)"
       },
       {
-        "command": "frothy.slotInfo",
-        "title": "Frothy: Show Slot Info",
+        "command": "froth.slotInfo",
+        "title": "Froth: Show Slot Info",
         "icon": "$(info)"
       },
       {
-        "command": "frothy.save",
-        "title": "Frothy: Save Snapshot",
+        "command": "froth.save",
+        "title": "Froth: Save Snapshot",
         "icon": "$(save)"
       },
       {
-        "command": "frothy.restore",
-        "title": "Frothy: Restore Snapshot",
+        "command": "froth.restore",
+        "title": "Froth: Restore Snapshot",
         "icon": "$(history)"
       },
       {
-        "command": "frothy.wipe",
-        "title": "Frothy: Dangerous Wipe Snapshot",
+        "command": "froth.wipe",
+        "title": "Froth: Dangerous Wipe Snapshot",
         "icon": "$(trash)"
       },
       {
-        "command": "frothy.doctor",
-        "title": "Frothy: Run Doctor",
+        "command": "froth.doctor",
+        "title": "Froth: Run Doctor",
         "icon": "$(tools)"
       },
       {
-        "command": "frothy.showConsole",
-        "title": "Frothy: Show Console",
+        "command": "froth.showConsole",
+        "title": "Froth: Show Console",
         "icon": "$(terminal)"
       }
     ],
     "keybindings": [
       {
-        "command": "frothy.sendSelection",
+        "command": "froth.sendSelection",
         "key": "ctrl+enter",
         "mac": "cmd+enter",
-        "when": "editorTextFocus && (resourceExtname == .frothy || resourceExtname == .froth)"
+        "when": "editorTextFocus && (resourceExtname == .froth)"
       },
       {
-        "command": "frothy.runLast",
+        "command": "froth.runLast",
         "key": "ctrl+alt+r",
         "mac": "cmd+alt+r",
-        "when": "frothy.hasLastRun && editorTextFocus && (resourceExtname == .frothy || resourceExtname == .froth)"
+        "when": "froth.hasLastRun && editorTextFocus && (resourceExtname == .froth)"
       },
       {
-        "command": "frothy.pinRunBinding",
+        "command": "froth.pinRunBinding",
         "key": "ctrl+alt+p",
         "mac": "cmd+alt+p",
-        "when": "editorTextFocus && (resourceExtname == .frothy || resourceExtname == .froth)"
+        "when": "editorTextFocus && (resourceExtname == .froth)"
       },
       {
-        "command": "frothy.runPinned",
+        "command": "froth.runPinned",
         "key": "ctrl+alt+enter",
         "mac": "cmd+alt+enter",
-        "when": "frothy.hasPinnedRun && editorTextFocus && (resourceExtname == .frothy || resourceExtname == .froth)"
+        "when": "froth.hasPinnedRun && editorTextFocus && (resourceExtname == .froth)"
       },
       {
-        "command": "frothy.sendFile",
+        "command": "froth.sendFile",
         "key": "ctrl+shift+enter",
         "mac": "cmd+shift+enter",
-        "when": "editorTextFocus && (resourceExtname == .frothy || resourceExtname == .froth)"
+        "when": "editorTextFocus && (resourceExtname == .froth)"
       },
       {
-        "command": "frothy.see",
+        "command": "froth.see",
         "key": "ctrl+alt+b",
         "mac": "cmd+alt+b",
-        "when": "editorTextFocus && (resourceExtname == .frothy || resourceExtname == .froth)"
+        "when": "editorTextFocus && (resourceExtname == .froth)"
       },
       {
-        "command": "frothy.interrupt",
+        "command": "froth.interrupt",
         "key": "ctrl+alt+.",
         "mac": "cmd+alt+.",
-        "when": "frothy.isRunning"
+        "when": "froth.isRunning"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "frothy",
-          "title": "Frothy",
+          "id": "froth",
+          "title": "Froth",
           "icon": "$(symbol-misc)"
         }
       ]
     },
     "views": {
-      "frothy": [
+      "froth": [
         {
-          "id": "frothyDeviceView",
+          "id": "frothDeviceView",
           "name": "Device"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "frothyDeviceView",
-        "contents": "Connect to a Frothy device from the current VS Code window.\n\n[Connect Device](command:frothy.connect)\n[Show Console](command:frothy.showConsole)\n[Run Doctor](command:frothy.doctor)"
+        "view": "frothDeviceView",
+        "contents": "Connect to a Froth device from the current VS Code window.\n\n[Connect Device](command:froth.connect)\n[Show Console](command:froth.showConsole)\n[Run Doctor](command:froth.doctor)"
       }
     ],
     "configuration": {
-      "title": "Frothy",
+      "title": "Froth",
       "properties": {
-        "frothy.cliPath": {
+        "froth.cliPath": {
           "type": "string",
           "default": "",
-          "description": "Absolute path to the installed `frothy` CLI binary. Leave empty to auto-discover `frothy` on PATH, fall back to legacy `froth`, or use a repo-local `tools/cli/frothy-cli` build."
+          "description": "Absolute path to the installed `froth` CLI binary. Leave empty to auto-discover `froth` on PATH."
         },
-        "frothy.port": {
+        "froth.port": {
           "type": "string",
           "default": "",
-          "description": "Preferred serial port for Frothy device connections. Leave empty to auto-connect one device or prompt when several are found."
+          "description": "Preferred serial port for Froth device connections. Leave empty to auto-connect one device or prompt when several are found."
         }
       }
     },
     "menus": {
       "view/title": [
         {
-          "command": "frothy.connect",
-          "when": "view == frothyDeviceView",
+          "command": "froth.connect",
+          "when": "view == frothDeviceView",
           "group": "navigation"
         },
         {
-          "command": "frothy.forceReconnect",
-          "when": "view == frothyDeviceView",
+          "command": "froth.forceReconnect",
+          "when": "view == frothDeviceView",
           "group": "navigation"
         },
         {
-          "command": "frothy.disconnect",
-          "when": "view == frothyDeviceView",
+          "command": "froth.disconnect",
+          "when": "view == frothDeviceView",
           "group": "navigation"
         },
         {
-          "command": "frothy.interrupt",
-          "when": "view == frothyDeviceView",
+          "command": "froth.interrupt",
+          "when": "view == frothDeviceView",
           "group": "navigation"
         },
         {
-          "command": "frothy.runLast",
-          "when": "view == frothyDeviceView && frothy.hasLastRun",
+          "command": "froth.runLast",
+          "when": "view == frothDeviceView && froth.hasLastRun",
           "group": "navigation"
         },
         {
-          "command": "frothy.runPinned",
-          "when": "view == frothyDeviceView && frothy.hasPinnedRun",
+          "command": "froth.runPinned",
+          "when": "view == frothDeviceView && froth.hasPinnedRun",
           "group": "navigation"
         },
         {
-          "command": "frothy.pinRunBinding",
-          "when": "view == frothyDeviceView",
+          "command": "froth.pinRunBinding",
+          "when": "view == frothDeviceView",
           "group": "navigation"
         },
         {
-          "command": "frothy.showConsole",
-          "when": "view == frothyDeviceView",
+          "command": "froth.showConsole",
+          "when": "view == frothDeviceView",
           "group": "navigation"
         },
         {
-          "command": "frothy.words",
-          "when": "view == frothyDeviceView",
+          "command": "froth.words",
+          "when": "view == frothDeviceView",
           "group": "2_actions"
         },
         {
-          "command": "frothy.see",
-          "when": "view == frothyDeviceView",
+          "command": "froth.see",
+          "when": "view == frothDeviceView",
           "group": "2_actions"
         },
         {
-          "command": "frothy.core",
-          "when": "view == frothyDeviceView",
+          "command": "froth.core",
+          "when": "view == frothDeviceView",
           "group": "2_actions"
         },
         {
-          "command": "frothy.slotInfo",
-          "when": "view == frothyDeviceView",
+          "command": "froth.slotInfo",
+          "when": "view == frothDeviceView",
           "group": "2_actions"
         },
         {
-          "command": "frothy.save",
-          "when": "view == frothyDeviceView",
+          "command": "froth.save",
+          "when": "view == frothDeviceView",
           "group": "2_actions"
         },
         {
-          "command": "frothy.restore",
-          "when": "view == frothyDeviceView",
+          "command": "froth.restore",
+          "when": "view == frothDeviceView",
           "group": "2_actions"
         },
         {
-          "command": "frothy.wipe",
-          "when": "view == frothyDeviceView",
+          "command": "froth.wipe",
+          "when": "view == frothDeviceView",
           "group": "2_actions"
         },
         {
-          "command": "frothy.doctor",
-          "when": "view == frothyDeviceView",
+          "command": "froth.doctor",
+          "when": "view == frothDeviceView",
           "group": "2_actions"
         }
       ],
       "editor/title": [
         {
-          "command": "frothy.sendSelection",
-          "when": "resourceExtname == .frothy || resourceExtname == .froth",
+          "command": "froth.sendSelection",
+          "when": "resourceExtname == .froth",
           "group": "navigation"
         },
         {
-          "command": "frothy.runBinding",
-          "when": "resourceExtname == .frothy || resourceExtname == .froth",
+          "command": "froth.runBinding",
+          "when": "resourceExtname == .froth",
           "group": "navigation"
         },
         {
-          "command": "frothy.pinRunBinding",
-          "when": "resourceExtname == .frothy || resourceExtname == .froth",
+          "command": "froth.pinRunBinding",
+          "when": "resourceExtname == .froth",
           "group": "navigation"
         },
         {
-          "command": "frothy.runLast",
-          "when": "frothy.hasLastRun && (resourceExtname == .frothy || resourceExtname == .froth)",
+          "command": "froth.runLast",
+          "when": "froth.hasLastRun && (resourceExtname == .froth)",
           "group": "navigation"
         },
         {
-          "command": "frothy.runPinned",
-          "when": "frothy.hasPinnedRun && (resourceExtname == .frothy || resourceExtname == .froth)",
+          "command": "froth.runPinned",
+          "when": "froth.hasPinnedRun && (resourceExtname == .froth)",
           "group": "navigation"
         },
         {
-          "command": "frothy.sendFile",
-          "when": "resourceExtname == .frothy || resourceExtname == .froth",
+          "command": "froth.sendFile",
+          "when": "resourceExtname == .froth",
           "group": "navigation"
         }
       ]

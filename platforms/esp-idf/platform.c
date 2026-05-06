@@ -277,10 +277,6 @@ bool platform_input_closed(void) { return false; }
 
 bool platform_should_echo_input(void) { return true; }
 
-bool platform_key_ready(void) {
-  return console_key_ready_internal();
-}
-
 void platform_check_interrupt(struct froth_vm_t *vm) {
   if (boot_button_pressed()) {
     vm->interrupted = 1;

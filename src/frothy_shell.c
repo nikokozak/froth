@@ -59,7 +59,7 @@ static froth_error_t frothy_shell_prepare_input_line(
     const char **command_out, const char **line_for_input_out,
     frothy_shell_command_t *shell_command_out);
 
-static const char *prompt_normal = "frothy> ";
+static const char *prompt_normal = "froth> ";
 static const char *prompt_cont = ".. ";
 /* Keep large line buffers off the ESP32 main task stack. Frothy runs one
  * interactive shell at a time, so static storage matches the inherited
@@ -987,30 +987,6 @@ static froth_error_t frothy_print_help(void) {
   return frothy_emit_text("exit\n");
 }
 
-static froth_error_t frothy_print_words(void) {
-  const char **names = NULL;
-  size_t count = 0;
-  size_t i;
-  froth_error_t err;
-
-  err = frothy_inspect_collect_words(&names, &count);
-  if (err != FROTH_OK) {
-    return err;
-  }
-  for (i = 0; i < count; i++) {
-    err = frothy_emit_text(names[i]);
-    if (err != FROTH_OK) {
-      break;
-    }
-    err = platform_emit('\n');
-    if (err != FROTH_OK) {
-      break;
-    }
-  }
-  frothy_inspect_free_words(names);
-
-  return err;
-}
 static bool frothy_slot_emits_output(frothy_runtime_t *runtime,
                                      const char *slot_name) {
   froth_cell_u_t slot_index = 0;

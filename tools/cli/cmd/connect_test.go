@@ -13,7 +13,7 @@ func TestLocalBinaryNeedsBuildWhenBinaryMissing(t *testing.T) {
 	resetCommandGlobals(t)
 
 	kernelRoot := makeLocalBuildKernelRoot(t)
-	needsBuild, err := localBinaryNeedsBuild(filepath.Join(t.TempDir(), "Frothy"), kernelRoot)
+	needsBuild, err := localBinaryNeedsBuild(filepath.Join(t.TempDir(), hostRuntimeBinaryName), kernelRoot)
 	if err != nil {
 		t.Fatalf("localBinaryNeedsBuild: %v", err)
 	}
@@ -26,7 +26,7 @@ func TestLocalBinaryNeedsBuildFalseWhenBinaryNewerThanSources(t *testing.T) {
 	resetCommandGlobals(t)
 
 	kernelRoot := makeLocalBuildKernelRoot(t)
-	binaryPath := filepath.Join(t.TempDir(), "Frothy")
+	binaryPath := filepath.Join(t.TempDir(), hostRuntimeBinaryName)
 	mustWriteFile(t, binaryPath, "binary")
 
 	base := time.Now().Add(-2 * time.Hour)
@@ -46,7 +46,7 @@ func TestLocalBinaryNeedsBuildTrueWhenSourceNewerThanBinary(t *testing.T) {
 	resetCommandGlobals(t)
 
 	kernelRoot := makeLocalBuildKernelRoot(t)
-	binaryPath := filepath.Join(t.TempDir(), "Frothy")
+	binaryPath := filepath.Join(t.TempDir(), hostRuntimeBinaryName)
 	mustWriteFile(t, binaryPath, "binary")
 
 	base := time.Now().Add(-2 * time.Hour)

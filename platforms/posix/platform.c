@@ -4,7 +4,6 @@
 #include "froth_vm.h"
 
 #include <errno.h>
-#include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -125,11 +124,6 @@ froth_error_t platform_key(uint8_t *byte) {
 bool platform_input_closed(void) { return feof(stdin) != 0; }
 
 bool platform_should_echo_input(void) { return isatty(STDIN_FILENO) != 0; }
-
-bool platform_key_ready(void) {
-  struct pollfd pfd = {.fd = STDIN_FILENO, .events = POLLIN};
-  return poll(&pfd, 1, 0) > 0;
-}
 
 void platform_check_interrupt(struct froth_vm_t *vm) {
   (void)vm; // SIGINT handler sets vm->interrupted asynchronously

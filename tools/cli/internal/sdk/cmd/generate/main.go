@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	repoRoot = flag.String("repo", "", "Frothy repo root")
+	repoRoot = flag.String("repo", "", "Froth repo root")
 	outDir   = flag.String("out", "", "output directory for generated payload")
 )
 

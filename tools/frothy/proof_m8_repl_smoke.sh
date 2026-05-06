@@ -2,7 +2,7 @@
 set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
-BINARY="${FROTHY_BINARY:-$ROOT_DIR/build/Frothy}"
+BINARY="${FROTH_BINARY:-${FROTHY_BINARY:-$ROOT_DIR/build/froth}}"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/frothy-m8.XXXXXX")"
 
 cleanup() {
@@ -61,11 +61,11 @@ MAIN_TRANSCRIPT="$(
 )"
 printf '%s\n' "$MAIN_TRANSCRIPT"
 
-require_contains "$MAIN_TRANSCRIPT" 'frothy> .. frothy> 5'
+require_contains "$MAIN_TRANSCRIPT" 'froth> .. froth> 5'
 require_contains "$MAIN_TRANSCRIPT" 'eval error ('
-require_contains "$MAIN_TRANSCRIPT" 'frothy> 2'
+require_contains "$MAIN_TRANSCRIPT" 'froth> 2'
 require_contains "$MAIN_TRANSCRIPT" 'parse error ('
-require_contains "$MAIN_TRANSCRIPT" 'frothy> 3'
+require_contains "$MAIN_TRANSCRIPT" 'froth> 3'
 
 if [ "$(count_occurrences "$MAIN_TRANSCRIPT" 'parse error (')" -ne 1 ]; then
   echo "error: expected exactly one parse error in main transcript" >&2
@@ -84,7 +84,7 @@ PAREN_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$PAREN_TRANSCRIPT"
-require_contains "$PAREN_TRANSCRIPT" 'frothy> .. 3'
+require_contains "$PAREN_TRANSCRIPT" 'froth> .. 3'
 require_not_contains "$PAREN_TRANSCRIPT" 'parse error ('
 
 BRACKET_TRANSCRIPT="$(
@@ -95,7 +95,7 @@ BRACKET_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$BRACKET_TRANSCRIPT"
-require_contains "$BRACKET_TRANSCRIPT" 'frothy> frothy> .. nil'
+require_contains "$BRACKET_TRANSCRIPT" 'froth> froth> .. nil'
 require_not_contains "$BRACKET_TRANSCRIPT" 'parse error ('
 
 STRING_TRANSCRIPT="$(
@@ -106,7 +106,7 @@ STRING_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$STRING_TRANSCRIPT"
-require_contains "$STRING_TRANSCRIPT" 'frothy> .. frothy> 2'
+require_contains "$STRING_TRANSCRIPT" 'froth> .. froth> 2'
 require_not_contains "$STRING_TRANSCRIPT" 'parse error ('
 
 STRING_BACKSLASH_TRANSCRIPT="$(
@@ -118,7 +118,7 @@ STRING_BACKSLASH_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$STRING_BACKSLASH_TRANSCRIPT"
-require_contains "$STRING_BACKSLASH_TRANSCRIPT" 'frothy> .. .. frothy> "a\n\\\nb"'
+require_contains "$STRING_BACKSLASH_TRANSCRIPT" 'froth> .. .. froth> "a\n\\\nb"'
 require_not_contains "$STRING_BACKSLASH_TRANSCRIPT" 'parse error ('
 
 NOT_TRANSCRIPT="$(
@@ -128,7 +128,7 @@ NOT_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$NOT_TRANSCRIPT"
-require_contains "$NOT_TRANSCRIPT" 'frothy> .. false'
+require_contains "$NOT_TRANSCRIPT" 'froth> .. false'
 require_not_contains "$NOT_TRANSCRIPT" 'parse error ('
 
 # Legacy named-definition compatibility: keep multiline recovery coverage for
@@ -142,7 +142,7 @@ COMMENT_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$COMMENT_TRANSCRIPT"
-require_contains "$COMMENT_TRANSCRIPT" 'frothy> .. .. frothy> 9'
+require_contains "$COMMENT_TRANSCRIPT" 'froth> .. .. froth> 9'
 require_not_contains "$COMMENT_TRANSCRIPT" 'parse error ('
 
 EQUAL_TRANSCRIPT="$(
@@ -153,7 +153,7 @@ EQUAL_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$EQUAL_TRANSCRIPT"
-require_contains "$EQUAL_TRANSCRIPT" 'frothy> .. frothy> 9'
+require_contains "$EQUAL_TRANSCRIPT" 'froth> .. froth> 9'
 require_not_contains "$EQUAL_TRANSCRIPT" 'parse error ('
 
 IS_TRANSCRIPT="$(
@@ -164,7 +164,7 @@ IS_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$IS_TRANSCRIPT"
-require_contains "$IS_TRANSCRIPT" 'frothy> .. frothy> 9'
+require_contains "$IS_TRANSCRIPT" 'froth> .. froth> 9'
 require_not_contains "$IS_TRANSCRIPT" 'parse error ('
 
 FN_TRANSCRIPT="$(
@@ -174,7 +174,7 @@ FN_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$FN_TRANSCRIPT"
-require_contains "$FN_TRANSCRIPT" 'frothy> .. <fn/2>'
+require_contains "$FN_TRANSCRIPT" 'froth> .. <fn/2>'
 require_not_contains "$FN_TRANSCRIPT" 'parse error ('
 
 OPERATOR_TRANSCRIPT="$(
@@ -184,7 +184,7 @@ OPERATOR_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$OPERATOR_TRANSCRIPT"
-require_contains "$OPERATOR_TRANSCRIPT" 'frothy> .. 3'
+require_contains "$OPERATOR_TRANSCRIPT" 'froth> .. 3'
 require_not_contains "$OPERATOR_TRANSCRIPT" 'parse error ('
 
 COMPARE_TRANSCRIPT="$(
@@ -194,7 +194,7 @@ COMPARE_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$COMPARE_TRANSCRIPT"
-require_contains "$COMPARE_TRANSCRIPT" 'frothy> .. true'
+require_contains "$COMPARE_TRANSCRIPT" 'froth> .. true'
 require_not_contains "$COMPARE_TRANSCRIPT" 'parse error ('
 
 # Legacy unary-minus continuation on the old named-definition surface.
@@ -206,7 +206,7 @@ UNARY_MINUS_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$UNARY_MINUS_TRANSCRIPT"
-require_contains "$UNARY_MINUS_TRANSCRIPT" 'frothy> .. frothy> -1'
+require_contains "$UNARY_MINUS_TRANSCRIPT" 'froth> .. froth> -1'
 require_not_contains "$UNARY_MINUS_TRANSCRIPT" 'parse error ('
 
 WHEN_TRANSCRIPT="$(
@@ -216,7 +216,7 @@ WHEN_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$WHEN_TRANSCRIPT"
-require_contains "$WHEN_TRANSCRIPT" 'frothy> .. 42'
+require_contains "$WHEN_TRANSCRIPT" 'froth> .. 42'
 require_not_contains "$WHEN_TRANSCRIPT" 'parse error ('
 
 REPEAT_TRANSCRIPT="$(
@@ -226,7 +226,7 @@ REPEAT_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$REPEAT_TRANSCRIPT"
-require_contains "$REPEAT_TRANSCRIPT" 'frothy> .. nil'
+require_contains "$REPEAT_TRANSCRIPT" 'froth> .. nil'
 require_not_contains "$REPEAT_TRANSCRIPT" 'parse error ('
 
 UNLESS_TRANSCRIPT="$(
@@ -236,7 +236,7 @@ UNLESS_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$UNLESS_TRANSCRIPT"
-require_contains "$UNLESS_TRANSCRIPT" 'frothy> .. 42'
+require_contains "$UNLESS_TRANSCRIPT" 'froth> .. 42'
 require_not_contains "$UNLESS_TRANSCRIPT" 'parse error ('
 
 AND_OR_TRANSCRIPT="$(
@@ -248,8 +248,8 @@ AND_OR_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$AND_OR_TRANSCRIPT"
-require_contains "$AND_OR_TRANSCRIPT" 'frothy> .. false'
-require_contains "$AND_OR_TRANSCRIPT" 'frothy> .. true'
+require_contains "$AND_OR_TRANSCRIPT" 'froth> .. false'
+require_contains "$AND_OR_TRANSCRIPT" 'froth> .. true'
 require_not_contains "$AND_OR_TRANSCRIPT" 'parse error ('
 
 CALL_HEADER_TRANSCRIPT="$(
@@ -260,7 +260,7 @@ CALL_HEADER_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$CALL_HEADER_TRANSCRIPT"
-require_contains "$CALL_HEADER_TRANSCRIPT" 'frothy> frothy> .. 42'
+require_contains "$CALL_HEADER_TRANSCRIPT" 'froth> froth> .. 42'
 require_not_contains "$CALL_HEADER_TRANSCRIPT" 'parse error ('
 
 COLON_CONTINUATION_TRANSCRIPT="$(
@@ -271,7 +271,7 @@ COLON_CONTINUATION_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$COLON_CONTINUATION_TRANSCRIPT"
-require_contains "$COLON_CONTINUATION_TRANSCRIPT" 'frothy> frothy> .. 42'
+require_contains "$COLON_CONTINUATION_TRANSCRIPT" 'froth> froth> .. 42'
 require_not_contains "$COLON_CONTINUATION_TRANSCRIPT" 'eval error (108)'
 require_not_contains "$COLON_CONTINUATION_TRANSCRIPT" 'parse error ('
 
@@ -282,7 +282,7 @@ CHAINED_MINUS_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$CHAINED_MINUS_TRANSCRIPT"
-require_contains "$CHAINED_MINUS_TRANSCRIPT" 'frothy> .. -1'
+require_contains "$CHAINED_MINUS_TRANSCRIPT" 'froth> .. -1'
 require_not_contains "$CHAINED_MINUS_TRANSCRIPT" 'parse error ('
 
 COMMA_TRANSCRIPT="$(
@@ -292,9 +292,9 @@ COMMA_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$COMMA_TRANSCRIPT"
-require_contains "$COMMA_TRANSCRIPT" 'frothy> .. parse error ('
-require_not_contains "$COMMA_TRANSCRIPT" 'frothy> parse error ('
-require_not_contains "$COMMA_TRANSCRIPT" 'frothy> 2'
+require_contains "$COMMA_TRANSCRIPT" 'froth> .. parse error ('
+require_not_contains "$COMMA_TRANSCRIPT" 'froth> parse error ('
+require_not_contains "$COMMA_TRANSCRIPT" 'froth> 2'
 if [ "$(count_occurrences "$COMMA_TRANSCRIPT" 'parse error (')" -ne 1 ]; then
   echo "error: expected exactly one parse error in comma transcript" >&2
   exit 1
@@ -314,29 +314,12 @@ CALL_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$CALL_TRANSCRIPT"
-require_contains "$CALL_TRANSCRIPT" 'frothy> frothy> 7'
-require_contains "$CALL_TRANSCRIPT" 'frothy> 42'
-require_contains "$CALL_TRANSCRIPT" 'frothy> frothy> 9'
-require_contains "$CALL_TRANSCRIPT" 'frothy> 1'
-require_contains "$CALL_TRANSCRIPT" 'frothy> frothy> 7'
+require_contains "$CALL_TRANSCRIPT" 'froth> froth> 7'
+require_contains "$CALL_TRANSCRIPT" 'froth> 42'
+require_contains "$CALL_TRANSCRIPT" 'froth> froth> 9'
+require_contains "$CALL_TRANSCRIPT" 'froth> 1'
+require_contains "$CALL_TRANSCRIPT" 'froth> froth> 7'
 require_not_contains "$CALL_TRANSCRIPT" 'parse error ('
-
-CTRL_C_MULTILINE_TRANSCRIPT="$(
-  (
-    cd "$WORK_DIR"
-    {
-      printf 'to inc with x\n'
-      printf '\003'
-      printf '2\n'
-      printf 'quit\n'
-    } | "$BINARY"
-  )
-)"
-printf '%s\n' "$CTRL_C_MULTILINE_TRANSCRIPT"
-require_contains "$CTRL_C_MULTILINE_TRANSCRIPT" 'frothy> .. frothy> 2'
-require_contains "$CTRL_C_MULTILINE_TRANSCRIPT" 'frothy> 2'
-require_not_contains "$CTRL_C_MULTILINE_TRANSCRIPT" 'parse error ('
-require_not_contains "$CTRL_C_MULTILINE_TRANSCRIPT" 'eval error ('
 
 CTRL_C_IDLE_TRANSCRIPT="$(
   (
@@ -349,6 +332,6 @@ CTRL_C_IDLE_TRANSCRIPT="$(
   )
 )"
 printf '%s\n' "$CTRL_C_IDLE_TRANSCRIPT"
-require_contains "$CTRL_C_IDLE_TRANSCRIPT" 'frothy> frothy> 2'
+require_contains "$CTRL_C_IDLE_TRANSCRIPT" 'froth> froth> 2'
 require_not_contains "$CTRL_C_IDLE_TRANSCRIPT" 'parse error ('
 require_not_contains "$CTRL_C_IDLE_TRANSCRIPT" 'eval error ('

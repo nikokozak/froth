@@ -142,13 +142,13 @@ function handle(message) {
         request_id: message.id,
         error: {
           code: "reset_unavailable",
-          message: "connected Frothy kernel does not support control reset"
+          message: "connected Froth kernel does not support control reset"
         }
       });
       emit({ type: "event", event: "idle", request_id: message.id });
       respond(message.id, false, null, {
         code: "reset_unavailable",
-        message: "connected Frothy kernel does not support control reset"
+        message: "connected Froth kernel does not support control reset"
       });
       return;
     case "words":
