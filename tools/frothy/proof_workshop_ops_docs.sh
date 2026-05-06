@@ -20,7 +20,8 @@ rg -nF "code --install-extension $vscode_extension_id" \
   docs/guide/Frothy_Workshop_Install_Quickstart.md
 rg -n 'Frothy_Workshop_Quick_Reference\.md|Frothy_Workshop_Clean_Machine_Validation\.md|boards/esp32-devkit-v4-game-board/WORKSHOP\.md|Frothy_Workshop_Rehearsal_Closeout_2026-04-14\.md' \
   README.md
-rg -n 'starter\.frothy|export_workshop_repo\.sh' workshop/README.md
+rg -n 'starter\.froth|export_workshop_repo\.sh|install `froth`|Froth VS Code extension' workshop/README.md
+! rg -n 'starter\.frothy|install `frothy`|Frothy VS Code extension' workshop/README.md
 rg -n 'proof\.sh workshop-v4 <PORT>' README.md \
   docs/roadmap/Frothy_Workshop_Rehearsal_Closeout_2026-04-14.md
 rg -n -- '--live-controls' README.md \
@@ -33,13 +34,13 @@ rg -n 'Frothy_Workshop_Quick_Reference\.md|Frothy_Workshop_Clean_Machine_Validat
 rg -n 'boards/esp32-devkit-v4-game-board/WORKSHOP\.md' tools/vscode/README.md
 rg -n '^## First Connect$|^## Prompt Checks$|^## Maintained Board Surface$|^## Persistence And Recovery$|^## When Something Goes Wrong$' \
   docs/guide/Frothy_Workshop_Quick_Reference.md
-rg -n 'frothy-v<version>-darwin-arm64\.tar\.gz|frothy-v<version>-darwin-amd64\.tar\.gz|frothy-v<version>-linux-amd64\.tar\.gz|frothy-vscode-v<extension-version>\.vsix|esp32-devkit-v4-game-board' \
+rg -n 'froth-v<version>-darwin-arm64\.tar\.gz|froth-v<version>-darwin-amd64\.tar\.gz|froth-v<version>-linux-amd64\.tar\.gz|froth-vscode-v<extension-version>\.vsix|esp32-devkit-v4-game-board' \
   docs/guide/Frothy_Workshop_Clean_Machine_Validation.md
 rg -n '^## Promised Matrix$|^## Release Assets To Stage$|^## Clean-Machine Procedure$|^## Recording Sheet$|^## Exit Rule$' \
   docs/guide/Frothy_Workshop_Clean_Machine_Validation.md
 rg -n 'without a repo checkout and without `esp-idf`|Only promise the rows that actually passed|Do not widen the support matrix because a machine "probably" works\.' \
   docs/guide/Frothy_Workshop_Clean_Machine_Validation.md
-rg -n 'frothy --port <path> doctor|frothy --port <path> connect|dangerous\.wipe|frothy --port <path> flash|frothy --target esp-idf --board esp32-devkit-v4-game-board --port <path> flash' \
+rg -n 'froth --port <path> doctor|froth --port <path> connect|dangerous\.wipe|froth --port <path> flash|froth --target esp-idf --board esp32-devkit-v4-game-board --port <path> flash' \
   boards/esp32-devkit-v4-game-board/WORKSHOP.md
 rg -n 'proof\.sh workshop-v4 <PORT>' \
   boards/esp32-devkit-v4-game-board/WORKSHOP.md

@@ -2,7 +2,7 @@
 set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
-BINARY="${FROTHY_BINARY:-$ROOT_DIR/build/Frothy}"
+BINARY="${FROTH_BINARY:-${FROTHY_BINARY:-$ROOT_DIR/build/froth}}"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/frothy-m8-inspect.XXXXXX")"
 
 cleanup() {
@@ -92,7 +92,7 @@ require_contains "$WORDS_TRANSCRIPT" 'core'
 require_contains "$WORDS_TRANSCRIPT" 'slotInfo'
 require_contains "$WORDS_TRANSCRIPT" 'inc'
 require_not_contains_line "$WORDS_TRANSCRIPT" 'boot'
-require_not_contains "$WORDS_TRANSCRIPT" 'frothy> nil'
+require_not_contains "$WORDS_TRANSCRIPT" 'froth> nil'
 
 BOOT_WORDS_TRANSCRIPT="$(
   run_transcript \
@@ -102,7 +102,7 @@ BOOT_WORDS_TRANSCRIPT="$(
 )"
 printf '%s\n' "$BOOT_WORDS_TRANSCRIPT"
 require_contains "$BOOT_WORDS_TRANSCRIPT" 'boot'
-require_not_contains "$BOOT_WORDS_TRANSCRIPT" 'frothy> nil'
+require_not_contains "$BOOT_WORDS_TRANSCRIPT" 'froth> nil'
 
 BASE_TRANSCRIPT="$(
   run_transcript \
@@ -182,9 +182,9 @@ require_contains "$COMMAND_TRANSCRIPT" '  kind: code'
 require_contains "$COMMAND_TRANSCRIPT" '  see: to alias [ 42 ]'
 require_contains "$COMMAND_TRANSCRIPT" '  core: (fn arity=0 locals=0 (seq (lit 42)))'
 require_contains "$COMMAND_TRANSCRIPT" '  persistence: saved in snapshot'
-require_contains "$COMMAND_TRANSCRIPT" 'frothy> "saved"'
+require_contains "$COMMAND_TRANSCRIPT" 'froth> "saved"'
 require_contains "$COMMAND_TRANSCRIPT" 'eval error ('
-require_not_contains "$COMMAND_TRANSCRIPT" 'frothy> nil'
+require_not_contains "$COMMAND_TRANSCRIPT" 'froth> nil'
 
 SIMPLE_CALL_TRANSCRIPT="$(
   run_transcript \
@@ -196,9 +196,9 @@ SIMPLE_CALL_TRANSCRIPT="$(
     'quit'
 )"
 printf '%s\n' "$SIMPLE_CALL_TRANSCRIPT"
-require_contains "$SIMPLE_CALL_TRANSCRIPT" 'frothy> frothy> 9'
-require_contains "$SIMPLE_CALL_TRANSCRIPT" 'frothy> 1'
-require_contains "$SIMPLE_CALL_TRANSCRIPT" 'frothy> frothy> 7'
+require_contains "$SIMPLE_CALL_TRANSCRIPT" 'froth> froth> 9'
+require_contains "$SIMPLE_CALL_TRANSCRIPT" 'froth> 1'
+require_contains "$SIMPLE_CALL_TRANSCRIPT" 'froth> froth> 7'
 require_not_contains "$SIMPLE_CALL_TRANSCRIPT" 'parse error ('
 
 CALLABLE_TRANSCRIPT="$(
@@ -215,6 +215,6 @@ CALLABLE_TRANSCRIPT="$(
 )"
 printf '%s\n' "$CALLABLE_TRANSCRIPT"
 require_contains "$CALLABLE_TRANSCRIPT" '  see: <native save/0>'
-require_contains "$CALLABLE_TRANSCRIPT" 'frothy> "saved"'
+require_contains "$CALLABLE_TRANSCRIPT" 'froth> "saved"'
 require_contains "$CALLABLE_TRANSCRIPT" 'eval error ('
-require_not_contains "$CALLABLE_TRANSCRIPT" 'frothy> nil'
+require_not_contains "$CALLABLE_TRANSCRIPT" 'froth> nil'

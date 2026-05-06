@@ -280,6 +280,7 @@ endfunction()
 
 if(FROTHY_BUILD_HOST)
   add_executable(Frothy)
+  set_target_properties(Frothy PROPERTIES OUTPUT_NAME froth)
   target_sources(Frothy
     PRIVATE
       src/frothy_main.c

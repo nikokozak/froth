@@ -11,7 +11,7 @@ import (
 func main() {
 	var cfg frothycontrol.SmokeConfig
 	flag.StringVar(&cfg.Port, "port", "", "serial port for the device control session")
-	flag.StringVar(&cfg.LocalRuntime, "local-runtime", "", "path to a local Frothy runtime binary")
+	flag.StringVar(&cfg.LocalRuntime, "local-runtime", "", "path to a local Froth runtime binary")
 	flag.Parse()
 
 	if cfg.Port == "" && cfg.LocalRuntime == "" {

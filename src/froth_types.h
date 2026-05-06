@@ -57,7 +57,7 @@ typedef enum {
   FROTH_OK = 0,
 
   /* Runtime and language errors. These numbers are persisted and may be
-   * surfaced through the Frothy runtime API. Never reorder.
+   * surfaced through the Froth runtime API. Never reorder.
    * Append new runtime errors after the last assigned value. */
   FROTH_ERROR_STACK_OVERFLOW = 1,
   FROTH_ERROR_STACK_UNDERFLOW = 2,

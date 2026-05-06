@@ -37,7 +37,7 @@ function assertThrows(fn, pattern, msg) {
 }
 
 function main() {
-  process.stdout.write("\n=== Frothy runtime-form smoke tests ===\n\n");
+  process.stdout.write("\n=== Froth runtime-form smoke tests ===\n\n");
 
   assertArrayEq(
     splitTopLevelForms("1 + 2\n"),
@@ -65,7 +65,7 @@ function main() {
 
   assertThrows(
     () => splitTopLevelForms("to boot\n"),
-    /incomplete Frothy source form/,
+    /incomplete Froth source form/,
     "incomplete form should fail",
   );
 

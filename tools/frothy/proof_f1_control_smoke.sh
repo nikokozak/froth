@@ -2,7 +2,7 @@
 set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
-BINARY="${FROTHY_BINARY:-$ROOT_DIR/build/Frothy}"
+BINARY="${FROTH_BINARY:-${FROTHY_BINARY:-$ROOT_DIR/build/froth}}"
 HOST_ONLY=0
 PORT=
 
@@ -88,7 +88,7 @@ build_cli_binary() {
 }
 
 run_flash_apply_smoke() {
-  work_dir="$(mktemp -d "${TMPDIR:-/tmp}/frothy-f1-control.XXXXXX")"
+  work_dir="$(mktemp -d "${TMPDIR:-/tmp}/froth-f1-control.XXXXXX")"
   cli_bin="$work_dir/frothy"
   project_dir="$work_dir/flash-proof"
 

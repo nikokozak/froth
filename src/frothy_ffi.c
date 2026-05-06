@@ -65,6 +65,7 @@ typedef struct {
  */
 const frothy_ffi_entry_t frothy_board_bindings[] FROTHY_WEAK_DEF = {{0}};
 #ifdef FROTH_HAS_PROJECT_FFI
+const frothy_ffi_entry_t froth_project_bindings[] FROTHY_WEAK_DEF = {{0}};
 const frothy_ffi_entry_t frothy_project_bindings[] FROTHY_WEAK_DEF = {{0}};
 #endif
 #endif
@@ -868,17 +869,22 @@ froth_error_t frothy_ffi_install_pin_table(const frothy_board_pin_t *pins) {
 static froth_error_t frothy_ffi_install_project_bindings(void) {
 #ifdef FROTH_HAS_PROJECT_FFI
 #if FROTHY_HAS_WEAK_SYMBOLS
+  if (frothy_ffi_table_present(froth_project_bindings)) {
+    return frothy_ffi_install_table_for_source(froth_project_bindings,
+                                               FROTHY_FFI_SOURCE_PROJECT);
+  }
+
   if (frothy_ffi_table_present(frothy_project_bindings)) {
     return frothy_ffi_install_table_for_source(frothy_project_bindings,
                                                FROTHY_FFI_SOURCE_PROJECT);
   }
 
   return frothy_ffi_raise(&froth_vm.frothy_runtime, FROTH_ERROR_UNDEFINED_WORD,
-                          "project-ffi", "frothy_project_bindings",
+                          "project-ffi", "froth_project_bindings",
                           "missing project FFI export");
 #else
-  extern const frothy_ffi_entry_t frothy_project_bindings[];
-  return frothy_ffi_install_table_for_source(frothy_project_bindings,
+  extern const frothy_ffi_entry_t froth_project_bindings[];
+  return frothy_ffi_install_table_for_source(froth_project_bindings,
                                              FROTHY_FFI_SOURCE_PROJECT);
 #endif
 #else

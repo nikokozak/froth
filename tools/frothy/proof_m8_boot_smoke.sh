@@ -2,7 +2,7 @@
 set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
-BINARY="${FROTHY_BINARY:-$ROOT_DIR/build/Frothy}"
+BINARY="${FROTH_BINARY:-${FROTHY_BINARY:-$ROOT_DIR/build/froth}}"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/frothy-m8-boot.XXXXXX")"
 
 cleanup() {
@@ -70,8 +70,8 @@ require_not_contains() {
 require_not_contains "$BOOT_TRANSCRIPT" 'eval error ('
 
 SAVE_LINE="$(printf '%s\n' "$BOOT_TRANSCRIPT" | grep -n -F '  see: <native save/0>' | head -n1 | cut -d: -f1)"
-FIRST_BOOTED_LINE="$(printf '%s\n' "$BOOT_TRANSCRIPT" | grep -n -F 'frothy> "booted"' | head -n1 | cut -d: -f1)"
-FIRST_NIL_LINE="$(printf '%s\n' "$BOOT_TRANSCRIPT" | grep -n -F 'frothy> nil' | head -n1 | cut -d: -f1)"
+FIRST_BOOTED_LINE="$(printf '%s\n' "$BOOT_TRANSCRIPT" | grep -n -F 'froth> "booted"' | head -n1 | cut -d: -f1)"
+FIRST_NIL_LINE="$(printf '%s\n' "$BOOT_TRANSCRIPT" | grep -n -F 'froth> nil' | head -n1 | cut -d: -f1)"
 if [ -z "$SAVE_LINE" ] || [ -z "$FIRST_BOOTED_LINE" ] || [ "$SAVE_LINE" -ge "$FIRST_BOOTED_LINE" ]; then
   echo 'error: expected boot output before the first prompt result' >&2
   exit 1

@@ -125,13 +125,13 @@ platform = "posix"
 		t.Fatalf("runBuildManifest: %v", err)
 	}
 
-	if seededBinary != filepath.Join(projectRoot, ".froth-build", "firmware", "Frothy") {
+	if seededBinary != filepath.Join(projectRoot, ".froth-build", "firmware", hostRuntimeBinaryName) {
 		t.Fatalf("seeded binary = %q", seededBinary)
 	}
 	if seededRunDir != projectRoot {
 		t.Fatalf("seeded run dir = %q, want %q", seededRunDir, projectRoot)
 	}
-	if seededSource != filepath.Join(projectRoot, ".froth-build", "runtime.frothy") {
+	if seededSource != filepath.Join(projectRoot, ".froth-build", runtimeSourceFilename) {
 		t.Fatalf("seeded source = %q", seededSource)
 	}
 }
@@ -562,7 +562,7 @@ func TestRunBuildLegacyCleanDeletesESPIDFBuildDir(t *testing.T) {
 	frothyHome := t.TempDir()
 	exportPath := filepath.Join(frothyHome, "sdk", "esp-idf", "export.sh")
 	mustWriteFile(t, exportPath, "export PATH=\""+toolsDir+":$PATH\"\n")
-	t.Setenv("FROTHY_HOME", frothyHome)
+	t.Setenv("FROTH_HOME", frothyHome)
 
 	withChdir(t, root)
 
@@ -607,7 +607,7 @@ func TestRunBuildLegacyBoardFlagPassesBoardToESPIDFAndCleansCache(t *testing.T) 
 	frothyHome := t.TempDir()
 	exportPath := filepath.Join(frothyHome, "sdk", "esp-idf", "export.sh")
 	mustWriteFile(t, exportPath, "export PATH=\""+toolsDir+":$PATH\"\n")
-	t.Setenv("FROTHY_HOME", frothyHome)
+	t.Setenv("FROTH_HOME", frothyHome)
 
 	withChdir(t, root)
 

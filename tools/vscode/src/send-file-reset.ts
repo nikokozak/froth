@@ -1,12 +1,12 @@
 import { ControlSessionClientError } from "./control-session-client";
 
-export const resetLogLine = "[frothy] reset";
+export const resetLogLine = "[froth] reset";
 export const resetUnavailableLogLine =
-  "[frothy] whole-file Send File aborted: control reset unavailable on connected firmware";
+  "[froth] whole-file Send File aborted: control reset unavailable on connected firmware";
 export const resetUnavailableProceedLogLine =
-  "[frothy] whole-file Send File continuing without control reset; additive eval may leave stale bindings";
+  "[froth] whole-file Send File continuing without control reset; additive eval may leave stale bindings";
 export const resetUnavailableError =
-  "Whole-file Send File requires control reset. The connected Frothy firmware is too old for safe whole-file send. Upgrade or reflash the firmware, or use Send Selection / Form for intentional additive eval.";
+  "Whole-file Send File requires control reset. The connected Froth firmware is too old for safe whole-file send. Upgrade or reflash the firmware, or use Send Selection / Form for intentional additive eval.";
 export const resetUnavailableProceedAction = "Send Anyway";
 export const resetUnavailableCancelAction = "Cancel";
 

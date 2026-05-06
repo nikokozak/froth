@@ -2,18 +2,17 @@ import * as fs from "fs";
 import * as path from "path";
 
 export function cliCandidates(cwd: string): string[] {
-  // Prefer installed `frothy` first, then repo-local Frothy checkout builds,
-  // then legacy `froth` compatibility during the transition.
+  // Prefer installed `froth` first, then repo-local checkout builds.
   return dedupe([
-    "frothy",
-    "/opt/homebrew/bin/frothy",
-    "/usr/local/bin/frothy",
-    ...repoLocalCandidates(cwd),
     "froth",
     "/opt/homebrew/bin/froth",
     "/usr/local/bin/froth",
-    "frothy-cli",
+    ...repoLocalCandidates(cwd),
     "froth-cli",
+    "frothy",
+    "/opt/homebrew/bin/frothy",
+    "/usr/local/bin/frothy",
+    "frothy-cli",
   ]);
 }
 
@@ -49,12 +48,11 @@ function repoLocalCandidates(cwd: string): string[] {
   let current = path.resolve(cwd);
 
   for (;;) {
-    // Repo-local checkouts may expose the default `frothy-cli` build, or
-    // legacy `froth-cli` / `froth` names during the transition.
-    candidates.push(path.join(current, "tools", "cli", "frothy-cli"));
-    candidates.push(path.join(current, "tools", "cli", "frothy"));
+    // Repo-local checkouts may still expose the default `frothy-cli` build.
     candidates.push(path.join(current, "tools", "cli", "froth-cli"));
     candidates.push(path.join(current, "tools", "cli", "froth"));
+    candidates.push(path.join(current, "tools", "cli", "frothy-cli"));
+    candidates.push(path.join(current, "tools", "cli", "frothy"));
 
     const parent = path.dirname(current);
     if (parent === current) {

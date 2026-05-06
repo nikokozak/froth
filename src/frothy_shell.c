@@ -59,7 +59,7 @@ static froth_error_t frothy_shell_prepare_input_line(
     const char **command_out, const char **line_for_input_out,
     frothy_shell_command_t *shell_command_out);
 
-static const char *prompt_normal = "frothy> ";
+static const char *prompt_normal = "froth> ";
 static const char *prompt_cont = ".. ";
 /* Keep large line buffers off the ESP32 main task stack. Frothy runs one
  * interactive shell at a time, so static storage matches the inherited

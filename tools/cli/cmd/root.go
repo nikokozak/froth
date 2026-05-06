@@ -18,7 +18,9 @@ var (
 var runSetupCommand = runSetup
 
 const (
-	cliCommandName = "frothy"
+	cliCommandName        = "froth"
+	hostRuntimeBinaryName = "froth"
+	runtimeSourceFilename = "runtime.froth"
 )
 
 // Execute parses os.Args and dispatches to the right subcommand.
@@ -96,13 +98,13 @@ func printUsage() {
 	fmt.Printf("Usage: %s [flags] <command>\n", cliCommandName)
 	fmt.Println()
 	fmt.Println("Commands:")
-	fmt.Println("  new <name>      Create a new Frothy project")
+	fmt.Println("  new <name>      Create a new Froth project")
 	fmt.Println("  doctor          Check environment and device")
-	fmt.Println("  build           Build Frothy firmware")
+	fmt.Println("  build           Build Froth firmware")
 	fmt.Println("  flash           Flash device")
 	fmt.Println("  setup           Install optional toolchains")
-	fmt.Println("  connect         Connect to Frothy")
-	fmt.Println("  send [file]     Send source to a Frothy runtime (raw text is additive; file/project send uses reset + eval)")
+	fmt.Println("  connect         Connect to Froth")
+	fmt.Println("  send [file]     Send source to a Froth runtime (raw text is additive; file/project send uses reset + eval)")
 	fmt.Println("  info            Show device info")
 	fmt.Println("  reset           Wipe the saved and live overlay image")
 	fmt.Println()
@@ -111,7 +113,7 @@ func printUsage() {
 	fmt.Println("  --target <name>  Target platform (`posix` or `esp-idf`)")
 	fmt.Println("  --board <name>   Board name from `boards/` (for example `esp32-devkit-v1`)")
 	fmt.Println("  --clean          Delete the build directory before building")
-	fmt.Println("  --version        Print Frothy version and exit")
+	fmt.Println("  --version        Print Froth version and exit")
 }
 
 func cliVersion() (string, error) {

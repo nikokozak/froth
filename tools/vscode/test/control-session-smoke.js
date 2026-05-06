@@ -53,7 +53,7 @@ async function test(name, fn) {
 }
 
 async function main() {
-  process.stdout.write("\n=== Frothy control-session smoke tests ===\n\n");
+  process.stdout.write("\n=== Froth control-session smoke tests ===\n\n");
 
   await test("client talks to mock helper over stdio", async () => {
     const helperPath = path.join(__dirname, "mock-control-session.js");
@@ -230,18 +230,18 @@ async function main() {
     await client.waitForExit(50);
   });
 
-  await test("CLI discovery prefers frothy and keeps legacy fallback paths", async () => {
+  await test("CLI discovery prefers froth and keeps checkout fallback paths", async () => {
     const cwd = path.resolve(__dirname, "..", "..");
     const candidates = cliCandidates(cwd);
-    assert(candidates.includes("frothy"), "frothy candidate");
     assert(candidates.includes("froth"), "froth candidate");
+    assert(candidates.includes("frothy"), "transitional frothy candidate");
     assert(
       candidates.some((candidate) => candidate.endsWith(path.join("tools", "cli", "frothy-cli"))),
       "repo-local frothy-cli candidate",
     );
     assert(
       candidates.some((candidate) => candidate.endsWith(path.join("tools", "cli", "froth-cli"))),
-      "repo-local legacy froth-cli candidate",
+      "repo-local froth-cli candidate",
     );
     assert(
       candidates.some((candidate) => candidate.endsWith(path.join("tools", "cli", "frothy"))),
@@ -249,30 +249,29 @@ async function main() {
     );
     assert(
       candidates.some((candidate) => candidate.endsWith(path.join("tools", "cli", "froth"))),
-      "repo-local legacy froth candidate",
+      "repo-local froth candidate",
     );
     assert(
-      candidates.indexOf("frothy") < candidates.indexOf("froth"),
-      "frothy comes before legacy froth",
+      candidates.indexOf("froth") < candidates.indexOf("frothy"),
+      "froth comes before transitional frothy",
     );
   });
 
-  await test("CLI discovery picks repo-local frothy-cli before legacy PATH froth", async () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "frothy-cli-discovery-"));
-    const pathDir = fs.mkdtempSync(path.join(os.tmpdir(), "frothy-cli-path-"));
+  await test("CLI discovery picks PATH froth before repo-local fallback", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "froth-cli-discovery-"));
+    const pathDir = fs.mkdtempSync(path.join(os.tmpdir(), "froth-cli-path-"));
 
     try {
       const repoCli = path.join(repoRoot, "tools", "cli", "frothy-cli");
-      const legacyCli = path.join(pathDir, "froth");
+      const installedCli = path.join(pathDir, "froth");
       fs.mkdirSync(path.dirname(repoCli), { recursive: true });
       fs.writeFileSync(repoCli, "#!/bin/sh\n");
-      fs.writeFileSync(legacyCli, "#!/bin/sh\n");
+      fs.writeFileSync(installedCli, "#!/bin/sh\n");
 
       const candidates = cliCandidates(repoRoot).filter((candidate) => ![
-        "frothy",
-        "/opt/homebrew/bin/frothy",
-        "/usr/local/bin/frothy",
-        "frothy-cli",
+        "/opt/homebrew/bin/froth",
+        "/usr/local/bin/froth",
+        "froth-cli",
       ].includes(candidate));
 
       let resolved = null;
@@ -283,7 +282,7 @@ async function main() {
         }
       }
 
-      assertEq(resolved, repoCli, "repo-local frothy-cli wins before legacy PATH froth");
+      assertEq(resolved, installedCli, "PATH froth wins before repo-local fallback");
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
       fs.rmSync(pathDir, { recursive: true, force: true });
@@ -297,16 +296,16 @@ async function main() {
     assert(resolved && resolved.endsWith("package.json"), "resolved repo file");
   });
 
-  await test("send-file helper reports Frothy wording for old CLI failures", async () => {
+  await test("send-file helper reports Froth wording for old CLI failures", async () => {
     const err = await assertRejects(
-      resolveSendSourceCommand("missing-cli", "/tmp/demo.frothy", process.cwd(), async () => {
+      resolveSendSourceCommand("missing-cli", "/tmp/demo.froth", process.cwd(), async () => {
         const failure = new Error("missing");
         failure.code = "ENOENT";
         throw failure;
       }),
       "missing cli should fail",
     );
-    assert(/Frothy CLI not found/.test(err.message), "send-file error wording");
+    assert(/Froth CLI not found/.test(err.message), "send-file error wording");
   });
 
   process.stdout.write(`\npassed ${passed}\n`);

@@ -211,7 +211,7 @@ froth_error_t frothy_boot(void) {
 
   froth_vm_mark_boot_complete();
 
-  FROTH_TRY(frothy_emit_line("Frothy shell"));
+  FROTH_TRY(frothy_emit_line("Froth shell"));
 #ifdef FROTH_HAS_SNAPSHOTS
   {
     uint8_t slot;

@@ -4,11 +4,11 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/cli/cmd/release-defaults.env"
 
-# Release assets and tap metadata stay Frothy-branded.
+# Release assets and tap metadata use the public Froth name.
 # Manual maintainer-only firmware packaging stays available separately.
-RELEASE_REPO_SLUG=${RELEASE_REPO_SLUG:-$FROTHY_DEFAULT_RELEASE_REPO_SLUG}
-HOMEBREW_TAP_REPO_SLUG=${HOMEBREW_TAP_REPO_SLUG:-$FROTHY_DEFAULT_HOMEBREW_TAP_REPO_SLUG}
-DEFAULT_FIRMWARE_BOARD=${DEFAULT_FIRMWARE_BOARD:-$FROTHY_DEFAULT_FIRMWARE_BOARD}
+RELEASE_REPO_SLUG=${RELEASE_REPO_SLUG:-$FROTH_DEFAULT_RELEASE_REPO_SLUG}
+HOMEBREW_TAP_REPO_SLUG=${HOMEBREW_TAP_REPO_SLUG:-$FROTH_DEFAULT_HOMEBREW_TAP_REPO_SLUG}
+DEFAULT_FIRMWARE_BOARD=${DEFAULT_FIRMWARE_BOARD:-$FROTH_DEFAULT_FIRMWARE_BOARD}
 
 normalize_version() {
   case "$1" in
@@ -26,18 +26,18 @@ cli_asset_name() {
   version=$(normalize_version "$1")
   os=$2
   arch=$3
-  printf 'frothy-v%s-%s-%s.tar.gz\n' "$version" "$os" "$arch"
+  printf 'froth-v%s-%s-%s.tar.gz\n' "$version" "$os" "$arch"
 }
 
 firmware_asset_name() {
   version=$(normalize_version "$1")
   board=${2:-$DEFAULT_FIRMWARE_BOARD}
-  printf 'frothy-v%s-%s.zip\n' "$version" "$board"
+  printf 'froth-v%s-%s.zip\n' "$version" "$board"
 }
 
 checksums_asset_name() {
   version=$(normalize_version "$1")
-  printf 'frothy-v%s-checksums.txt\n' "$version"
+  printf 'froth-v%s-checksums.txt\n' "$version"
 }
 
 release_download_base() {

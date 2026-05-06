@@ -111,7 +111,7 @@ type LocalRuntime struct {
 }
 
 func StartLocalRuntime(binary string) (*LocalRuntime, error) {
-	tempDir, err := os.MkdirTemp("", "frothy-control-smoke-")
+	tempDir, err := os.MkdirTemp("", "froth-control-smoke-")
 	if err != nil {
 		return nil, fmt.Errorf("mktemp: %w", err)
 	}

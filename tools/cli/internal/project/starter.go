@@ -13,7 +13,7 @@ func defaultStarterSourceFiles() map[string]string {
 		filepath.Join("src", "main.froth"): `note = nil
 
 boot {
-  set note = "Hello from Frothy!"
+  set note = "Hello from Froth!"
 }
 `,
 	}

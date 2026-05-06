@@ -26,9 +26,12 @@ func VersionFromFS(fsys fs.FS) (string, error) {
 	return version, nil
 }
 
-func FrothyHome() (string, error) {
+func FrothHome() (string, error) {
+	if home := os.Getenv("FROTH_HOME"); home != "" {
+		return ensureFrothHome(home)
+	}
 	if home := os.Getenv("FROTHY_HOME"); home != "" {
-		return ensureFrothyHome(home)
+		return ensureFrothHome(home)
 	}
 
 	home, err := os.UserHomeDir()
@@ -36,22 +39,22 @@ func FrothyHome() (string, error) {
 		return "", fmt.Errorf("home dir: %w", err)
 	}
 
-	return ensureFrothyHome(filepath.Join(home, ".frothy"))
+	return ensureFrothHome(filepath.Join(home, ".froth"))
 }
 
-func FrothHome() (string, error) {
-	return FrothyHome()
+func FrothyHome() (string, error) {
+	return FrothHome()
 }
 
-func ensureFrothyHome(home string) (string, error) {
+func ensureFrothHome(home string) (string, error) {
 	if err := os.MkdirAll(home, 0755); err != nil {
-		return "", fmt.Errorf("create Frothy home %s: %w", home, err)
+		return "", fmt.Errorf("create Froth home %s: %w", home, err)
 	}
 	return home, nil
 }
 
 func SDKPath(version string) (string, error) {
-	frothHome, err := FrothyHome()
+	frothHome, err := FrothHome()
 	if err != nil {
 		return "", err
 	}
@@ -69,7 +72,7 @@ func EnsureSDK() (string, error) {
 		return "", err
 	}
 
-	frothHome, err := FrothyHome()
+	frothHome, err := FrothHome()
 	if err != nil {
 		return "", err
 	}
@@ -166,7 +169,7 @@ func ensureSDKFromFS(fsys fs.FS, frothHome string, version string) (string, erro
 		return "", fmt.Errorf("create sdk cache dir: %w", err)
 	}
 
-	tempDir, err := os.MkdirTemp(parentDir, ".frothy-sdk-*")
+	tempDir, err := os.MkdirTemp(parentDir, ".froth-sdk-*")
 	if err != nil {
 		return "", fmt.Errorf("create sdk temp dir: %w", err)
 	}
@@ -204,7 +207,7 @@ func ensureSDKFromFS(fsys fs.FS, frothHome string, version string) (string, erro
 }
 
 func sdkPathForHome(frothHome string, version string) string {
-	return filepath.Join(frothHome, "sdk", "frothy-"+version)
+	return filepath.Join(frothHome, "sdk", "froth-"+version)
 }
 
 func payloadDigestFromFS(fsys fs.FS) (string, error) {

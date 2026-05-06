@@ -4,7 +4,7 @@
 const {
   ControlSessionClientError,
 } = require("../out/control-session-client");
-const { FrothyController } = require("../out/controller");
+const { FrothController } = require("../out/controller");
 
 let passed = 0;
 let failed = 0;
@@ -102,7 +102,7 @@ class FakeEditor {
 class FakeHost {
   constructor() {
     this.output = new FakeOutput();
-    this.editor = new FakeEditor("/tmp/demo.frothy", "control.value = 41 + 1");
+    this.editor = new FakeEditor("/tmp/demo.froth", "control.value = 41 + 1");
     this.warningResponses = [];
     this.inputResponses = [];
     this.warningMessages = [];
@@ -269,7 +269,7 @@ function createController(host, clientOrClients, overrides = {}) {
     ? clientOrClients.slice()
     : [clientOrClients];
   const fallbackClient = clients[clients.length - 1];
-  return new FrothyController({
+  return new FrothController({
     host,
     sendFileInterruptSettleTimeoutMs: overrides.sendFileInterruptSettleTimeoutMs,
     async resolveCliPath() {
@@ -288,7 +288,7 @@ function createController(host, clientOrClients, overrides = {}) {
 }
 
 async function main() {
-  process.stdout.write("\n=== Frothy controller smoke tests ===\n\n");
+  process.stdout.write("\n=== Froth controller smoke tests ===\n\n");
 
   await test("connect failure offers doctor on no_devices", async () => {
     const host = new FakeHost();
@@ -297,7 +297,7 @@ async function main() {
     client.connectImpl = async () => {
       throw new ControlSessionClientError({
         code: "no_devices",
-        message: "no Frothy device found",
+        message: "no Froth device found",
       });
     };
 
@@ -315,7 +315,7 @@ async function main() {
       if (!port) {
         throw new ControlSessionClientError({
           code: "multiple_devices",
-          message: "multiple Frothy devices found",
+          message: "multiple Froth devices found",
           candidates: [
             { port: "/dev/cu.picked", board: "picked", version: "0.1.0-test" },
           ],
@@ -349,7 +349,7 @@ async function main() {
     client.connectImpl = async () => {
       throw new ControlSessionClientError({
         code: "multiple_devices",
-        message: "multiple Frothy devices found",
+        message: "multiple Froth devices found",
         candidates: [
           { port: "/dev/cu.a", board: "A", version: "0.1.0-test" },
           { port: "/dev/cu.b", board: "B", version: "0.1.0-test" },
@@ -401,7 +401,7 @@ async function main() {
     client.resetImpl = async () => {
       throw new ControlSessionClientError({
         code: "reset_unavailable",
-        message: "connected Frothy kernel does not support control reset",
+        message: "connected Froth kernel does not support control reset",
       });
     };
 
@@ -575,7 +575,7 @@ async function main() {
     await runningEval;
     assert(
       !host.warningMessages.some((entry) =>
-        /No Frothy device connected/.test(entry.message)
+        /No Froth device connected/.test(entry.message)
       ),
       "intentional reconnect should not show stale disconnect warning",
     );
@@ -621,7 +621,7 @@ async function main() {
     );
     assert(
       !host.warningMessages.some((entry) =>
-        /No Frothy device connected/.test(entry.message)
+        /No Froth device connected/.test(entry.message)
       ),
       "late old request should not warn as current disconnect",
     );
@@ -784,7 +784,7 @@ async function main() {
     );
     assert(
       !host.warningMessages.some((entry) =>
-        /No Frothy device connected/.test(entry.message)
+        /No Froth device connected/.test(entry.message)
       ),
       "stale connect should not warn",
     );
@@ -1366,7 +1366,7 @@ async function main() {
     assertEq(resetCalls, 0, "reset should not run on a changed helper");
     assertEq((client.evalCalls || []).length, 0, "file should not send");
     assert(
-      !host.output.buffer.includes("[frothy] send "),
+      !host.output.buffer.includes("[froth] send "),
       "send log should not claim the file was sent",
     );
   });
@@ -1405,7 +1405,7 @@ async function main() {
     assertEq(evalCount, 1, "send file should stop after helper exit");
     assertEq(controller.getSnapshot().state, "disconnected", "helper exit should disconnect");
     assert(
-      !host.warningMessages.some((entry) => /No Frothy device connected/.test(entry.message)),
+      !host.warningMessages.some((entry) => /No Froth device connected/.test(entry.message)),
       "stale request completion should not emit disconnect warning",
     );
   });

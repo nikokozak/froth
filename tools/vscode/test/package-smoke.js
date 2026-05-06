@@ -41,14 +41,14 @@ function includesPrefix(entries, prefix) {
 }
 
 function main() {
-  process.stdout.write("\n=== Frothy VSIX package smoke tests ===\n\n");
+  process.stdout.write("\n=== Froth VSIX package smoke tests ===\n\n");
 
   assert(manifest.repository, "missing repository metadata");
   assert(manifest.license === "MIT", "license should be MIT");
   assert(Array.isArray(manifest.files), "missing packaged files allowlist");
 
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "frothy-vsix-"));
-  const vsixFile = path.join(tempDir, "frothy-package-smoke.vsix");
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "froth-vsix-"));
+  const vsixFile = path.join(tempDir, "froth-package-smoke.vsix");
 
   try {
     execFileSync(vscePath(), ["package", "--no-yarn", "--out", vsixFile], {

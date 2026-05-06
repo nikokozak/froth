@@ -9,7 +9,7 @@ import (
 
 const (
 	legacyPrompt       = "froth> "
-	frothyPrompt       = "frothy> "
+	frothyPrompt       = "froth> "
 	frothyContinue     = ".. "
 	snapshotHeaderSize = 50
 	payloadCRC32Offset = 26

@@ -65,7 +65,7 @@ func detectRepoRoot() (string, error) {
 		}
 		dir = parent
 	}
-	return "", errors.New("could not locate Frothy repo root")
+	return "", errors.New("could not locate Froth repo root")
 }
 
 func baseTestEnv(paths pathSet) map[string]string {
@@ -76,7 +76,7 @@ func baseTestEnv(paths pathSet) map[string]string {
 		"FROTH_TEST_RUNNER_BIN":      runnerBin,
 		"FROTH_TEST_REPO_ROOT":       paths.Root,
 		"FROTH_TEST_DEFAULT_PROFILE": "host-default",
-		"FROTHY_BINARY":              filepath.Join(profileBuildDir(paths, "host-default"), "Frothy"),
+		"FROTH_BINARY":               filepath.Join(profileBuildDir(paths, "host-default"), "froth"),
 	}
 }
 

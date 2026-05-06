@@ -38,7 +38,7 @@ func runFlash() error {
 		return runFlashLegacy()
 	}
 
-	return fmt.Errorf("`%s flash` now supports source-based flashing only. Workshop boards are preflashed; for maintainer flashing, run from a Frothy project or repo checkout", cliCommandName)
+	return fmt.Errorf("`%s flash` now supports source-based flashing only. Workshop boards are preflashed; for maintainer flashing, run from a Froth project or repo checkout", cliCommandName)
 }
 
 func runFlashManifest(manifest *project.Manifest, root string) error {
@@ -49,7 +49,7 @@ func runFlashManifest(manifest *project.Manifest, root string) error {
 
 	switch manifest.Target.Platform {
 	case "", "posix":
-		fmt.Printf("binary: %s\n", filepath.Join(root, ".froth-build", "firmware", "Frothy"))
+		fmt.Printf("binary: %s\n", filepath.Join(root, ".froth-build", "firmware", hostRuntimeBinaryName))
 		return nil
 	case "esp-idf":
 		port, err := flashResolvePort()
@@ -60,7 +60,7 @@ func runFlashManifest(manifest *project.Manifest, root string) error {
 		if err := flashESPIDFDirFn(filepath.Join(root, ".froth-build", "esp-idf"), port); err != nil {
 			return err
 		}
-		runtimePath := filepath.Join(root, ".froth-build", "runtime.frothy")
+		runtimePath := filepath.Join(root, ".froth-build", runtimeSourceFilename)
 		fmt.Printf("Applying runtime source: %s\n", runtimePath)
 		return flashApplyRuntime(port, runtimePath)
 	default:
@@ -130,7 +130,7 @@ func runFlashLegacy() error {
 			return err
 		}
 		fmt.Println("no flash step for POSIX target")
-		fmt.Printf("binary: %s\n", filepath.Join(root, "build", "Frothy"))
+		fmt.Printf("binary: %s\n", filepath.Join(root, "build", hostRuntimeBinaryName))
 		return nil
 	case "esp-idf":
 		if err := cleanBuildDirForExplicitSelection(filepath.Join(root, "targets", "esp-idf", "build"), selection); err != nil {

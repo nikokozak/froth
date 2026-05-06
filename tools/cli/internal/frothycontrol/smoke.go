@@ -25,7 +25,7 @@ func runRawMultilineInterrupt(session *Session) error {
 	if err := session.Interrupt(); err != nil {
 		return fmt.Errorf("interrupt multiline input: %w", err)
 	}
-	if _, err := session.waitForRaw([]byte("frothy> "), rawPromptTimeout); err != nil {
+	if _, err := session.waitForRaw([]byte("froth> "), rawPromptTimeout); err != nil {
 		return fmt.Errorf("wait for prompt after multiline interrupt: %w", err)
 	}
 	return nil
@@ -50,7 +50,7 @@ func interruptIdleControlSession(session *Session) error {
 	if err := session.Interrupt(); err != nil {
 		return fmt.Errorf("interrupt idle control session: %w", err)
 	}
-	if _, err := session.waitForRaw([]byte("frothy> "), rawPromptTimeout); err != nil {
+	if _, err := session.waitForRaw([]byte("froth> "), rawPromptTimeout); err != nil {
 		return fmt.Errorf("wait for prompt after idle control interrupt: %w", err)
 	}
 	session.sessionID = 0

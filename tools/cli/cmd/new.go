@@ -46,22 +46,22 @@ platform = "%s"
 # [dependencies]
 # utils = { path = "lib/utils.froth" }
 #
-# In Frothy source:
+# In Froth source:
 # \ #use "utils"
 #
 # Relative includes also work without a manifest entry:
 # \ #use "../lib/utils.froth"
 
 # This [target] block is the project authority after scaffolding.
-# frothy new defaults to posix.
-# frothy new --board <board> can prefill a non-posix target.
+# froth new defaults to posix.
+# froth new --board <board> can prefill a non-posix target.
 # You can also edit these values later.
 
 # Project FFI: compile your own C bindings alongside the kernel.
-# Export a null-terminated frothy_ffi_entry_t[] table named
-# frothy_project_bindings.
-# For arity > 0 entries, set .param_count = FROTHY_FFI_PARAM_COUNT(params).
-# Optional: set .stack_effect on each frothy_ffi_entry_t if you want
+# Export a null-terminated froth_ffi_entry_t[] table named
+# froth_project_bindings.
+# For arity > 0 entries, set .param_count = FROTH_FFI_PARAM_COUNT(params).
+# Optional: set .stack_effect on each froth_ffi_entry_t if you want
 # slotInfo to show an explicit effect line for maintained bindings.
 #
 # [ffi]

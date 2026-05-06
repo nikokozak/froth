@@ -64,7 +64,7 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const extensionDevelopmentPath = path.resolve(__dirname, "..");
   const extensionTestsPath = path.resolve(__dirname, "extension-host", "index.js");
-  const profilePath = fs.mkdtempSync(path.join(os.tmpdir(), "frothy-vscode-smoke-"));
+  const profilePath = fs.mkdtempSync(path.join(os.tmpdir(), "froth-vscode-smoke-"));
 
   await runTests({
     extensionDevelopmentPath,

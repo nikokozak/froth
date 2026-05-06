@@ -1,6 +1,6 @@
 REPO_ROOT := ../..
 SDK_PAYLOAD_DIR := internal/sdk/generated
-# Repo-local checkout builds use the Frothy-owned CLI name.
+# Repo-local checkout builds keep the internal binary name.
 OUTPUT ?= frothy-cli
 export FROTH_LINK_MAX_PAYLOAD ?= 1024
 empty :=
@@ -20,7 +20,7 @@ sdk-payload:
 
 build: sdk-payload
 	@rm -f froth-cli
-	@echo "  Compiling repo-local $(OUTPUT)..."
+	@echo "  Compiling repo-local CLI binary..."
 	@if [ -n "$(GOCACHE)" ]; then \
 		GOCACHE="$(GOCACHE)" go build -o $(OUTPUT) .; \
 	else \

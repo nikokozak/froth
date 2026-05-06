@@ -117,7 +117,7 @@ func FindProjectRoot(startDir string) (string, error) {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", fmt.Errorf("not in a Frothy project (no %s found)", ManifestFile)
+			return "", fmt.Errorf("not in a Froth project (no %s found)", ManifestFile)
 		}
 		dir = parent
 	}

@@ -13,7 +13,7 @@ import (
 
 func commandProofCtrlC(args []string) error {
 	fs := flag.NewFlagSet("proof-ctrlc", flag.ContinueOnError)
-	binaryPath := fs.String("binary", "", "Frothy host binary")
+	binaryPath := fs.String("binary", "", "Froth host binary")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -22,7 +22,7 @@ func commandProofCtrlC(args []string) error {
 
 func commandProofSafeBoot(args []string) error {
 	fs := flag.NewFlagSet("proof-safeboot", flag.ContinueOnError)
-	binaryPath := fs.String("binary", "", "Frothy host binary")
+	binaryPath := fs.String("binary", "", "Froth host binary")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -33,6 +33,9 @@ func resolveFrothyBinary(provided string) string {
 	if provided != "" {
 		return provided
 	}
+	if fromEnv := os.Getenv("FROTH_BINARY"); fromEnv != "" {
+		return fromEnv
+	}
 	if fromEnv := os.Getenv("FROTHY_BINARY"); fromEnv != "" {
 		return fromEnv
 	}
@@ -40,12 +43,12 @@ func resolveFrothyBinary(provided string) string {
 	if err != nil {
 		fatalf("error: %v", err)
 	}
-	return filepath.Join(root, "build", "Frothy")
+	return filepath.Join(root, "build", "froth")
 }
 
 func proofCtrlC(binaryPath string) error {
 	if !fileExists(binaryPath) {
-		return fmt.Errorf("missing Frothy binary: %s", binaryPath)
+		return fmt.Errorf("missing Froth binary: %s", binaryPath)
 	}
 	if err := runCtrlCRawByteMultilineCase(binaryPath); err != nil {
 		return err
@@ -108,7 +111,7 @@ func runCtrlCRawByteMultilineCase(binaryPath string) error {
 
 	text := normalizeNewlines(transcript)
 	fmt.Print(text)
-	requireOrderedContains(text, frothyPrompt, frothyContinue, "frothy> 2\n", frothyPrompt)
+	requireOrderedContains(text, frothyPrompt, frothyContinue, "froth> 2\n", frothyPrompt)
 	requireNotContains(text, "parse error (")
 	requireNotContains(text, "eval error (")
 	return nil
@@ -166,7 +169,7 @@ func runCtrlCMultilineCase(binaryPath string) error {
 
 	text := normalizeNewlines(transcript)
 	fmt.Print(text)
-	requireOrderedContains(text, frothyPrompt, frothyContinue, "frothy> 2\n", frothyPrompt)
+	requireOrderedContains(text, frothyPrompt, frothyContinue, "froth> 2\n", frothyPrompt)
 	requireNotContains(text, "parse error (")
 	requireNotContains(text, "eval error (")
 	return nil
@@ -224,14 +227,14 @@ func runCtrlCLoopCase(binaryPath string) error {
 
 	text := normalizeNewlines(transcript)
 	fmt.Print(text)
-	requireOrderedContains(text, frothyPrompt, "<native save/0>", "eval error (14)", "frothy> 2\nfrothy> ")
+	requireOrderedContains(text, frothyPrompt, "<native save/0>", "eval error (14)", "froth> 2\nfroth> ")
 	requireNotContains(text, "parse error (")
 	return nil
 }
 
 func proofSafeBoot(binaryPath string) error {
 	if !fileExists(binaryPath) {
-		return fmt.Errorf("missing Frothy binary: %s", binaryPath)
+		return fmt.Errorf("missing Froth binary: %s", binaryPath)
 	}
 	workDir, err := os.MkdirTemp("", "frothy-m3a-safe-boot.")
 	if err != nil {
@@ -295,8 +298,8 @@ func proofSafeBoot(binaryPath string) error {
 
 	text := normalizeNewlines(transcript)
 	fmt.Print(text)
-	requireContains(text, "Frothy shell")
-	requireOrderedContains(text, "snapshot: found", "boot: CTRL-C for safe boot", "boot: Safe Boot, skipped restore and boot.", "eval error (4)", "frothy> 2\nfrothy> ")
+	requireContains(text, "Froth shell")
+	requireOrderedContains(text, "snapshot: found", "boot: CTRL-C for safe boot", "boot: Safe Boot, skipped restore and boot.", "eval error (4)", "froth> 2\nfroth> ")
 	requireNotContains(text, "\"booted\"")
 	requireNotContains(text, "parse error (")
 	return nil
