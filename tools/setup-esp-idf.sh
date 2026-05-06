@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Fetch and install ESP-IDF for Frothy development.
-# Installs to $FROTHY_HOME/sdk/esp-idf/ when FROTHY_HOME is set,
-# falls back to $FROTH_HOME/sdk/esp-idf/ for legacy compatibility,
-# otherwise ~/.frothy/sdk/esp-idf/.
+# Fetch and install ESP-IDF for Froth development.
+# Installs to $FROTH_HOME/sdk/esp-idf/ when FROTH_HOME is set, falls back to
+# the transitional home override when present, and otherwise uses
+# ~/.froth/sdk/esp-idf/.
 #
 # Usage:
 #   ./tools/setup-esp-idf.sh           # install (skip if already present)
@@ -12,10 +12,10 @@
 set -eu
 
 ESP_IDF_VERSION="v5.5"
-FROTH_HOME_DIR="${FROTHY_HOME:-${FROTH_HOME:-$HOME/.frothy}}"
+FROTH_HOME_DIR="${FROTH_HOME:-${FROTHY_HOME:-$HOME/.froth}}"
 FROTH_SDK_DIR="$FROTH_HOME_DIR/sdk"
 IDF_INSTALL_DIR="$FROTH_SDK_DIR/esp-idf"
-IDF_READY_MARKER=".frothy-install-complete"
+IDF_READY_MARKER=".froth-install-complete"
 
 usage() {
   cat <<'EOF'
@@ -124,9 +124,9 @@ echo "  source $IDF_INSTALL_DIR/export.sh"
 echo ""
 echo "Then verify the toolchain:"
 echo ""
-echo "  frothy doctor"
+echo "  froth doctor"
 echo ""
-echo "Then build Frothy for ESP32:"
+echo "Then build Froth for ESP32:"
 echo ""
 echo "  cd targets/esp-idf"
 echo "  idf.py set-target esp32"

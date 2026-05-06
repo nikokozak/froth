@@ -34,26 +34,26 @@ if [ ! -f "$BINARY" ]; then
 fi
 
 mkdir -p "$DIST_DIR"
-STAGING_DIR=$(mktemp -d "${TMPDIR:-/tmp}/frothy-release.XXXXXX")
+STAGING_DIR=$(mktemp -d "${TMPDIR:-/tmp}/froth-release.XXXXXX")
 trap 'rm -rf "$STAGING_DIR"' EXIT INT TERM
 
-# Ship the Frothy-owned installed command name in release assets.
-cp "$BINARY" "$STAGING_DIR/frothy"
+# Ship the public installed command name in release assets.
+cp "$BINARY" "$STAGING_DIR/froth"
 cat >"$STAGING_DIR/README.txt" <<EOF
-Frothy CLI release archive
-==========================
+Froth CLI release archive
+=========================
 
 Archive name: $(cli_asset_name "$VERSION" "$GOOS" "$GOARCH")
-Installed command: frothy
+Installed command: froth
 Repo-local checkout build: tools/cli/frothy-cli
 
 Direct-install reminder:
-- place \`frothy\` somewhere on PATH
-- then run \`frothy --version\`
-- then run \`frothy doctor\`
+- place \`froth\` somewhere on PATH
+- then run \`froth --version\`
+- then run \`froth doctor\`
 EOF
 ARCHIVE="$DIST_DIR/$(cli_asset_name "$VERSION" "$GOOS" "$GOARCH")"
-LC_ALL=C COPYFILE_DISABLE=1 tar -C "$STAGING_DIR" -czf "$ARCHIVE" frothy README.txt
+LC_ALL=C COPYFILE_DISABLE=1 tar -C "$STAGING_DIR" -czf "$ARCHIVE" froth README.txt
 
 printf '%s\n' "$ARCHIVE"
 LC_ALL=C COPYFILE_DISABLE=1 tar -tzf "$ARCHIVE"

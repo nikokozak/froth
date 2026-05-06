@@ -28,41 +28,41 @@ function commandIds() {
 }
 
 async function main() {
-  process.stdout.write("\n=== Frothy extension manifest smoke tests ===\n\n");
+  process.stdout.write("\n=== Froth extension manifest smoke tests ===\n\n");
 
   const commands = commandIds();
   for (const command of [
-    "frothy.connect",
-    "frothy.forceReconnect",
-    "frothy.disconnect",
-    "frothy.sendSelection",
-    "frothy.runBinding",
-    "frothy.pinRunBinding",
-    "frothy.runLast",
-    "frothy.runPinned",
-    "frothy.sendFile",
-    "frothy.interrupt",
-    "frothy.words",
-    "frothy.see",
-    "frothy.core",
-    "frothy.slotInfo",
-    "frothy.save",
-    "frothy.restore",
-    "frothy.wipe",
-    "frothy.doctor",
-    "frothy.showConsole",
+    "froth.connect",
+    "froth.forceReconnect",
+    "froth.disconnect",
+    "froth.sendSelection",
+    "froth.runBinding",
+    "froth.pinRunBinding",
+    "froth.runLast",
+    "froth.runPinned",
+    "froth.sendFile",
+    "froth.interrupt",
+    "froth.words",
+    "froth.see",
+    "froth.core",
+    "froth.slotInfo",
+    "froth.save",
+    "froth.restore",
+    "froth.wipe",
+    "froth.doctor",
+    "froth.showConsole",
   ]) {
     assert(commands.has(command), `missing command ${command}`);
   }
 
-  for (const command of ["froth.connect", "froth.tryLocal", "froth.reset"]) {
+  for (const command of ["frothy.connect", "froth.tryLocal", "froth.reset"]) {
     assert(!commands.has(command), `stale public command ${command}`);
   }
   const pinRunCommand = manifest.contributes.commands.find(
-    (entry) => entry.command === "frothy.pinRunBinding",
+    (entry) => entry.command === "froth.pinRunBinding",
   );
   const runPinnedCommand = manifest.contributes.commands.find(
-    (entry) => entry.command === "frothy.runPinned",
+    (entry) => entry.command === "froth.runPinned",
   );
   assert(pinRunCommand.icon === "$(pinned)", "pin binding should use pinned icon");
   assert(
@@ -71,9 +71,9 @@ async function main() {
   );
 
   const config = manifest.contributes.configuration.properties;
-  assert(config["frothy.cliPath"], "missing frothy.cliPath setting");
-  assert(config["frothy.port"], "missing frothy.port setting");
-  assert(!config["froth.cliPath"], "stale froth.cliPath setting");
+  assert(config["froth.cliPath"], "missing froth.cliPath setting");
+  assert(config["froth.port"], "missing froth.port setting");
+  assert(!config["frothy.cliPath"], "stale frothy.cliPath setting");
   assert(!config["froth.localRuntimePath"], "stale local runtime setting");
   assert(manifest.repository, "missing repository metadata");
   assert(manifest.license === "MIT", "license should be MIT");
@@ -82,12 +82,8 @@ async function main() {
   assert(manifest.files.includes("LICENSE"), "LICENSE should ship in the VSIX");
 
   const language = manifest.contributes.languages[0];
-  assert(language.id === "frothy", "language id should be frothy");
-  assert(language.extensions.includes(".frothy"), "missing .frothy extension");
-  assert(
-    language.extensions.includes(".froth"),
-    "missing .froth compatibility extension",
-  );
+  assert(language.id === "froth", "language id should be froth");
+  assert(language.extensions.includes(".froth"), "missing .froth extension");
 
   const welcome = manifest.contributes.viewsWelcome[0].contents;
   assert(/Connect Device/.test(welcome), "welcome content should offer connect");
@@ -96,31 +92,31 @@ async function main() {
   const keybindings = manifest.contributes.keybindings;
   assert(
     keybindings.some(
-      (entry) => entry.command === "frothy.runLast" && entry.mac === "cmd+alt+r",
+      (entry) => entry.command === "froth.runLast" && entry.mac === "cmd+alt+r",
     ),
     "run last should have a macOS keybinding",
   );
   assert(
     keybindings.some(
-      (entry) => entry.command === "frothy.pinRunBinding" && entry.mac === "cmd+alt+p",
+      (entry) => entry.command === "froth.pinRunBinding" && entry.mac === "cmd+alt+p",
     ),
     "pin run binding should have a macOS keybinding",
   );
   assert(
     keybindings.some(
-      (entry) => entry.command === "frothy.runPinned" && entry.mac === "cmd+alt+enter",
+      (entry) => entry.command === "froth.runPinned" && entry.mac === "cmd+alt+enter",
     ),
     "run pinned binding should have a macOS keybinding",
   );
   assert(
     keybindings.some(
-      (entry) => entry.command === "frothy.see" && entry.mac === "cmd+alt+b",
+      (entry) => entry.command === "froth.see" && entry.mac === "cmd+alt+b",
     ),
     "see binding should have a macOS keybinding",
   );
   assert(
     keybindings.some(
-      (entry) => entry.command === "frothy.interrupt" && entry.mac === "cmd+alt+.",
+      (entry) => entry.command === "froth.interrupt" && entry.mac === "cmd+alt+.",
     ),
     "interrupt should have the macOS interrupt chord",
   );
@@ -144,7 +140,7 @@ async function main() {
       reset: async () => {
         throw new ControlSessionClientError({
           code: "reset_unavailable",
-          message: "connected Frothy kernel does not support control reset",
+          message: "connected Froth kernel does not support control reset",
         });
       },
     },
@@ -174,7 +170,7 @@ async function main() {
       reset: async () => {
         throw new ControlSessionClientError({
           code: "reset_unavailable",
-          message: "connected Frothy kernel does not support control reset",
+          message: "connected Froth kernel does not support control reset",
         });
       },
     },

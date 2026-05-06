@@ -14,48 +14,46 @@ import (
 	"testing/fstest"
 )
 
-func TestFrothyHomeUsesEnvironmentOverride(t *testing.T) {
-	t.Setenv("FROTHY_HOME", filepath.Join(t.TempDir(), "frothy-home"))
+func TestFrothHomeUsesEnvironmentOverride(t *testing.T) {
+	t.Setenv("FROTH_HOME", filepath.Join(t.TempDir(), "froth-home"))
+	t.Setenv("FROTHY_HOME", "")
 
-	home, err := FrothyHome()
+	home, err := FrothHome()
 	if err != nil {
-		t.Fatalf("FrothyHome: %v", err)
+		t.Fatalf("FrothHome: %v", err)
 	}
-	if home != os.Getenv("FROTHY_HOME") {
-		t.Fatalf("home = %q, want %q", home, os.Getenv("FROTHY_HOME"))
+	if home != os.Getenv("FROTH_HOME") {
+		t.Fatalf("home = %q, want %q", home, os.Getenv("FROTH_HOME"))
 	}
 	if info, err := os.Stat(home); err != nil || !info.IsDir() {
 		t.Fatalf("home dir missing: info=%v err=%v", info, err)
 	}
 }
 
-func TestFrothyHomeIgnoresLegacyFROTHHOME(t *testing.T) {
-	tmpHome := t.TempDir()
-	t.Setenv("FROTHY_HOME", "")
-	t.Setenv("FROTH_HOME", filepath.Join(tmpHome, ".froth"))
-	t.Setenv("HOME", tmpHome)
+func TestFrothHomeUsesTransitionalOverride(t *testing.T) {
+	t.Setenv("FROTH_HOME", "")
+	t.Setenv("FROTHY_HOME", filepath.Join(t.TempDir(), "transitional-home"))
 
-	home, err := FrothyHome()
+	home, err := FrothHome()
 	if err != nil {
-		t.Fatalf("FrothyHome: %v", err)
+		t.Fatalf("FrothHome: %v", err)
 	}
-	want := filepath.Join(tmpHome, ".frothy")
-	if home != want {
-		t.Fatalf("home = %q, want %q", home, want)
+	if home != os.Getenv("FROTHY_HOME") {
+		t.Fatalf("home = %q, want %q", home, os.Getenv("FROTHY_HOME"))
 	}
 }
 
-func TestFrothyHomeDefaultsToDotFrothy(t *testing.T) {
+func TestFrothHomeDefaultsToDotFroth(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("FROTHY_HOME", "")
 	t.Setenv("FROTH_HOME", "")
 	t.Setenv("HOME", tmpHome)
 
-	home, err := FrothyHome()
+	home, err := FrothHome()
 	if err != nil {
-		t.Fatalf("FrothyHome: %v", err)
+		t.Fatalf("FrothHome: %v", err)
 	}
-	want := filepath.Join(tmpHome, ".frothy")
+	want := filepath.Join(tmpHome, ".froth")
 	if home != want {
 		t.Fatalf("home = %q, want %q", home, want)
 	}
@@ -88,7 +86,7 @@ func TestEnsureSDKExtractsEmbeddedTree(t *testing.T) {
 		t.Fatalf("ensureSDKFromFS: %v", err)
 	}
 
-	wantRoot := filepath.Join(frothHome, "sdk", "frothy-"+version)
+	wantRoot := filepath.Join(frothHome, "sdk", "froth-"+version)
 	if sdkRoot != wantRoot {
 		t.Fatalf("sdk root = %q, want %q", sdkRoot, wantRoot)
 	}

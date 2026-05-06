@@ -481,7 +481,7 @@ func runM10SafeBootProof(paths pathSet, port string, log *proofLog) error {
 		if !hasTerminalPrompt(data, frothyPrompt) {
 			return false
 		}
-		return strings.Contains(normalizeNewlines(data), "1 + 1\n2\nfrothy>")
+		return strings.Contains(normalizeNewlines(data), "1 + 1\n2\nfroth>")
 	}, 10*time.Second)
 	if err != nil {
 		return fmt.Errorf("safe boot arithmetic check: %w", err)
@@ -508,7 +508,7 @@ func runM10SafeBootProof(paths pathSet, port string, log *proofLog) error {
 }
 
 func espIDFExportPath() (string, error) {
-	home, err := sdk.FrothyHome()
+	home, err := sdk.FrothHome()
 	if err != nil {
 		return "", err
 	}

@@ -35,8 +35,8 @@ func TestRunFlashManifestReportsFrothyPosixBinary(t *testing.T) {
 		}
 	})
 
-	if !strings.Contains(stdout, filepath.Join(root, ".froth-build", "firmware", "Frothy")) {
-		t.Fatalf("stdout = %q, want Frothy binary path", stdout)
+	if !strings.Contains(stdout, filepath.Join(root, ".froth-build", "firmware", hostRuntimeBinaryName)) {
+		t.Fatalf("stdout = %q, want Froth binary path", stdout)
 	}
 }
 
@@ -94,10 +94,10 @@ func TestRunFlashManifestAppliesRuntimeImageAfterESPIDFFlash(t *testing.T) {
 	if appliedPort != "/dev/cu.mock" {
 		t.Fatalf("apply port = %q", appliedPort)
 	}
-	if appliedRuntime != filepath.Join(root, ".froth-build", "runtime.frothy") {
+	if appliedRuntime != filepath.Join(root, ".froth-build", runtimeSourceFilename) {
 		t.Fatalf("runtime path = %q", appliedRuntime)
 	}
-	if !strings.Contains(stdout, "Applying runtime source: "+filepath.Join(root, ".froth-build", "runtime.frothy")) {
+	if !strings.Contains(stdout, "Applying runtime source: "+filepath.Join(root, ".froth-build", runtimeSourceFilename)) {
 		t.Fatalf("stdout = %q, want runtime apply message", stdout)
 	}
 }
@@ -115,7 +115,7 @@ func TestRunFlashPrefersLocalCheckout(t *testing.T) {
 	withChdir(t, filepath.Join(repoRoot, "nested"))
 	targetFlag = "esp-idf"
 	portFlag = "/dev/cu.usbserial-test"
-	t.Setenv("FROTHY_HOME", filepath.Join(t.TempDir(), "frothy-home"))
+	t.Setenv("FROTH_HOME", filepath.Join(t.TempDir(), "froth-home"))
 
 	err := runFlash()
 	if err == nil {
@@ -195,7 +195,7 @@ func TestRunFlashLegacyBoardFlagBuildsBeforeFlashing(t *testing.T) {
 	frothyHome := t.TempDir()
 	exportPath := filepath.Join(frothyHome, "sdk", "esp-idf", "export.sh")
 	mustWriteFile(t, exportPath, "export PATH=\""+toolsDir+":$PATH\"\n")
-	t.Setenv("FROTHY_HOME", frothyHome)
+	t.Setenv("FROTH_HOME", frothyHome)
 
 	withChdir(t, root)
 

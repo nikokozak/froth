@@ -6,8 +6,8 @@ froth_slot_t slot_table[FROTH_SLOT_TABLE_SIZE];
 static froth_cell_u_t slot_pointer = 0;
 static froth_cell_u_t slot_high_water = 0;
 
-static char index_has_slot_assigned(froth_cell_u_t index) {
-  return slot_table[index].name != NULL;
+static bool index_has_slot_assigned(froth_cell_u_t index) {
+  return index < slot_pointer && slot_table[index].name != NULL;
 }
 
 static bool froth_slot_name_matches(const char *slot_name, const char *name,
@@ -23,6 +23,9 @@ froth_error_t froth_slot_find_name(const char *name,
 froth_error_t froth_slot_find_name_n(const char *name, size_t length,
                                      froth_cell_u_t *found_slot_index) {
   for (froth_cell_u_t ip = 0; ip < slot_pointer; ip++) {
+    if (slot_table[ip].name == NULL) {
+      continue;
+    }
     if (froth_slot_name_matches(slot_table[ip].name, name, length)) {
       *found_slot_index = ip;
       return FROTH_OK;
@@ -79,13 +82,12 @@ froth_error_t froth_slot_find_name_or_create(froth_heap_t *froth_heap,
 froth_error_t froth_slot_find_name_or_create_n(froth_heap_t *froth_heap,
                                                const char *name, size_t length,
                                                froth_cell_u_t *slot_index) {
-  if (froth_slot_find_name_n(name, length, slot_index) ==
-      FROTH_ERROR_UNDEFINED_WORD) {
-    FROTH_TRY(froth_slot_create_n(name, length, froth_heap, slot_index));
-    return FROTH_OK;
-  } else {
+  if (froth_slot_find_name_n(name, length, slot_index) == FROTH_OK) {
     return FROTH_OK;
   }
+
+  FROTH_TRY(froth_slot_create_n(name, length, froth_heap, slot_index));
+  return FROTH_OK;
 }
 
 froth_error_t froth_slot_get_impl(froth_cell_u_t slot_index,
@@ -213,11 +215,10 @@ bool froth_slot_is_overlay(froth_cell_u_t slot_index) {
 }
 
 froth_error_t froth_slot_reset_overlay(void) {
-  froth_cell_u_t new_pointer = slot_pointer;
+  froth_cell_u_t new_pointer = 0;
+
   for (froth_cell_u_t i = 0; i < slot_pointer; i++) {
     if (slot_table[i].overlay) {
-      if (i < new_pointer)
-        new_pointer = i;
       slot_table[i].name = NULL;
       slot_table[i].impl = 0;
       slot_table[i].prim = NULL;
@@ -225,8 +226,16 @@ froth_error_t froth_slot_reset_overlay(void) {
       slot_table[i].impl_bound = 0;
       slot_table[i].in_arity = FROTH_SLOT_ARITY_UNKNOWN;
       slot_table[i].out_arity = FROTH_SLOT_ARITY_UNKNOWN;
+    } else if (slot_table[i].name != NULL) {
+      new_pointer = i + 1;
     }
   }
   slot_pointer = new_pointer;
   return FROTH_OK;
+}
+
+void froth_slot_reset_all(void) {
+  memset(slot_table, 0, sizeof(slot_table));
+  slot_pointer = 0;
+  slot_high_water = 0;
 }

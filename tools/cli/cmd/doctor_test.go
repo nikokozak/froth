@@ -141,7 +141,7 @@ func TestRunDoctorReportsGMakeAndOptionalTooling(t *testing.T) {
 	}
 	t.Cleanup(func() { doctorLookPath = oldDoctorLookPath })
 
-	t.Setenv("FROTHY_HOME", filepath.Join(t.TempDir(), "frothy-home"))
+	t.Setenv("FROTH_HOME", filepath.Join(t.TempDir(), "froth-home"))
 	withChdir(t, t.TempDir())
 	portFlag = "/dev/definitely-not-a-froth-device"
 
@@ -188,10 +188,10 @@ func TestRunDoctorTreatsMissingBuildToolsAsOptional(t *testing.T) {
 		}
 	})
 
-	if !strings.Contains(stdout, "cmake: not found") || !strings.Contains(stdout, "Needed only for source builds from a Frothy repo checkout.") {
+	if !strings.Contains(stdout, "cmake: not found") || !strings.Contains(stdout, "Needed only for source builds from a Froth repo checkout.") {
 		t.Fatalf("stdout = %q, want optional cmake note", stdout)
 	}
-	if !strings.Contains(stdout, "make: not found") || !strings.Contains(stdout, "Needed only for source builds from a Frothy repo checkout.") {
+	if !strings.Contains(stdout, "make: not found") || !strings.Contains(stdout, "Needed only for source builds from a Froth repo checkout.") {
 		t.Fatalf("stdout = %q, want optional make note", stdout)
 	}
 }

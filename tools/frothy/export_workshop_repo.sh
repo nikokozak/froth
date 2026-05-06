@@ -4,21 +4,21 @@ set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 workshop_dir="$repo_root/workshop"
-workshop_file="$workshop_dir/starter.frothy"
+workshop_file="$workshop_dir/starter.froth"
 legacy_pong_file="$workshop_dir/pong.frothy"
 
 usage() {
   cat <<'EOF'
 usage: export_workshop_repo.sh [write|check]
 
-write  regenerate workshop/starter.frothy from the canonical starter template
-check  fail if workshop/starter.frothy has drifted from the canonical starter template
+write  regenerate workshop/starter.froth from the canonical starter template
+check  fail if workshop/starter.froth has drifted from the canonical starter template
 EOF
 }
 
 render_export() {
   cat <<'EOF'
-\ -- Frothy workshop starter ------------------------------------
+\ -- Froth workshop starter -------------------------------------
 \ Send this file to your board, then type: my.run:
 \ Click the joystick to stop. Edit, re-send, run again.
 
@@ -58,7 +58,7 @@ EOF
 }
 
 write_export() {
-  tmp_file=$(mktemp "${TMPDIR:-/tmp}/frothy-workshop-starter.XXXXXX")
+  tmp_file=$(mktemp "${TMPDIR:-/tmp}/froth-workshop-starter.XXXXXX")
   trap 'rm -f "$tmp_file"' EXIT INT TERM
   mkdir -p "$workshop_dir"
   render_export > "$tmp_file"
@@ -66,13 +66,13 @@ write_export() {
 }
 
 check_export() {
-  tmp_file=$(mktemp "${TMPDIR:-/tmp}/frothy-workshop-starter.XXXXXX")
+  tmp_file=$(mktemp "${TMPDIR:-/tmp}/froth-workshop-starter.XXXXXX")
   trap 'rm -f "$tmp_file"' EXIT INT TERM
   render_export > "$tmp_file"
 
   if [ -f "$legacy_pong_file" ]; then
     printf 'stale workshop Pong export remains: %s\n' "$legacy_pong_file" >&2
-    printf 'remove it and use workshop/starter.frothy\n' >&2
+    printf 'remove it and use workshop/starter.froth\n' >&2
     exit 1
   fi
 

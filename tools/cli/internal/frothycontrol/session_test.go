@@ -206,7 +206,7 @@ func newReadyControlTransport(t *testing.T, board string) *closeCountingTranspor
 
 	stub := &stubTransport{}
 	transport := &closeCountingTransport{stubTransport: stub}
-	stub.queueRaw("frothy> ")
+	stub.queueRaw("froth> ")
 	stub.onWrite = func(data []byte) {
 		if bytes.Equal(data, []byte(".control\n")) {
 			stub.queueRaw("control: ready")
@@ -660,7 +660,7 @@ func TestSessionAcquirePromptRecoversAfterCtrlC(t *testing.T) {
 	transport := &stubTransport{}
 	transport.onWrite = func(data []byte) {
 		if bytes.Equal(data, []byte{0x03}) {
-			transport.readBuf.WriteString("boot noise\nfrothy> ")
+			transport.readBuf.WriteString("boot noise\nfroth> ")
 		}
 	}
 
@@ -681,7 +681,7 @@ func TestSessionAcquirePromptRecoversAfterCtrlCNewlineBurst(t *testing.T) {
 	transport := &stubTransport{}
 	transport.onWrite = func(data []byte) {
 		if bytes.Equal(data, []byte{0x03, '\n'}) {
-			transport.readBuf.WriteString("frothy> ")
+			transport.readBuf.WriteString("froth> ")
 		}
 	}
 
@@ -709,7 +709,7 @@ func TestSessionAcquirePromptWaitsForSlowPromptBeforeRecovery(t *testing.T) {
 	transport := &stubTransport{}
 	go func() {
 		time.Sleep(700 * time.Millisecond)
-		transport.queueRaw("boot noise\nfrothy> ")
+		transport.queueRaw("boot noise\nfroth> ")
 	}()
 
 	session := NewSession(transport)

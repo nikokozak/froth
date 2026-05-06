@@ -13,7 +13,7 @@ import {
 } from "./send-file-reset";
 import { splitTopLevelForms } from "./runtime-forms";
 
-const lastPortKey = "frothy.lastPort";
+const lastPortKey = "froth.lastPort";
 const runningSettleTimeoutMs = 15000;
 const disconnectGraceTimeoutMs = 1000;
 const forceReconnectAction = "Force Reconnect";
@@ -121,7 +121,7 @@ export interface ControllerDeps {
   ): Promise<{ source: string }>;
 }
 
-export class FrothyController {
+export class FrothController {
   private client: ControlSessionClientLike | null = null;
   private closingClient: ControlSessionClientLike | null = null;
   private state: ConnectionState = "idle";
@@ -187,7 +187,7 @@ export class FrothyController {
 
     if (this.state === "running") {
       this.deps.host.output.appendLine(
-        "[frothy] reconnect requested while running; restarting control session",
+        "[froth] reconnect requested while running; restarting control session",
       );
       const generation = await this.disposeClientAndWait();
       if (!this.isDisposedGenerationCurrent(generation)) {
@@ -262,7 +262,7 @@ export class FrothyController {
 
     if (this.state === "running") {
       this.deps.host.output.appendLine(
-        "[frothy] disconnect requested while running; closing control session",
+        "[froth] disconnect requested while running; closing control session",
       );
       const generation = await this.disposeClientAndWait();
       if (this.isDisposedGenerationCurrent(generation)) {
@@ -310,7 +310,7 @@ export class FrothyController {
 
   async forceReconnect(): Promise<boolean> {
     this.deps.host.output.appendLine(
-      "[frothy] force reconnect requested; restarting control session",
+      "[froth] force reconnect requested; restarting control session",
     );
     const generation = await this.disposeClientAndWait();
     if (!this.isDisposedGenerationCurrent(generation)) {
@@ -341,7 +341,7 @@ export class FrothyController {
         : editor.currentRuntimeFormText() ?? editor.currentLineText();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      this.deps.host.showErrorMessage(`Frothy eval failed: ${message}`);
+      this.deps.host.showErrorMessage(`Froth eval failed: ${message}`);
       return;
     }
     if (text.trim().length === 0) {
@@ -378,7 +378,7 @@ export class FrothyController {
     const source = `${name}:`;
     this.rememberLastRun(source);
     this.deps.host.output.show(true);
-    this.deps.host.output.appendLine(`[frothy] run ${source}`);
+    this.deps.host.output.appendLine(`[froth] run ${source}`);
     await this.runTextOperation(
       "run",
       () => this.client!.eval(source),
@@ -397,14 +397,14 @@ export class FrothyController {
 
     const source = `${name}:`;
     this.rememberPinnedRun(source);
-    this.deps.host.output.appendLine(`[frothy] pinned run ${source}`);
+    this.deps.host.output.appendLine(`[froth] pinned run ${source}`);
   }
 
   async runLast(): Promise<void> {
     const source = this.lastRunSource;
     if (!source) {
       await this.deps.host.showWarningMessage(
-        "No previous Frothy run form. Use Run Binding or Send Selection / Form on an expression first.",
+        "No previous Froth run form. Use Run Binding or Send Selection / Form on an expression first.",
       );
       return;
     }
@@ -416,7 +416,7 @@ export class FrothyController {
     }
 
     this.deps.host.output.show(true);
-    this.deps.host.output.appendLine(`[frothy] rerun ${previewText(source)}`);
+    this.deps.host.output.appendLine(`[froth] rerun ${previewText(source)}`);
     const result = await this.runTextOperation(
       "rerun",
       () => this.client!.eval(source),
@@ -431,7 +431,7 @@ export class FrothyController {
     const source = this.pinnedRunSource;
     if (!source) {
       await this.deps.host.showWarningMessage(
-        "No pinned Frothy run binding. Use Pin Run Binding first.",
+        "No pinned Froth run binding. Use Pin Run Binding first.",
       );
       return;
     }
@@ -444,7 +444,7 @@ export class FrothyController {
 
     this.rememberLastRun(source);
     this.deps.host.output.show(true);
-    this.deps.host.output.appendLine(`[frothy] run pinned ${source}`);
+    this.deps.host.output.appendLine(`[froth] run pinned ${source}`);
     await this.runTextOperation(
       "run pinned",
       () => this.client!.eval(source),
@@ -459,7 +459,7 @@ export class FrothyController {
     const preflightClient = this.client;
     const preflightGeneration = this.clientGeneration;
     if (!preflightClient) {
-      await this.deps.host.showWarningMessage("No active Frothy session");
+      await this.deps.host.showWarningMessage("No active Froth session");
       return;
     }
 
@@ -472,7 +472,7 @@ export class FrothyController {
     const document = editor.document;
     if (document.uriScheme !== "file") {
       await this.deps.host.showWarningMessage(
-        "Save the file to disk before sending it to Frothy.",
+        "Save the file to disk before sending it to Froth.",
       );
       return;
     }
@@ -500,7 +500,7 @@ export class FrothyController {
       source = result.source;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      this.deps.host.showErrorMessage(`Frothy send prepare failed: ${message}`);
+      this.deps.host.showErrorMessage(`Froth send prepare failed: ${message}`);
       return;
     }
 
@@ -509,7 +509,7 @@ export class FrothyController {
     }
 
     this.deps.host.output.show(true);
-    this.deps.host.output.appendLine(`[frothy] send ${document.fsPath}`);
+    this.deps.host.output.appendLine(`[froth] send ${document.fsPath}`);
 
     if (!(await this.interruptRunningBeforeFileSend())) {
       return;
@@ -521,7 +521,7 @@ export class FrothyController {
     const resetClient = this.client;
     const resetGeneration = this.clientGeneration;
     if (!resetClient) {
-      await this.deps.host.showWarningMessage("No active Frothy session");
+      await this.deps.host.showWarningMessage("No active Froth session");
       return;
     }
 
@@ -545,7 +545,7 @@ export class FrothyController {
     const client = this.client;
     const generation = this.clientGeneration;
     if (!client) {
-      await this.deps.host.showWarningMessage("No active Frothy session");
+      await this.deps.host.showWarningMessage("No active Froth session");
       return;
     }
 
@@ -554,7 +554,7 @@ export class FrothyController {
       if (!this.isCurrentClient(client, generation)) {
         return;
       }
-      this.deps.host.output.appendLine("[frothy] interrupt sent");
+      this.deps.host.output.appendLine("[froth] interrupt sent");
     } catch (err: unknown) {
       if (!this.isCurrentClient(client, generation)) {
         return;
@@ -583,7 +583,7 @@ export class FrothyController {
 
     const words = result as WordsValue;
     this.deps.host.output.show(true);
-    this.deps.host.output.appendLine("[frothy] words");
+    this.deps.host.output.appendLine("[froth] words");
     for (const word of words.words) {
       this.deps.host.output.appendLine(word);
     }
@@ -640,7 +640,7 @@ export class FrothyController {
 
   async wipeSnapshot(): Promise<void> {
     const action = await this.deps.host.showWarningMessage(
-      "Dangerous wipe clears the Frothy snapshot overlay on the connected device.",
+      "Dangerous wipe clears the Froth snapshot overlay on the connected device.",
       "Wipe Snapshot",
     );
     if (action !== "Wipe Snapshot") {
@@ -657,7 +657,7 @@ export class FrothyController {
     }
 
     const terminal = this.deps.host.createTerminal({
-      name: "Frothy Doctor",
+      name: "Froth Doctor",
       shellPath: cliPath,
       shellArgs: ["doctor"],
     });
@@ -685,7 +685,7 @@ export class FrothyController {
     }
 
     this.deps.host.output.show(true);
-    this.deps.host.output.appendLine(`[frothy] ${label}`);
+    this.deps.host.output.appendLine(`[froth] ${label}`);
     if (result.text !== "nil") {
       this.deps.host.output.appendLine(result.text);
     }
@@ -709,7 +709,7 @@ export class FrothyController {
     }
 
     this.deps.host.output.show(true);
-    this.deps.host.output.appendLine(`[frothy] ${label} ${name}`);
+    this.deps.host.output.appendLine(`[froth] ${label} ${name}`);
     if (result.text !== "nil") {
       this.deps.host.output.appendLine(result.text);
     }
@@ -735,7 +735,7 @@ export class FrothyController {
 
     const view = result as SeeValue;
     this.deps.host.output.show(true);
-    this.deps.host.output.appendLine(`[frothy] ${label} ${name}`);
+    this.deps.host.output.appendLine(`[froth] ${label} ${name}`);
     onValue(view);
   }
 
@@ -765,7 +765,7 @@ export class FrothyController {
       forms = splitTopLevelForms(source);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      this.deps.host.showErrorMessage(`Frothy ${label} failed: ${message}`);
+      this.deps.host.showErrorMessage(`Froth ${label} failed: ${message}`);
       return null;
     }
 
@@ -780,7 +780,7 @@ export class FrothyController {
         label,
         new ControlSessionClientError({
           code: "not_connected",
-          message: "no Frothy device connected",
+          message: "no Froth device connected",
         }),
       );
       return null;
@@ -873,21 +873,21 @@ export class FrothyController {
       return true;
     }
     if (!this.client) {
-      await this.deps.host.showWarningMessage("No active Frothy session");
+      await this.deps.host.showWarningMessage("No active Froth session");
       return false;
     }
     const client = this.client;
     const generation = this.clientGeneration;
 
     this.deps.host.output.appendLine(
-      "[frothy] send requested while running; interrupting current program",
+      "[froth] send requested while running; interrupting current program",
     );
     try {
       await client.interrupt();
       if (!this.isCurrentClient(client, generation)) {
         return false;
       }
-      this.deps.host.output.appendLine("[frothy] interrupt sent");
+      this.deps.host.output.appendLine("[froth] interrupt sent");
     } catch (err: unknown) {
       if (!this.isCurrentClient(client, generation)) {
         return false;
@@ -906,10 +906,10 @@ export class FrothyController {
     }
 
     this.deps.host.output.appendLine(
-      "[frothy] interrupt did not settle; force reconnect is available",
+      "[froth] interrupt did not settle; force reconnect is available",
     );
     const choice = await this.deps.host.showWarningMessage(
-      "Frothy send failed: the running program did not stop after interrupt. If the board was reset or the editor session is stale, use Force Reconnect.",
+      "Froth send failed: the running program did not stop after interrupt. If the board was reset or the editor session is stale, use Force Reconnect.",
       forceReconnectAction,
     );
     if (choice === forceReconnectAction) {
@@ -969,7 +969,7 @@ export class FrothyController {
       this.client = null;
       const message = err instanceof Error ? err.message : String(err);
       this.deps.host.showErrorMessage(
-        `Failed to start Frothy control helper: ${message}`,
+        `Failed to start Froth control helper: ${message}`,
       );
       return null;
     }
@@ -999,7 +999,7 @@ export class FrothyController {
       this.clearSessionState();
       this.setState("disconnected");
       const action = await this.deps.host.showWarningMessage(
-        "No Frothy device found.",
+        "No Froth device found.",
         "Run Doctor",
       );
       if (action === "Run Doctor") {
@@ -1029,7 +1029,7 @@ export class FrothyController {
 
     await this.deps.host.setStoredPort(lastPortKey, "");
     this.deps.host.output.appendLine(
-      "[frothy] remembered port failed; retrying device discovery",
+      "[froth] remembered port failed; retrying device discovery",
     );
     try {
       const device = await client.connect();
@@ -1081,13 +1081,13 @@ export class FrothyController {
         }
         break;
       case "interrupted":
-        this.deps.host.output.appendLine("[frothy] interrupted");
+        this.deps.host.output.appendLine("[froth] interrupted");
         if (this.state === "running" && this.runningOperations === 0) {
           this.setState(this.device ? "connected" : "disconnected");
         }
         break;
       case "disconnected":
-        this.deps.host.output.appendLine("[frothy] disconnected");
+        this.deps.host.output.appendLine("[froth] disconnected");
         this.clearRunningState();
         this.clearSessionState();
         this.setState("disconnected");
@@ -1111,7 +1111,7 @@ export class FrothyController {
     this.clearRunningState();
     this.clearSessionState();
     if (error) {
-      this.deps.host.output.appendLine(`[frothy] helper exited: ${error.message}`);
+      this.deps.host.output.appendLine(`[froth] helper exited: ${error.message}`);
     }
     this.setState("disconnected");
   }
@@ -1119,25 +1119,25 @@ export class FrothyController {
   private handleClientError(label: string, err: unknown): void {
     if (err instanceof ControlSessionClientError) {
       if (err.code === "interrupted") {
-        this.deps.host.output.appendLine("[frothy] interrupted");
+        this.deps.host.output.appendLine("[froth] interrupted");
         return;
       }
       if (err.code === "not_connected") {
         this.retireCurrentClient();
         this.clearSessionState();
         this.setState("disconnected");
-        void this.deps.host.showWarningMessage("No Frothy device connected.");
+        void this.deps.host.showWarningMessage("No Froth device connected.");
         return;
       }
 
-      this.deps.host.output.appendLine(`[frothy] ${label}: ${err.message}`);
-      this.deps.host.showErrorMessage(`Frothy ${label} failed: ${err.message}`);
+      this.deps.host.output.appendLine(`[froth] ${label}: ${err.message}`);
+      this.deps.host.showErrorMessage(`Froth ${label} failed: ${err.message}`);
       return;
     }
 
     const message = err instanceof Error ? err.message : String(err);
-    this.deps.host.output.appendLine(`[frothy] ${label}: ${message}`);
-    this.deps.host.showErrorMessage(`Frothy ${label} failed: ${message}`);
+    this.deps.host.output.appendLine(`[froth] ${label}: ${message}`);
+    this.deps.host.showErrorMessage(`Froth ${label} failed: ${message}`);
   }
 
   private setState(state: ConnectionState): void {
@@ -1316,7 +1316,7 @@ export class FrothyController {
     this.clearRunningState();
     if (log) {
       this.deps.host.output.appendLine(
-        `[frothy] connected: ${device.board} (${device.port})`,
+        `[froth] connected: ${device.board} (${device.port})`,
       );
     }
     this.setState("connected");

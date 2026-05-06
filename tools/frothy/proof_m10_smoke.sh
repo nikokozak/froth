@@ -2,7 +2,7 @@
 set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
-BINARY="${FROTHY_BINARY:-$ROOT_DIR/build/Frothy}"
+BINARY="${FROTH_BINARY:-${FROTHY_BINARY:-$ROOT_DIR/build/froth}}"
 CLI_BIN="${FROTHY_CLI_BINARY:-$ROOT_DIR/tools/cli/frothy-cli}"
 TEST_RUNNER_BIN=${FROTHY_TEST_RUNNER_BIN:-${FROTH_TEST_RUNNER_BIN:-}}
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/frothy-m10.XXXXXX")"
@@ -163,7 +163,7 @@ require_sequence() {
 
 BLINK_TRANSCRIPT="$(run_file "$ROOT_DIR/tools/frothy/proof_m10_blink.frothy")"
 printf '%s\n' "$BLINK_TRANSCRIPT"
-require_contains "$BLINK_TRANSCRIPT" 'Frothy shell'
+require_contains "$BLINK_TRANSCRIPT" 'Froth shell'
 require_contains "$BLINK_TRANSCRIPT" 'Type help for commands.'
 require_contains "$BLINK_TRANSCRIPT" '[gpio] pin 2 -> OUTPUT'
 require_count_at_least "$BLINK_TRANSCRIPT" '[gpio] pin 2 = HIGH' 3
@@ -195,7 +195,7 @@ require_not_contains "$BOOT_VERIFY_TRANSCRIPT" 'parse error ('
 
 CELLS_TRANSCRIPT="$(run_file "$ROOT_DIR/tools/frothy/proof_m10_cells_adc.frothy")"
 printf '%s\n' "$CELLS_TRANSCRIPT"
-require_contains "$CELLS_TRANSCRIPT" 'Frothy shell'
+require_contains "$CELLS_TRANSCRIPT" 'Froth shell'
 require_count_at_least "$CELLS_TRANSCRIPT" '2048' 4
 require_not_contains "$CELLS_TRANSCRIPT" 'eval error ('
 require_not_contains "$CELLS_TRANSCRIPT" 'parse error ('
@@ -212,46 +212,46 @@ require_sequence "$WORKSHOP_TRANSCRIPT" \
   $'adc.percent\n  slot: base\n  kind: code\n  call: 1 -> 1\n  owner: base image\n  persistence: not saved'
 require_sequence "$WORKSHOP_TRANSCRIPT" \
   '"millis.check"' \
-  'frothy> true'
+  'froth> true'
 require_sequence "$WORKSHOP_TRANSCRIPT" \
   '"gpio.low.check"' \
   '[gpio] pin 2 = LOW' \
-  'frothy> 0'
+  'froth> 0'
 require_sequence "$WORKSHOP_TRANSCRIPT" \
   '"gpio.high.check"' \
   '[gpio] pin 2 = HIGH' \
-  'frothy> 1'
+  'froth> 1'
 require_sequence "$WORKSHOP_TRANSCRIPT" \
   '"gpio.toggle.check"' \
   '[gpio] pin 2 = LOW' \
-  'frothy> 0'
+  'froth> 0'
 require_sequence "$WORKSHOP_TRANSCRIPT" \
   '"led.off.check"' \
   '[gpio] pin 2 -> OUTPUT' \
   '[gpio] pin 2 = LOW' \
-  'frothy> 0'
+  'froth> 0'
 require_sequence "$WORKSHOP_TRANSCRIPT" \
   '"led.on.check"' \
   '[gpio] pin 2 -> OUTPUT' \
   '[gpio] pin 2 = HIGH' \
-  'frothy> 1'
+  'froth> 1'
 require_sequence "$WORKSHOP_TRANSCRIPT" \
   '"led.toggle.check"' \
   '[gpio] pin 2 -> OUTPUT' \
   '[gpio] pin 2 = LOW' \
-  'frothy> 0'
+  'froth> 0'
 require_sequence "$WORKSHOP_TRANSCRIPT" \
   '"adc.percent.check"' \
-  'frothy> 50'
+  'froth> 50'
 require_sequence "$WORKSHOP_TRANSCRIPT" \
   '"anim.check"' \
-  'frothy> 41' \
-  'frothy> 42' \
-  'frothy> 43'
+  'froth> 41' \
+  'froth> 42' \
+  'froth> 43'
 require_sequence "$WORKSHOP_TRANSCRIPT" \
   '"overlay.blink.check"' \
   $'blink\n  slot: overlay\n  kind: code\n  call: 3 -> 1\n  owner: overlay image\n  persistence: saved in snapshot' \
-  'frothy> 99'
+  'froth> 99'
 require_sequence "$WORKSHOP_TRANSCRIPT" \
   '"restored.blink.check"' \
   $'blink\n  slot: base\n  kind: code\n  call: 3 -> 1\n  owner: base image\n  persistence: not saved' \

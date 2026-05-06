@@ -52,7 +52,7 @@ export function findTopLevelFormAtLine(
   }
 
   if (hasCode && line >= startLine) {
-    throw new Error("incomplete Frothy source form");
+    throw new Error("incomplete Froth source form");
   }
   return null;
 }
@@ -96,7 +96,7 @@ function collectTopLevelForms(source: string): RuntimeFormSpan[] {
   }
 
   if (hasCode || current.trim().length > 0) {
-    throw new Error("incomplete Frothy source form");
+    throw new Error("incomplete Froth source form");
   }
   return forms;
 }

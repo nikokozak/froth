@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "Frothy",
-  "scopeName": "source.frothy",
+  "name": "Froth",
+  "scopeName": "source.froth",
   "patterns": [
     {
       "include": "#line-comment"
@@ -54,26 +54,26 @@
   ],
   "repository": {
     "line-comment": {
-      "name": "comment.line.backslash.frothy",
+      "name": "comment.line.backslash.froth",
       "match": "(?<!\\S)\\\\.*$"
     },
     "string": {
-      "name": "string.quoted.double.frothy",
+      "name": "string.quoted.double.froth",
       "begin": "\"",
       "beginCaptures": {
         "0": {
-          "name": "punctuation.definition.string.begin.frothy"
+          "name": "punctuation.definition.string.begin.froth"
         }
       },
       "end": "\"",
       "endCaptures": {
         "0": {
-          "name": "punctuation.definition.string.end.frothy"
+          "name": "punctuation.definition.string.end.froth"
         }
       },
       "patterns": [
         {
-          "name": "constant.character.escape.frothy",
+          "name": "constant.character.escape.froth",
           "match": "\\\\(?:[ntr\\\\\"]|x[0-9A-Fa-f]{2})"
         }
       ]
@@ -82,24 +82,24 @@
       "begin": "(?<![A-Za-z0-9_.!?@])(to)(\\s+)([A-Za-z_][A-Za-z0-9_.!?@]*)",
       "beginCaptures": {
         "1": {
-          "name": "keyword.control.definition.frothy"
+          "name": "keyword.control.definition.froth"
         },
         "3": {
-          "name": "entity.name.function.frothy"
+          "name": "entity.name.function.froth"
         }
       },
       "end": "(?=\\[|$)",
       "patterns": [
         {
-          "name": "keyword.control.parameters.frothy",
+          "name": "keyword.control.parameters.froth",
           "match": "(?<![A-Za-z0-9_.!?@])(with)(?=\\s)"
         },
         {
-          "name": "variable.parameter.frothy",
+          "name": "variable.parameter.froth",
           "match": "[A-Za-z_][A-Za-z0-9_.!?@]*"
         },
         {
-          "name": "punctuation.separator.parameter.frothy",
+          "name": "punctuation.separator.parameter.froth",
           "match": ","
         }
       ]
@@ -108,21 +108,21 @@
       "begin": "(?<![A-Za-z0-9_.!?@])(fn)(?=\\s)",
       "beginCaptures": {
         "1": {
-          "name": "storage.type.function.frothy"
+          "name": "storage.type.function.froth"
         }
       },
       "end": "(?=\\[|$)",
       "patterns": [
         {
-          "name": "keyword.control.parameters.frothy",
+          "name": "keyword.control.parameters.froth",
           "match": "(?<![A-Za-z0-9_.!?@])(with)(?=\\s)"
         },
         {
-          "name": "variable.parameter.frothy",
+          "name": "variable.parameter.froth",
           "match": "[A-Za-z_][A-Za-z0-9_.!?@]*"
         },
         {
-          "name": "punctuation.separator.parameter.frothy",
+          "name": "punctuation.separator.parameter.froth",
           "match": ","
         }
       ]
@@ -131,10 +131,10 @@
       "match": "(?<![A-Za-z0-9_.!?@])(record)(\\s+)([A-Za-z_][A-Za-z0-9_.!?@]*)",
       "captures": {
         "1": {
-          "name": "keyword.control.declaration.frothy"
+          "name": "keyword.control.declaration.froth"
         },
         "3": {
-          "name": "entity.name.type.frothy"
+          "name": "entity.name.type.froth"
         }
       }
     },
@@ -142,13 +142,13 @@
       "match": "(?<![A-Za-z0-9_.!?@])(?:(here)(\\s+))?([A-Za-z_][A-Za-z0-9_.!?@]*)(\\s+)(is)(?=\\s|$)",
       "captures": {
         "1": {
-          "name": "keyword.control.declaration.frothy"
+          "name": "keyword.control.declaration.froth"
         },
         "3": {
-          "name": "variable.other.definition.frothy"
+          "name": "variable.other.definition.froth"
         },
         "5": {
-          "name": "keyword.control.definition.frothy"
+          "name": "keyword.control.definition.froth"
         }
       }
     },
@@ -156,68 +156,68 @@
       "match": "(?<![A-Za-z0-9_.!?@])(as)(\\s+)([A-Za-z_][A-Za-z0-9_.!?@]*)(?=\\s|\\[|$)",
       "captures": {
         "1": {
-          "name": "keyword.control.loop.frothy"
+          "name": "keyword.control.loop.froth"
         },
         "3": {
-          "name": "variable.parameter.frothy"
+          "name": "variable.parameter.froth"
         }
       }
     },
     "slot-designator": {
-      "name": "variable.other.slot-designator.frothy",
+      "name": "variable.other.slot-designator.froth",
       "match": "@[A-Za-z_][A-Za-z0-9_.!?@]*"
     },
     "field-access": {
       "match": "(->)([A-Za-z_][A-Za-z0-9_.!?@]*)",
       "captures": {
         "1": {
-          "name": "keyword.operator.field.frothy"
+          "name": "keyword.operator.field.froth"
         },
         "2": {
-          "name": "variable.other.property.frothy"
+          "name": "variable.other.property.froth"
         }
       }
     },
     "builtin": {
-      "name": "support.function.builtin.frothy",
+      "name": "support.function.builtin.froth",
       "match": "(?<![A-Za-z0-9_.!?@])(?:save|restore|dangerous\\.wipe|words|see|core|slotInfo|cells)(?![A-Za-z0-9_.!?@])"
     },
     "constants": {
-      "name": "constant.language.frothy",
+      "name": "constant.language.froth",
       "match": "(?<![A-Za-z0-9_.!?@])(?:true|false|nil)(?![A-Za-z0-9_.!?@])"
     },
     "numbers": {
       "patterns": [
         {
-          "name": "constant.numeric.hex.frothy",
+          "name": "constant.numeric.hex.froth",
           "match": "(?<![A-Za-z0-9_.!?@])-?0x[0-9A-Fa-f]+(?![A-Za-z0-9_.!?@])"
         },
         {
-          "name": "constant.numeric.binary.frothy",
+          "name": "constant.numeric.binary.froth",
           "match": "(?<![A-Za-z0-9_.!?@])-?0b[01]+(?![A-Za-z0-9_.!?@])"
         },
         {
-          "name": "constant.numeric.decimal.frothy",
+          "name": "constant.numeric.decimal.froth",
           "match": "(?<![A-Za-z0-9_.!?@])-?\\d+(?![A-Za-z0-9_.!?@])"
         }
       ]
     },
     "call-target": {
-      "name": "support.function.call.frothy",
+      "name": "support.function.call.froth",
       "match": "[A-Za-z_][A-Za-z0-9_.!?@]*(?=:)"
     },
     "keywords": {
       "patterns": [
         {
-          "name": "keyword.control.conditional.frothy",
+          "name": "keyword.control.conditional.froth",
           "match": "(?<![A-Za-z0-9_.!?@])(?:if|else|when|unless|cond|case)(?![A-Za-z0-9_.!?@])"
         },
         {
-          "name": "keyword.control.loop.frothy",
+          "name": "keyword.control.loop.froth",
           "match": "(?<![A-Za-z0-9_.!?@])(?:while|repeat)(?![A-Za-z0-9_.!?@])"
         },
         {
-          "name": "keyword.control.frothy",
+          "name": "keyword.control.froth",
           "match": "(?<![A-Za-z0-9_.!?@])(?:set|call|in|with|here|to|is|record)(?![A-Za-z0-9_.!?@])"
         }
       ]
@@ -225,11 +225,11 @@
     "operators": {
       "patterns": [
         {
-          "name": "keyword.operator.word.frothy",
+          "name": "keyword.operator.word.froth",
           "match": "(?<![A-Za-z0-9_.!?@])(?:and|or|not)(?![A-Za-z0-9_.!?@])"
         },
         {
-          "name": "keyword.operator.symbol.frothy",
+          "name": "keyword.operator.symbol.froth",
           "match": "==|!=|<=|>=|[-+*/%<>]"
         }
       ]
@@ -237,31 +237,31 @@
     "punctuation": {
       "patterns": [
         {
-          "name": "punctuation.section.group.begin.frothy",
+          "name": "punctuation.section.group.begin.froth",
           "match": "\\("
         },
         {
-          "name": "punctuation.section.group.end.frothy",
+          "name": "punctuation.section.group.end.froth",
           "match": "\\)"
         },
         {
-          "name": "punctuation.section.block.begin.frothy",
+          "name": "punctuation.section.block.begin.froth",
           "match": "\\["
         },
         {
-          "name": "punctuation.section.block.end.frothy",
+          "name": "punctuation.section.block.end.froth",
           "match": "\\]"
         },
         {
-          "name": "punctuation.separator.arguments.frothy",
+          "name": "punctuation.separator.arguments.froth",
           "match": ","
         },
         {
-          "name": "punctuation.separator.statement.frothy",
+          "name": "punctuation.separator.statement.froth",
           "match": ";"
         },
         {
-          "name": "punctuation.separator.call.frothy",
+          "name": "punctuation.separator.call.froth",
           "match": ":"
         }
       ]

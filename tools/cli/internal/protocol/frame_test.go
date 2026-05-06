@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+const testEvalReq = 0x03
+
 func TestDefaultMaxPayloadAllowsWorkshopDefinitions(t *testing.T) {
 	if DefaultMaxPayload != 1024 {
 		t.Fatalf("DefaultMaxPayload = %d, want 1024", DefaultMaxPayload)
@@ -14,7 +16,7 @@ func TestDefaultMaxPayloadAllowsWorkshopDefinitions(t *testing.T) {
 	}
 
 	payload := bytes.Repeat([]byte{'x'}, 596)
-	frame, err := BuildFrame(1, EvalReq, 1, payload)
+	frame, err := BuildFrame(1, testEvalReq, 1, payload)
 	if err != nil {
 		t.Fatalf("BuildFrame workshop-sized payload: %v", err)
 	}

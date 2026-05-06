@@ -23,7 +23,7 @@ func runDoctor() error {
 	if path, err := doctorLookPath("cmake"); err == nil {
 		fmt.Printf("cmake: %s\n", path)
 	} else {
-		doctorOptional("cmake", "not found", "Needed only for source builds from a Frothy repo checkout.")
+		doctorOptional("cmake", "not found", "Needed only for source builds from a Froth repo checkout.")
 	}
 
 	if path, name, err := findMakeTool(doctorLookPath); err == nil {
@@ -33,14 +33,14 @@ func runDoctor() error {
 			fmt.Printf("make: %s\n", path)
 		}
 	} else {
-		doctorOptional("make", "not found", "Needed only for source builds from a Frothy repo checkout.")
+		doctorOptional("make", "not found", "Needed only for source builds from a Froth repo checkout.")
 	}
 
 	candidates, err := serialpkg.ListCandidates()
 	if err != nil {
 		doctorFailure("serial", fmt.Sprintf("error: %v", err), fmt.Sprintf("Check USB permissions and retry `%s doctor`.", cliCommandName))
 	} else if len(candidates) == 0 {
-		doctorFailure("serial", "no USB-serial ports found", "Connect a preflashed Frothy board and retry.")
+		doctorFailure("serial", "no USB-serial ports found", "Connect a preflashed Froth board and retry.")
 	} else {
 		fmt.Printf("serial: %d port(s)\n", len(candidates))
 		for _, p := range candidates {
@@ -167,7 +167,7 @@ func runProjectDoctor(manifest *project.Manifest, root string) {
 }
 
 func doctorESPIDFStatus() (string, bool) {
-	home, err := sdk.FrothyHome()
+	home, err := sdk.FrothHome()
 	if err != nil || home == "" {
 		return "", false
 	}
@@ -194,9 +194,9 @@ func doctorDeviceRemediation() string {
 	if portFlag != "" {
 		return fmt.Sprintf("Check the device on `%s` and retry `%s doctor --port %s`.", portFlag, cliCommandName, portFlag)
 	}
-	return fmt.Sprintf("Connect a preflashed Frothy board or retry with `%s doctor --port <path>`.", cliCommandName)
+	return fmt.Sprintf("Connect a preflashed Froth board or retry with `%s doctor --port <path>`.", cliCommandName)
 }
 
 func isBareProjectMode(err error) bool {
-	return strings.Contains(err.Error(), "not in a Frothy project")
+	return strings.Contains(err.Error(), "not in a Froth project")
 }

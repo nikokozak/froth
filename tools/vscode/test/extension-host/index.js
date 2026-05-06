@@ -62,7 +62,7 @@ async function restoreEditorSmokeFixtures() {
     return;
   }
   const fixtures = new Map([
-    ["send-file.frothy", "keep = 30\nprobe(n) { n + 2 }\n"],
+    ["send-file.froth", "keep = 30\nprobe(n) { n + 2 }\n"],
   ]);
   for (const [fileName, contents] of fixtures) {
     const uri = vscode.Uri.file(path.join(folder.uri.fsPath, fileName));
@@ -94,16 +94,16 @@ async function configureExtension() {
   }
 
   await vscode.workspace
-    .getConfiguration("frothy")
+    .getConfiguration("froth")
     .update("cliPath", cliPath, vscode.ConfigurationTarget.Workspace);
   await vscode.workspace
-    .getConfiguration("frothy")
+    .getConfiguration("froth")
     .update("port", port, vscode.ConfigurationTarget.Workspace);
 }
 
 async function expectSee(api, name, pattern) {
   api.enqueueInputBoxResponse(name);
-  await vscode.commands.executeCommand("frothy.see");
+  await vscode.commands.executeCommand("froth.see");
   await waitForOutput(api, pattern);
 }
 
@@ -134,7 +134,7 @@ async function run() {
         process.env.FROTHY_VSCODE_SMOKE_LOCAL_RUNTIME;
     }
 
-    const lineEditor = await openEditor("line-send.frothy");
+    const lineEditor = await openEditor("line-send.froth");
     await replaceDocument(
       lineEditor,
       "control.value = 41 + 1\nwhile true { keep }\nafter_interrupt = 7\n",
@@ -142,24 +142,24 @@ async function run() {
     setLineCursor(lineEditor, 0);
     trace("line editor ready");
 
-    await vscode.commands.executeCommand("frothy.connect");
+    await vscode.commands.executeCommand("froth.connect");
     await api.waitForState("connected", 15000);
     assert.ok(api.getSnapshot().device, "device should be connected");
     trace("connected");
 
     api.clearOutput();
-    await vscode.commands.executeCommand("frothy.sendSelection");
+    await vscode.commands.executeCommand("froth.sendSelection");
     await expectSee(api, "control.value", "42");
     trace("selection ok");
 
-    let fileEditor = await openEditor("send-file.frothy");
+    let fileEditor = await openEditor("send-file.froth");
     await replaceDocument(
       fileEditor,
       "keep = 10\ndrop = 20\nprobe(n) { n + 1 }\n",
     );
     api.clearOutput();
-    await vscode.commands.executeCommand("frothy.sendFile");
-    await waitForOutput(api, "[frothy] reset");
+    await vscode.commands.executeCommand("froth.sendFile");
+    await waitForOutput(api, "[froth] reset");
     await expectSee(api, "drop", "20");
     trace("first send file ok");
 
@@ -168,37 +168,37 @@ async function run() {
       "keep = 30\nprobe(n) { n + 2 }\n",
     );
     api.clearOutput();
-    await vscode.commands.executeCommand("frothy.sendFile");
-    await waitForOutput(api, "[frothy] reset");
+    await vscode.commands.executeCommand("froth.sendFile");
+    await waitForOutput(api, "[froth] reset");
     await expectSee(api, "drop", "see failed");
     await expectSee(api, "keep", "30");
     trace("second send file ok");
 
     api.clearOutput();
-    await vscode.commands.executeCommand("frothy.words");
+    await vscode.commands.executeCommand("froth.words");
     await waitForOutput(api, "probe");
     assert.ok(!/\bdrop\b/.test(api.getOutputText()), "drop should be gone after reset + eval");
     trace("words ok");
 
     api.clearOutput();
-    await expectNamedCommand(api, "frothy.core", "probe", "[frothy] core probe");
+    await expectNamedCommand(api, "froth.core", "probe", "[froth] core probe");
     trace("core ok");
 
     api.clearOutput();
     await expectNamedCommand(
       api,
-      "frothy.slotInfo",
+      "froth.slotInfo",
       "probe",
-      "[frothy] slotInfo probe",
+      "[froth] slotInfo probe",
     );
     trace("slotInfo ok");
 
     api.clearOutput();
-    await vscode.commands.executeCommand("frothy.save");
-    await waitForOutput(api, "[frothy] save");
+    await vscode.commands.executeCommand("froth.save");
+    await waitForOutput(api, "[froth] save");
     trace("save ok");
 
-    let runtimeEditor = await openEditor("line-send.frothy");
+    let runtimeEditor = await openEditor("line-send.froth");
     setLineCursor(runtimeEditor, 0);
     await replaceDocument(
       runtimeEditor,
@@ -206,88 +206,88 @@ async function run() {
     );
     setLineCursor(runtimeEditor, 0);
     api.clearOutput();
-    await vscode.commands.executeCommand("frothy.sendSelection");
+    await vscode.commands.executeCommand("froth.sendSelection");
     await expectSee(api, "keep", "99");
     trace("mutate keep ok");
 
     api.clearOutput();
-    await vscode.commands.executeCommand("frothy.restore");
-    await waitForOutput(api, "[frothy] restore");
+    await vscode.commands.executeCommand("froth.restore");
+    await waitForOutput(api, "[froth] restore");
     await expectSee(api, "keep", "30");
     trace("restore ok");
 
     setLineCursor(runtimeEditor, 1);
     api.clearOutput();
-    const runningEval = vscode.commands.executeCommand("frothy.sendSelection");
+    const runningEval = vscode.commands.executeCommand("froth.sendSelection");
     await api.waitForState("running", 15000);
-    await vscode.commands.executeCommand("frothy.interrupt");
+    await vscode.commands.executeCommand("froth.interrupt");
     await withTimeout(runningEval, 15000, "interrupted eval to settle");
     await api.waitForState("connected", 15000);
     trace("interrupt ok");
 
-    fileEditor = await openEditor("send-file.frothy");
+    fileEditor = await openEditor("send-file.froth");
     await replaceDocument(fileEditor, "file_after_interrupt = 44\n");
-    runtimeEditor = await openEditor("line-send.frothy");
+    runtimeEditor = await openEditor("line-send.froth");
     setLineCursor(runtimeEditor, 1);
     api.clearOutput();
-    const supersededEval = vscode.commands.executeCommand("frothy.sendSelection");
+    const supersededEval = vscode.commands.executeCommand("froth.sendSelection");
     await api.waitForState("running", 15000);
     await vscode.window.showTextDocument(fileEditor.document, { preview: false });
-    await vscode.commands.executeCommand("frothy.sendFile");
+    await vscode.commands.executeCommand("froth.sendFile");
     await withTimeout(supersededEval, 15000, "superseded eval to settle");
     await api.waitForState("connected", 15000);
     await waitForOutput(api, "send requested while running");
-    await waitForOutput(api, "[frothy] reset");
+    await waitForOutput(api, "[froth] reset");
     api.clearOutput();
     await expectSee(api, "file_after_interrupt", "44");
     api.clearOutput();
     await expectSee(api, "probe", "see failed");
     trace("send file while running ok");
 
-    runtimeEditor = await openEditor("line-send.frothy");
+    runtimeEditor = await openEditor("line-send.froth");
     setLineCursor(runtimeEditor, 2);
     api.clearOutput();
-    await vscode.commands.executeCommand("frothy.sendSelection");
+    await vscode.commands.executeCommand("froth.sendSelection");
     await expectSee(api, "after_interrupt", "7");
     trace("post interrupt ok");
 
     api.clearOutput();
     api.enqueueWarningResponse("Wipe Snapshot");
-    await vscode.commands.executeCommand("frothy.wipe");
-    await waitForOutput(api, "[frothy] wipe");
+    await vscode.commands.executeCommand("froth.wipe");
+    await waitForOutput(api, "[froth] wipe");
     await expectSee(api, "keep", "see failed");
     trace("wipe ok");
 
-    runtimeEditor = await openEditor("line-send.frothy");
+    runtimeEditor = await openEditor("line-send.froth");
     await replaceDocument(runtimeEditor, "while true { nil }\n");
     setLineCursor(runtimeEditor, 0);
     api.clearOutput();
-    const disconnectEval = vscode.commands.executeCommand("frothy.sendSelection");
+    const disconnectEval = vscode.commands.executeCommand("froth.sendSelection");
     await api.waitForState("running", 15000);
-    await vscode.commands.executeCommand("frothy.disconnect");
+    await vscode.commands.executeCommand("froth.disconnect");
     await withTimeout(disconnectEval, 15000, "disconnect eval to settle");
     await api.waitForState("idle", 15000);
     trace("disconnect while running ok");
 
     api.clearOutput();
-    await vscode.commands.executeCommand("frothy.connect");
+    await vscode.commands.executeCommand("froth.connect");
     await api.waitForState("connected", 15000);
-    await vscode.commands.executeCommand("frothy.forceReconnect");
+    await vscode.commands.executeCommand("froth.forceReconnect");
     await api.waitForState("connected", 15000);
     trace("force reconnect ok");
 
-    runtimeEditor = await openEditor("line-send.frothy");
+    runtimeEditor = await openEditor("line-send.froth");
     await replaceDocument(runtimeEditor, "while true { nil }\n");
     setLineCursor(runtimeEditor, 0);
     api.clearOutput();
-    const forceReconnectEval = vscode.commands.executeCommand("frothy.sendSelection");
+    const forceReconnectEval = vscode.commands.executeCommand("froth.sendSelection");
     await api.waitForState("running", 15000);
-    await vscode.commands.executeCommand("frothy.forceReconnect");
+    await vscode.commands.executeCommand("froth.forceReconnect");
     await withTimeout(forceReconnectEval, 15000, "force reconnect eval to settle");
     await api.waitForState("connected", 15000);
     trace("force reconnect while running ok");
 
-    await vscode.commands.executeCommand("frothy.disconnect");
+    await vscode.commands.executeCommand("froth.disconnect");
     await api.waitForState("idle", 15000);
     trace("reconnect ok");
 

@@ -22,7 +22,6 @@ void platform_clear_emit_hook(void);
 froth_error_t platform_key(uint8_t *byte);
 bool platform_input_closed(void);
 bool platform_should_echo_input(void);
-bool platform_key_ready(void);
 void platform_check_interrupt(struct froth_vm_t *vm);
 void platform_delay_ms(froth_cell_u_t ms);
 uint32_t platform_uptime_ms(void);

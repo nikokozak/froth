@@ -61,7 +61,7 @@ platform = "esp-idf"
 	for _, needle := range []string{
 		`note = nil`,
 		`boot {`,
-		`set note = "Hello from Frothy!"`,
+		`set note = "Hello from Froth!"`,
 	} {
 		if !strings.Contains(runtimeSource, needle) {
 			t.Fatalf("runtime source missing %q\n%s", needle, runtimeSource)

@@ -13,23 +13,28 @@ void froth_cellspace_init(froth_cellspace_t *cellspace) {
 froth_error_t froth_cellspace_allot(froth_cellspace_t *cellspace,
                                     froth_cell_t count,
                                     froth_cell_t *base_addr_out) {
+  froth_cell_u_t requested;
+
   if (count < 0) {
     return FROTH_ERROR_BOUNDS;
   }
 
-  if (cellspace->used + count > cellspace->capacity) {
+  requested = (froth_cell_u_t)count;
+  if (requested > cellspace->capacity ||
+      cellspace->used > cellspace->capacity - requested) {
     return FROTH_ERROR_CELLSPACE_FULL;
   }
 
   *base_addr_out = cellspace->used;
-  memset(cellspace->data + cellspace->used, 0, sizeof(froth_cell_t) * count);
-  cellspace->used += count;
+  memset(cellspace->data + cellspace->used, 0,
+         sizeof(froth_cell_t) * requested);
+  cellspace->used += requested;
   if (cellspace->used > cellspace->high_water) {
     cellspace->high_water = cellspace->used;
   }
 
   return FROTH_OK;
-};
+}
 
 froth_error_t froth_cellspace_fetch(const froth_cellspace_t *cellspace,
                                     froth_cell_t index, froth_cell_t *result) {

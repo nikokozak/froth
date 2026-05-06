@@ -1,6 +1,7 @@
 set(FROTH_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../..")
 
 include(${FROTH_ROOT}/cmake/froth_board_assets.cmake)
+include(${FROTH_ROOT}/cmake/frothy_runtime_sources.cmake)
 
 if(NOT DEFINED FROTH_BOARD OR FROTH_BOARD STREQUAL "")
   get_property(FROTH_BOARD_CACHE_VALUE CACHE FROTH_BOARD PROPERTY VALUE)
@@ -14,8 +15,6 @@ endif()
 set(FROTH_BOARD_CONFIG_CELL_SIZE_BITS 32)
 set(FROTH_BOARD_CONFIG_HEAP_SIZE 4096)
 set(FROTH_BOARD_CONFIG_DATA_SPACE_SIZE 256)
-set(FROTH_BOARD_CONFIG_DS_DEPTH 256)
-set(FROTH_BOARD_CONFIG_RS_DEPTH 256)
 set(FROTH_BOARD_CONFIG_SLOT_COUNT 128)
 set(FROTH_BOARD_CONFIG_HAS_SNAPSHOTS 1)
 set(FROTH_BOARD_CONFIG_SNAPSHOT_BLOCK_SIZE 2048)
@@ -48,18 +47,6 @@ if(EXISTS "${FROTH_BOARD_JSON_PATH}")
          GET "${FROTH_BOARD_JSON_CONTENT}" config data_space_size)
   if(NOT FROTH_BOARD_CONFIG_ERROR)
     set(FROTH_BOARD_CONFIG_DATA_SPACE_SIZE "${FROTH_BOARD_CONFIG_VALUE}")
-  endif()
-
-  string(JSON FROTH_BOARD_CONFIG_VALUE ERROR_VARIABLE FROTH_BOARD_CONFIG_ERROR
-         GET "${FROTH_BOARD_JSON_CONTENT}" config ds_depth)
-  if(NOT FROTH_BOARD_CONFIG_ERROR)
-    set(FROTH_BOARD_CONFIG_DS_DEPTH "${FROTH_BOARD_CONFIG_VALUE}")
-  endif()
-
-  string(JSON FROTH_BOARD_CONFIG_VALUE ERROR_VARIABLE FROTH_BOARD_CONFIG_ERROR
-         GET "${FROTH_BOARD_JSON_CONTENT}" config rs_depth)
-  if(NOT FROTH_BOARD_CONFIG_ERROR)
-    set(FROTH_BOARD_CONFIG_RS_DEPTH "${FROTH_BOARD_CONFIG_VALUE}")
   endif()
 
   string(JSON FROTH_BOARD_CONFIG_VALUE ERROR_VARIABLE FROTH_BOARD_CONFIG_ERROR
@@ -146,46 +133,17 @@ endif()
 
 frothy_resolve_board_sources(FROTHY_BOARD_SRCS "${FROTH_ROOT}" "${FROTH_BOARD}")
 
-set(FROTHY_KERNEL_PRODUCT_SRCS
-    ${FROTH_ROOT}/src/frothy_boot.c
-    ${FROTH_ROOT}/src/frothy_base_image.c
-    ${FROTH_ROOT}/src/frothy_control.c
-    ${FROTH_ROOT}/src/frothy_shell.c
-    ${FROTH_ROOT}/src/frothy_ffi.c
-    ${FROTH_ROOT}/src/frothy_inspect.c
-    ${FROTH_ROOT}/src/frothy_ir.c
-    ${FROTH_ROOT}/src/frothy_parser.c
-    ${FROTH_ROOT}/src/frothy_snapshot.c
-    ${FROTH_ROOT}/src/frothy_snapshot_codec.c
-    ${FROTH_ROOT}/src/frothy_value.c
-    ${FROTH_ROOT}/src/frothy_eval.c
-    ${FROTHY_BOARD_SRCS}
-)
-
-set(FROTHY_KERNEL_RETAINED_SUBSTRATE_SRCS
-    ${FROTH_ROOT}/src/froth_stack.c
-    ${FROTH_ROOT}/src/froth_fmt.c
-    ${FROTH_ROOT}/src/froth_console.c
-    ${FROTH_ROOT}/src/froth_ffi.c
-    ${FROTH_ROOT}/src/froth_tbuf.c
-    ${FROTH_ROOT}/src/froth_vm.c
-    ${FROTH_ROOT}/src/froth_heap.c
-    ${FROTH_ROOT}/src/froth_slot_table.c
-    ${FROTH_ROOT}/src/froth_cellspace.c
-    ${FROTH_ROOT}/src/froth_snapshot.c
-    ${FROTH_ROOT}/src/froth_crc32.c
-    ${FROTH_ROOT}/src/froth_transport.c
-)
-
-set(FROTHY_KERNEL_COMPAT_LAYER_SRCS
-    ${FROTH_ROOT}/src/compat/frothy_console_compat.c
-    ${FROTH_ROOT}/src/compat/frothy_link_stub.c
+frothy_runtime_sources(
+    FROTHY_KERNEL_PRODUCT_SRCS
+    FROTHY_KERNEL_RETAINED_SUBSTRATE_SRCS
+    FROTHY_KERNEL_SUPPORT_SRCS
+    "${FROTH_ROOT}"
+    FROTHY_BOARD_SRCS
 )
 
 set(FROTHY_KERNEL_SRCS
     ${FROTHY_KERNEL_PRODUCT_SRCS}
     ${FROTHY_KERNEL_RETAINED_SUBSTRATE_SRCS}
-    ${FROTHY_KERNEL_COMPAT_LAYER_SRCS}
 )
 
 idf_component_register(
@@ -196,20 +154,16 @@ idf_component_register(
     INCLUDE_DIRS
         "${FROTH_ROOT}/src"
         "${FROTH_ROOT}/boards/${FROTH_BOARD}"
-    REQUIRES driver esp_timer nvs_flash
+    REQUIRES driver esp_adc esp_timer nvs_flash
 )
 
 # Frothy compile-time configuration
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
     FROTH_CELL_SIZE_BITS=${FROTH_BOARD_CONFIG_CELL_SIZE_BITS}
-    FROTH_DS_CAPACITY=${FROTH_BOARD_CONFIG_DS_DEPTH}
-    FROTH_RS_CAPACITY=${FROTH_BOARD_CONFIG_RS_DEPTH}
-    FROTH_CS_CAPACITY=256
     FROTH_HEAP_SIZE=${FROTH_BOARD_CONFIG_HEAP_SIZE}
     FROTH_SLOT_TABLE_SIZE=${FROTH_BOARD_CONFIG_SLOT_COUNT}
     FROTH_DATA_SPACE_SIZE=${FROTH_BOARD_CONFIG_DATA_SPACE_SIZE}
     FROTH_LINE_BUFFER_SIZE=1024
-    FROTH_MAX_PERM_SIZE=16
     FROTH_VERSION="0.1.0"
     FROTH_BOARD_NAME="${FROTH_BOARD}"
     FROTH_STRING_MAX_LEN=256

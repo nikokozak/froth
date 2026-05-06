@@ -37,23 +37,23 @@ func TestPackageReleaseScriptIncludesBinaryAndReadme(t *testing.T) {
 		t.Fatalf("package-release.sh: %v\n%s", err, output)
 	}
 
-	archivePath := filepath.Join(outputDir, "frothy-v0.1.0-darwin-arm64.tar.gz")
+	archivePath := filepath.Join(outputDir, "froth-v0.1.0-darwin-arm64.tar.gz")
 	entries := untarEntries(t, archivePath)
-	if _, ok := entries["frothy"]; !ok {
-		t.Fatalf("archive entries = %v, want frothy", sortedKeys(entries))
+	if _, ok := entries["froth"]; !ok {
+		t.Fatalf("archive entries = %v, want froth", sortedKeys(entries))
 	}
 	readme, ok := entries["README.txt"]
 	if !ok {
 		t.Fatalf("archive entries = %v, want README.txt", sortedKeys(entries))
 	}
-	if !strings.Contains(readme, "Installed command: frothy") {
+	if !strings.Contains(readme, "Installed command: froth") {
 		t.Fatalf("README.txt = %q, want installed command note", readme)
 	}
 }
 
 func TestUpdateBrewFormulaScriptIncludesStableAssetsAndHeadBuild(t *testing.T) {
 	repoRoot := repoRootForScriptTest(t)
-	outputPath := filepath.Join(t.TempDir(), "frothy.rb")
+	outputPath := filepath.Join(t.TempDir(), "froth.rb")
 	cmd := exec.Command(
 		filepath.Join(repoRoot, "tools", "update-brew-formula.sh"),
 		"0.1.0",
@@ -72,13 +72,13 @@ func TestUpdateBrewFormulaScriptIncludesStableAssetsAndHeadBuild(t *testing.T) {
 	}
 	text := string(formula)
 	for _, want := range []string{
-		`url "https://github.com/nikokozak/frothy/archive/refs/tags/v0.1.0.tar.gz"`,
+		`url "https://github.com/nikokozak/froth/archive/refs/tags/v0.1.0.tar.gz"`,
 		`sha256 "` + strings.Repeat("a", 64) + `"`,
-		`head "https://github.com/nikokozak/frothy.git", branch: "main"`,
+		`head "https://github.com/nikokozak/froth.git", branch: "main"`,
 		`depends_on "go" => :build`,
 		`system "go", "run", "./internal/sdk/cmd/generate",`,
-		`system "go", "build", "-o", bin/"frothy", "."`,
-		`assert_match "frothy ", output`,
+		`system "go", "build", "-o", bin/"froth", "."`,
+		`assert_match "froth ", output`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("generated formula missing %q\n%s", want, text)

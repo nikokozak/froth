@@ -16,7 +16,7 @@ if (!realCli) {
 
 const args = process.argv.slice(2);
 if (args.length === 0) {
-  fail("expected Frothy CLI arguments");
+  fail("expected Froth CLI arguments");
 }
 
 const proxiedArgs = [...args];

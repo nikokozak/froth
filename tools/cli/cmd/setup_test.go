@@ -17,13 +17,13 @@ func TestRunSetupESPIDFUsesLocalScriptInsideRepo(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "setup.log")
 	mustWriteFile(t, filepath.Join(repoRoot, "CMakeLists.txt"), "project(Froth)\n")
 	mustWriteFile(t, filepath.Join(repoRoot, "src", "froth_vm.h"), "/* vm */\n")
-	mustWriteExecutable(t, filepath.Join(repoRoot, "tools", "setup-esp-idf.sh"), "#!/bin/sh\nprintf 'args=%s\\nFROTHY_HOME=%s\\n' \"$*\" \"$FROTHY_HOME\" > \""+logPath+"\"\n")
+	mustWriteExecutable(t, filepath.Join(repoRoot, "tools", "setup-esp-idf.sh"), "#!/bin/sh\nprintf 'args=%s\\nFROTH_HOME=%s\\n' \"$*\" \"$FROTH_HOME\" > \""+logPath+"\"\n")
 
 	if err := os.MkdirAll(filepath.Join(repoRoot, "nested"), 0755); err != nil {
 		t.Fatalf("mkdir nested: %v", err)
 	}
 	withChdir(t, filepath.Join(repoRoot, "nested"))
-	t.Setenv("FROTHY_HOME", "/tmp/frothy-home")
+	t.Setenv("FROTH_HOME", "/tmp/froth-home")
 
 	if err := runSetup([]string{"esp-idf", "--force"}); err != nil {
 		t.Fatalf("runSetup: %v", err)
@@ -33,8 +33,8 @@ func TestRunSetupESPIDFUsesLocalScriptInsideRepo(t *testing.T) {
 	if !strings.Contains(log, "args=--force") {
 		t.Fatalf("setup log = %q, want --force", log)
 	}
-	if !strings.Contains(log, "FROTHY_HOME=/tmp/frothy-home") {
-		t.Fatalf("setup log = %q, want FROTHY_HOME", log)
+	if !strings.Contains(log, "FROTH_HOME=/tmp/froth-home") {
+		t.Fatalf("setup log = %q, want FROTH_HOME", log)
 	}
 }
 
@@ -44,12 +44,12 @@ func TestRunSetupESPIDFDownloadsTaggedRawScriptOutsideRepo(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "setup.log")
 	version := frothVersion(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		wantPath := fmt.Sprintf("/nikokozak/frothy/v%s/tools/setup-esp-idf.sh", version)
+		wantPath := fmt.Sprintf("/nikokozak/froth/v%s/tools/setup-esp-idf.sh", version)
 		if r.URL.Path != wantPath {
 			http.NotFound(w, r)
 			return
 		}
-		fmt.Fprintf(w, "#!/bin/sh\nprintf 'args=%%s\\nFROTHY_HOME=%%s\\n' \"$*\" \"$FROTHY_HOME\" > %q\n", logPath)
+		fmt.Fprintf(w, "#!/bin/sh\nprintf 'args=%%s\\nFROTH_HOME=%%s\\n' \"$*\" \"$FROTH_HOME\" > %q\n", logPath)
 	}))
 	defer server.Close()
 
@@ -58,7 +58,7 @@ func TestRunSetupESPIDFDownloadsTaggedRawScriptOutsideRepo(t *testing.T) {
 	t.Cleanup(func() { rawContentBase = oldRawBase })
 
 	withChdir(t, t.TempDir())
-	t.Setenv("FROTHY_HOME", "/tmp/frothy-home")
+	t.Setenv("FROTH_HOME", "/tmp/froth-home")
 
 	if err := runSetup([]string{"esp-idf", "--force"}); err != nil {
 		t.Fatalf("runSetup: %v", err)
@@ -68,8 +68,8 @@ func TestRunSetupESPIDFDownloadsTaggedRawScriptOutsideRepo(t *testing.T) {
 	if !strings.Contains(log, "args=--force") {
 		t.Fatalf("setup log = %q, want --force", log)
 	}
-	if !strings.Contains(log, "FROTHY_HOME=/tmp/frothy-home") {
-		t.Fatalf("setup log = %q, want FROTHY_HOME", log)
+	if !strings.Contains(log, "FROTH_HOME=/tmp/froth-home") {
+		t.Fatalf("setup log = %q, want FROTH_HOME", log)
 	}
 }
 
@@ -87,17 +87,17 @@ func TestRunSetupESPIDFRejectsUnknownArgs(t *testing.T) {
 
 func TestRawTaggedURLUsesSingleRepoPrefix(t *testing.T) {
 	url := rawTaggedURL("1.2.3", "tools/setup-esp-idf.sh")
-	want := "https://raw.githubusercontent.com/nikokozak/frothy/v1.2.3/tools/setup-esp-idf.sh"
+	want := "https://raw.githubusercontent.com/nikokozak/froth/v1.2.3/tools/setup-esp-idf.sh"
 	if url != want {
 		t.Fatalf("rawTaggedURL = %q, want %q", url, want)
 	}
 }
 
 func TestRawTaggedURLUsesReleaseRepoSlugOverride(t *testing.T) {
-	t.Setenv("RELEASE_REPO_SLUG", "example/frothy-nightly")
+	t.Setenv("RELEASE_REPO_SLUG", "example/froth-nightly")
 
 	url := rawTaggedURL("1.2.3", "tools/setup-esp-idf.sh")
-	want := "https://raw.githubusercontent.com/example/frothy-nightly/v1.2.3/tools/setup-esp-idf.sh"
+	want := "https://raw.githubusercontent.com/example/froth-nightly/v1.2.3/tools/setup-esp-idf.sh"
 	if url != want {
 		t.Fatalf("rawTaggedURL = %q, want %q", url, want)
 	}
