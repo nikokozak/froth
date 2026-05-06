@@ -30,6 +30,9 @@ func Execute() error {
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
+		case "--help", "-h", "help":
+			printUsage()
+			return nil
 		case "--port":
 			if i+1 < len(args) {
 				portFlag = args[i+1]
@@ -65,6 +68,9 @@ func Execute() error {
 	}
 
 	switch remaining[0] {
+	case "help":
+		printUsage()
+		return nil
 	case "new":
 		return runNew(remaining[1:])
 	case "info":
