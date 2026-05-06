@@ -30,8 +30,13 @@ compile_stack_usage() {
   source_file=$1
   object_file=$2
   command_line=$(
-    rg -N --no-filename "\"command\": \".*${source_file}\"" "$compile_db" \
-      | sed 's/^.*"command": "//; s/",$//; s/\\"/"/g'
+    {
+      if command -v rg >/dev/null 2>&1; then
+        rg -N --no-filename "\"command\": \".*${source_file}\"" "$compile_db" || true
+      else
+        grep "\"command\": \".*${source_file}\"" "$compile_db" || true
+      fi
+    } | sed 's/^.*"command": "//; s/",$//; s/\\"/"/g'
   )
 
   if [ -z "$command_line" ]; then
