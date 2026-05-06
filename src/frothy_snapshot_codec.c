@@ -157,10 +157,27 @@ static bool frothy_snapshot_name_bytes_are_slot_name(const uint8_t *bytes,
   return frothy_slot_name_bytes_are_valid(bytes, length);
 }
 
+static bool frothy_snapshot_writer_has_space(
+    const frothy_snapshot_writer_t *writer, size_t length) {
+  if (writer == NULL || writer->data == NULL ||
+      writer->length > writer->capacity) {
+    return false;
+  }
+  return length <= writer->capacity - writer->length;
+}
+
+static bool frothy_snapshot_reader_has_remaining(
+    const frothy_snapshot_reader_t *reader, size_t length) {
+  if (reader == NULL || reader->data == NULL ||
+      reader->offset > reader->length) {
+    return false;
+  }
+  return length <= reader->length - reader->offset;
+}
 
 static froth_error_t frothy_snapshot_writer_write_u8(
     frothy_snapshot_writer_t *writer, uint8_t value) {
-  if (writer->length + 1 > writer->capacity) {
+  if (!frothy_snapshot_writer_has_space(writer, 1)) {
     return FROTH_ERROR_SNAPSHOT_OVERFLOW;
   }
 
@@ -170,7 +187,7 @@ static froth_error_t frothy_snapshot_writer_write_u8(
 
 static froth_error_t frothy_snapshot_writer_write_u16(
     frothy_snapshot_writer_t *writer, uint16_t value) {
-  if (writer->length + 2 > writer->capacity) {
+  if (!frothy_snapshot_writer_has_space(writer, 2)) {
     return FROTH_ERROR_SNAPSHOT_OVERFLOW;
   }
 
@@ -181,7 +198,7 @@ static froth_error_t frothy_snapshot_writer_write_u16(
 
 static froth_error_t frothy_snapshot_writer_write_u32(
     frothy_snapshot_writer_t *writer, uint32_t value) {
-  if (writer->length + 4 > writer->capacity) {
+  if (!frothy_snapshot_writer_has_space(writer, 4)) {
     return FROTH_ERROR_SNAPSHOT_OVERFLOW;
   }
 
@@ -199,7 +216,8 @@ static froth_error_t frothy_snapshot_writer_write_i32(
 
 static froth_error_t frothy_snapshot_writer_write_bytes(
     frothy_snapshot_writer_t *writer, const uint8_t *bytes, size_t length) {
-  if (writer->length + length > writer->capacity) {
+  if ((length > 0 && bytes == NULL) ||
+      !frothy_snapshot_writer_has_space(writer, length)) {
     return FROTH_ERROR_SNAPSHOT_OVERFLOW;
   }
 
@@ -210,7 +228,7 @@ static froth_error_t frothy_snapshot_writer_write_bytes(
 
 static froth_error_t frothy_snapshot_reader_read_u8(
     frothy_snapshot_reader_t *reader, uint8_t *out) {
-  if (reader->offset + 1 > reader->length) {
+  if (out == NULL || !frothy_snapshot_reader_has_remaining(reader, 1)) {
     return FROTH_ERROR_SNAPSHOT_OVERFLOW;
   }
 
@@ -220,7 +238,7 @@ static froth_error_t frothy_snapshot_reader_read_u8(
 
 static froth_error_t frothy_snapshot_reader_read_u16(
     frothy_snapshot_reader_t *reader, uint16_t *out) {
-  if (reader->offset + 2 > reader->length) {
+  if (out == NULL || !frothy_snapshot_reader_has_remaining(reader, 2)) {
     return FROTH_ERROR_SNAPSHOT_OVERFLOW;
   }
 
@@ -232,7 +250,7 @@ static froth_error_t frothy_snapshot_reader_read_u16(
 
 static froth_error_t frothy_snapshot_reader_read_u32(
     frothy_snapshot_reader_t *reader, uint32_t *out) {
-  if (reader->offset + 4 > reader->length) {
+  if (out == NULL || !frothy_snapshot_reader_has_remaining(reader, 4)) {
     return FROTH_ERROR_SNAPSHOT_OVERFLOW;
   }
 
@@ -255,7 +273,7 @@ static froth_error_t frothy_snapshot_reader_read_i32(
 
 static froth_error_t frothy_snapshot_reader_read_bytes(
     frothy_snapshot_reader_t *reader, size_t length, const uint8_t **out) {
-  if (reader->offset + length > reader->length) {
+  if (out == NULL || !frothy_snapshot_reader_has_remaining(reader, length)) {
     return FROTH_ERROR_SNAPSHOT_OVERFLOW;
   }
 
@@ -2772,6 +2790,10 @@ froth_error_t frothy_snapshot_codec_write_payload(
   uint32_t binding_count = 0;
   froth_error_t err = FROTH_OK;
 
+  if (runtime == NULL || payload_out == NULL || payload_length_out == NULL) {
+    return FROTH_ERROR_BOUNDS;
+  }
+
   frothy_snapshot_workspace_reset(workspace);
   memset(&symbols, 0, sizeof(symbols));
   memset(&objects, 0, sizeof(objects));
@@ -2814,6 +2836,10 @@ froth_error_t frothy_snapshot_codec_validate_payload(const uint8_t *payload,
   frothy_snapshot_codec_workspace_t *workspace = frothy_snapshot_workspace();
   froth_error_t err;
 
+  if (payload == NULL) {
+    return FROTH_ERROR_BOUNDS;
+  }
+
   frothy_snapshot_workspace_reset(workspace);
   frothy_snapshot_layout_init(&layout, workspace);
   err = frothy_snapshot_validate(payload, payload_length, &layout);
@@ -2832,6 +2858,10 @@ froth_error_t frothy_snapshot_codec_restore_payload(const uint8_t *payload,
   frothy_snapshot_layout_t layout;
   frothy_snapshot_codec_workspace_t *workspace = frothy_snapshot_workspace();
   froth_error_t err;
+
+  if (payload == NULL) {
+    return FROTH_ERROR_BOUNDS;
+  }
 
   frothy_snapshot_workspace_reset(workspace);
   frothy_snapshot_layout_init(&layout, workspace);

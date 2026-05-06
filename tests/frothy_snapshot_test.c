@@ -7,6 +7,7 @@
 #include "frothy_ir.h"
 #include "frothy_parser.h"
 #include "frothy_snapshot.h"
+#include "frothy_snapshot_codec.h"
 #include "frothy_value.h"
 #include "platform.h"
 
@@ -955,6 +956,58 @@ static int expect_startup_report(const frothy_startup_report_t *report,
   }
 
   return 1;
+}
+
+static int test_snapshot_api_guards(void) {
+  temp_workspace_t workspace = {{0}};
+  uint8_t header[FROTH_SNAPSHOT_HEADER_SIZE];
+  uint8_t payload[1] = {0};
+  const uint8_t *payload_out = NULL;
+  frothy_snapshot_header_info_t info;
+  uint32_t payload_length = 0;
+  uint32_t generation = 0;
+  uint8_t slot = 0;
+  int ok = 1;
+
+  memset(&info, 0, sizeof(info));
+  ok &= frothy_snapshot_build_header(NULL, 0, payload, 1) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_build_header(header, 1, NULL, 1) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_build_header(header, 0, NULL, 1) == FROTH_OK;
+  ok &= frothy_snapshot_parse_header(NULL, &info) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_parse_header(header, NULL) == FROTH_ERROR_BOUNDS;
+
+  ok &= frothy_snapshot_codec_write_payload(NULL, &payload_out,
+                                            &payload_length) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_codec_write_payload(runtime(), NULL, &payload_length) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_codec_write_payload(runtime(), &payload_out, NULL) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_codec_validate_payload(NULL, 0) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_codec_restore_payload(NULL, 0) == FROTH_ERROR_BOUNDS;
+
+  ok &= frothy_builtin_save(runtime(), NULL, NULL, 0, NULL) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_builtin_restore(runtime(), NULL, NULL, 0, NULL) ==
+        FROTH_ERROR_BOUNDS;
+  ok &= frothy_builtin_wipe(runtime(), NULL, NULL, 0, NULL) ==
+        FROTH_ERROR_BOUNDS;
+
+  if (!enter_temp_workspace(&workspace)) {
+    return 0;
+  }
+  ok &= frothy_snapshot_pick_active(NULL, &generation) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_pick_active(&slot, NULL) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_pick_inactive(NULL, &generation) == FROTH_ERROR_BOUNDS;
+  ok &= frothy_snapshot_pick_inactive(&slot, NULL) == FROTH_ERROR_BOUNDS;
+  leave_temp_workspace(&workspace);
+
+  if (!ok) {
+    fprintf(stderr, "snapshot API guards failed\n");
+  }
+  return ok;
 }
 
 static int test_native_dispatch_and_roundtrip(void) {
@@ -2603,6 +2656,7 @@ static int test_non_persistable_rejection(void) {
 int main(void) {
   int ok = 1;
 
+  ok &= test_snapshot_api_guards();
   ok &= test_native_dispatch_and_roundtrip();
   ok &= test_readability_snapshot_roundtrip();
   ok &= test_overlay_reset_semantics();

@@ -58,6 +58,10 @@ froth_error_t frothy_snapshot_build_header(uint8_t *header,
                                            uint32_t payload_len,
                                            const uint8_t *payload,
                                            uint32_t generation) {
+  if (header == NULL || (payload_len > 0 && payload == NULL)) {
+    return FROTH_ERROR_BOUNDS;
+  }
+
   memset(header, 0, FROTH_SNAPSHOT_HEADER_SIZE);
   memcpy(&header[FROTH_SNAPSHOT_MAGIC_OFFSET], FROTH_SNAPSHOT_MAGIC, 8);
   frothy_snapshot_write_le16(&header[FROTH_SNAPSHOT_VERSION_OFFSET],
@@ -83,6 +87,10 @@ frothy_snapshot_parse_header(const uint8_t *header,
                              frothy_snapshot_header_info_t *parse_out) {
   uint8_t copy[FROTH_SNAPSHOT_HEADER_SIZE];
   uint32_t stored_header_crc = 0;
+
+  if (header == NULL || parse_out == NULL) {
+    return FROTH_ERROR_BOUNDS;
+  }
 
   if (memcmp(&header[FROTH_SNAPSHOT_MAGIC_OFFSET], FROTH_SNAPSHOT_MAGIC, 8) !=
       0) {
@@ -133,10 +141,19 @@ froth_error_t frothy_snapshot_pick_active(uint8_t *slot_out,
                                           uint32_t *generation_out) {
   frothy_snapshot_header_info_t info_a;
   frothy_snapshot_header_info_t info_b;
-  froth_error_t err_a = frothy_snapshot_read_slot_header(0, &info_a);
-  froth_error_t err_b = frothy_snapshot_read_slot_header(1, &info_b);
-  bool a_valid = err_a == FROTH_OK;
-  bool b_valid = err_b == FROTH_OK;
+  froth_error_t err_a;
+  froth_error_t err_b;
+  bool a_valid;
+  bool b_valid;
+
+  if (slot_out == NULL || generation_out == NULL) {
+    return FROTH_ERROR_BOUNDS;
+  }
+
+  err_a = frothy_snapshot_read_slot_header(0, &info_a);
+  err_b = frothy_snapshot_read_slot_header(1, &info_b);
+  a_valid = err_a == FROTH_OK;
+  b_valid = err_b == FROTH_OK;
 
   if (!a_valid && !b_valid) {
     return FROTH_ERROR_SNAPSHOT_NO_SNAPSHOT;
@@ -157,10 +174,19 @@ froth_error_t frothy_snapshot_pick_inactive(uint8_t *slot_out,
                                             uint32_t *next_generation_out) {
   frothy_snapshot_header_info_t info_a;
   frothy_snapshot_header_info_t info_b;
-  froth_error_t err_a = frothy_snapshot_read_slot_header(0, &info_a);
-  froth_error_t err_b = frothy_snapshot_read_slot_header(1, &info_b);
-  bool a_valid = err_a == FROTH_OK;
-  bool b_valid = err_b == FROTH_OK;
+  froth_error_t err_a;
+  froth_error_t err_b;
+  bool a_valid;
+  bool b_valid;
+
+  if (slot_out == NULL || next_generation_out == NULL) {
+    return FROTH_ERROR_BOUNDS;
+  }
+
+  err_a = frothy_snapshot_read_slot_header(0, &info_a);
+  err_b = frothy_snapshot_read_slot_header(1, &info_b);
+  a_valid = err_a == FROTH_OK;
+  b_valid = err_b == FROTH_OK;
 
   if (!a_valid && !b_valid) {
     *slot_out = 0;
@@ -295,6 +321,9 @@ froth_error_t frothy_builtin_save(frothy_runtime_t *runtime,
   (void)runtime;
   (void)context;
   (void)args;
+  if (out == NULL) {
+    return FROTH_ERROR_BOUNDS;
+  }
   if (arg_count != 0) {
     return FROTH_ERROR_SIGNATURE;
   }
@@ -311,6 +340,9 @@ froth_error_t frothy_builtin_restore(frothy_runtime_t *runtime,
   (void)runtime;
   (void)context;
   (void)args;
+  if (out == NULL) {
+    return FROTH_ERROR_BOUNDS;
+  }
   if (arg_count != 0) {
     return FROTH_ERROR_SIGNATURE;
   }
@@ -327,6 +359,9 @@ froth_error_t frothy_builtin_wipe(frothy_runtime_t *runtime,
   (void)runtime;
   (void)context;
   (void)args;
+  if (out == NULL) {
+    return FROTH_ERROR_BOUNDS;
+  }
   if (arg_count != 0) {
     return FROTH_ERROR_SIGNATURE;
   }
