@@ -2,6 +2,32 @@
 !.githooks/
 !.githooks/pre-commit
 froth-session
+
+# Local narrative/control docs. Keep these usable in a checkout without
+# publishing them as tracked repo content.
+/README.md
+/PROGRESS.md
+/TIMELINE.md
+/docs/
+/boards/README.md
+/boards/*/WORKSHOP.md
+/platforms/README.md
+/workshop/README.md
+/tools/vscode/README.md
+
+# Generated or presentation-style artifacts.
+*.docx
+*.gif
+*.jpg
+*.jpeg
+*.pdf
+*.png
+*.pptx
+*.svg
+*.tgz
+*.xlsx
+*.zip
+
 docs/superpowers/
 docs/perm-tutorial.md
 docs/guide/*.pdf
