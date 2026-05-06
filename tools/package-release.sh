@@ -6,8 +6,8 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
 if [ "$#" -eq 0 ]; then
   VERSION=$(normalize_version "$(cat "$ROOT_DIR/VERSION")")
-  # Default to the repo-local `frothy-cli` checkout build when packaging locally.
-  BINARY="$ROOT_DIR/tools/cli/frothy-cli"
+  # Default to the repo-local checkout build when packaging locally.
+  BINARY="$ROOT_DIR/tools/cli/froth-cli"
   DIST_DIR="$ROOT_DIR/dist"
   GOOS=$(detect_goos)
   GOARCH=$(detect_goarch)
@@ -45,7 +45,7 @@ Froth CLI release archive
 
 Archive name: $(cli_asset_name "$VERSION" "$GOOS" "$GOARCH")
 Installed command: froth
-Repo-local checkout build: tools/cli/frothy-cli
+Repo-local checkout build: tools/cli/froth-cli
 
 Direct-install reminder:
 - place \`froth\` somewhere on PATH

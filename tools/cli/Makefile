@@ -1,7 +1,7 @@
 REPO_ROOT := ../..
 SDK_PAYLOAD_DIR := internal/sdk/generated
-# Repo-local checkout builds keep the internal binary name.
-OUTPUT ?= frothy-cli
+# Repo-local checkout builds keep a checkout-specific suffix.
+OUTPUT ?= froth-cli
 export FROTH_LINK_MAX_PAYLOAD ?= 1024
 empty :=
 space := $(empty) $(empty)
@@ -19,7 +19,7 @@ sdk-payload:
 	@go run ./internal/sdk/cmd/generate -repo $(REPO_ROOT) -out $(SDK_PAYLOAD_DIR)
 
 build: sdk-payload
-	@rm -f froth-cli
+	@rm -f frothy-cli
 	@echo "  Compiling repo-local CLI binary..."
 	@if [ -n "$(GOCACHE)" ]; then \
 		GOCACHE="$(GOCACHE)" go build -o $(OUTPUT) .; \

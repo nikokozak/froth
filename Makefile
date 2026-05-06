@@ -17,7 +17,7 @@ help:
 
 ##@ Build
 build: build-kernel build-cli ## Build everything (kernel + CLI)
-	@echo "==> Done. host runtime: build/froth, repo-local CLI: tools/cli/frothy-cli"
+	@echo "==> Done. host runtime: build/froth, repo-local CLI: tools/cli/froth-cli"
 
 build-kernel: check-cmake check-make ## Build the Froth host runtime
 	@echo "==> Building Froth host runtime (POSIX, 32-bit)..."
@@ -27,10 +27,10 @@ build-kernel: check-cmake check-make ## Build the Froth host runtime
 
 build-cli: check-go ## Build CLI tool
 	@mkdir -p "$(GO_CACHE_DIR)"
-	@rm -f tools/cli/froth-cli
+	@rm -f tools/cli/frothy-cli
 	@echo "==> Building repo-local CLI..."
 	@$(MAKE) --no-print-directory -C tools/cli build GOCACHE="$(GO_CACHE_DIR)"
-	@echo "==> Repo-local CLI ready: tools/cli/frothy-cli"
+	@echo "==> Repo-local CLI ready: tools/cli/froth-cli"
 
 release: version-check build-cli ## Build release tarball (current platform)
 	@tools/package-release.sh

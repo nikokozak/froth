@@ -180,11 +180,7 @@ export class VSCodeHost implements ControllerHost {
   }
 
   getConfiguredPort(): string {
-    return (
-      vscode.workspace.getConfiguration("froth").get<string>("port") ??
-      vscode.workspace.getConfiguration("frothy").get<string>("port") ??
-      ""
-    );
+    return vscode.workspace.getConfiguration("froth").get<string>("port") ?? "";
   }
 
   getStoredPort(key: string): string | undefined {
@@ -236,7 +232,6 @@ export function createVSCodeCliPathResolver(
   return async (): Promise<string | null> => {
     const configured =
       vscode.workspace.getConfiguration("froth").get<string>("cliPath") ??
-      vscode.workspace.getConfiguration("frothy").get<string>("cliPath") ??
       "";
     if (configured && configured.trim().length > 0) {
       const resolved = resolveCliCandidate(configured.trim(), host.getWorkspaceCwd());

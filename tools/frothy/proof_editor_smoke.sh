@@ -4,7 +4,7 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 VSCODE_DIR="$ROOT_DIR/tools/vscode"
-CLI_PATH="$ROOT_DIR/tools/cli/frothy-cli"
+CLI_PATH="$ROOT_DIR/tools/cli/froth-cli"
 WRAPPER_PATH="$VSCODE_DIR/test/froth-local-runtime-cli.js"
 HOST_RUNTIME=${FROTH_BINARY:-${FROTHY_BINARY:-"$ROOT_DIR/build/froth"}}
 

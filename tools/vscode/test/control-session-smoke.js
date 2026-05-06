@@ -234,27 +234,15 @@ async function main() {
     const cwd = path.resolve(__dirname, "..", "..");
     const candidates = cliCandidates(cwd);
     assert(candidates.includes("froth"), "froth candidate");
-    assert(candidates.includes("frothy"), "transitional frothy candidate");
-    assert(
-      candidates.some((candidate) => candidate.endsWith(path.join("tools", "cli", "frothy-cli"))),
-      "repo-local frothy-cli candidate",
-    );
     assert(
       candidates.some((candidate) => candidate.endsWith(path.join("tools", "cli", "froth-cli"))),
       "repo-local froth-cli candidate",
     );
     assert(
-      candidates.some((candidate) => candidate.endsWith(path.join("tools", "cli", "frothy"))),
-      "repo-local frothy candidate",
-    );
-    assert(
       candidates.some((candidate) => candidate.endsWith(path.join("tools", "cli", "froth"))),
       "repo-local froth candidate",
     );
-    assert(
-      candidates.indexOf("froth") < candidates.indexOf("frothy"),
-      "froth comes before transitional frothy",
-    );
+    assert(!candidates.includes("frothy"), "no old command candidate");
   });
 
   await test("CLI discovery picks PATH froth before repo-local fallback", async () => {
@@ -262,7 +250,7 @@ async function main() {
     const pathDir = fs.mkdtempSync(path.join(os.tmpdir(), "froth-cli-path-"));
 
     try {
-      const repoCli = path.join(repoRoot, "tools", "cli", "frothy-cli");
+      const repoCli = path.join(repoRoot, "tools", "cli", "froth-cli");
       const installedCli = path.join(pathDir, "froth");
       fs.mkdirSync(path.dirname(repoCli), { recursive: true });
       fs.writeFileSync(repoCli, "#!/bin/sh\n");

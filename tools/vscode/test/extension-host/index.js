@@ -62,6 +62,7 @@ async function restoreEditorSmokeFixtures() {
     return;
   }
   const fixtures = new Map([
+    ["line-send.froth", "control.value = 41 + 1\nwhile true { keep }\nafter_interrupt = 7\n"],
     ["send-file.froth", "keep = 30\nprobe(n) { n + 2 }\n"],
   ]);
   for (const [fileName, contents] of fixtures) {

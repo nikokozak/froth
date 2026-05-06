@@ -17,7 +17,7 @@ import (
 func TestPackageReleaseScriptIncludesBinaryAndReadme(t *testing.T) {
 	repoRoot := repoRootForScriptTest(t)
 	workDir := t.TempDir()
-	binaryPath := filepath.Join(workDir, "frothy-cli")
+	binaryPath := filepath.Join(workDir, "froth-cli")
 	if err := os.WriteFile(binaryPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatalf("write binary: %v", err)
 	}

@@ -9,10 +9,6 @@ export function cliCandidates(cwd: string): string[] {
     "/usr/local/bin/froth",
     ...repoLocalCandidates(cwd),
     "froth-cli",
-    "frothy",
-    "/opt/homebrew/bin/frothy",
-    "/usr/local/bin/frothy",
-    "frothy-cli",
   ]);
 }
 
@@ -48,11 +44,8 @@ function repoLocalCandidates(cwd: string): string[] {
   let current = path.resolve(cwd);
 
   for (;;) {
-    // Repo-local checkouts may still expose the default `frothy-cli` build.
     candidates.push(path.join(current, "tools", "cli", "froth-cli"));
     candidates.push(path.join(current, "tools", "cli", "froth"));
-    candidates.push(path.join(current, "tools", "cli", "frothy-cli"));
-    candidates.push(path.join(current, "tools", "cli", "frothy"));
 
     const parent = path.dirname(current);
     if (parent === current) {

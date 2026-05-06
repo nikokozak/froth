@@ -166,7 +166,7 @@ set(FROTH_HEAP_SIZE ${FROTH_BOARD_CONFIG_HEAP_SIZE_DEFAULT} CACHE STRING "Heap s
 set(FROTH_SLOT_TABLE_SIZE ${FROTH_BOARD_CONFIG_SLOT_COUNT_DEFAULT} CACHE STRING "Maximum number of slots.")
 set(FROTH_DATA_SPACE_SIZE ${FROTH_BOARD_CONFIG_DATA_SPACE_SIZE_DEFAULT} CACHE STRING "Mutable memory size in number of cells.")
 set(FROTH_LINE_BUFFER_SIZE 1024 CACHE STRING "Input line buffer for REPL in number of bytes.")
-set(FROTH_VERSION "0.1.0" CACHE STRING "Frothy version string")
+set(FROTH_VERSION "0.1.2" CACHE STRING "Frothy version string")
 set(FROTH_HAS_SNAPSHOTS ${FROTH_BOARD_CONFIG_HAS_SNAPSHOTS_DEFAULT} CACHE BOOL "Target supports Frothy snapshots")
 set(FROTH_SNAPSHOT_BLOCK_SIZE "${FROTH_BOARD_CONFIG_SNAPSHOT_BLOCK_SIZE_DEFAULT}" CACHE STRING "Snapshot size in target memory (bytes)")
 set(FROTH_SNAPSHOT_PATH_A "froth_a.snap" CACHE STRING "Snapshot A file path (default froth_a.snap)")
