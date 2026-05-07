@@ -201,7 +201,7 @@ func commandProofM10Device(args []string) error {
 	fs := flag.NewFlagSet("proof-m10-device", flag.ContinueOnError)
 	port := fs.String("port", "", "serial port for ESP32 proof board")
 	board := fs.String("board", "esp32-devkit-v1", "board name for maintained flash path")
-	cli := fs.String("cli", "", "frothy CLI binary")
+	cli := fs.String("cli", "", "froth CLI binary")
 	assumeBlink := fs.Bool("assume-blink-confirmed", false, "accepted for compatibility; device proof is non-interactive")
 	transcriptOut := fs.String("transcript-out", "", "write compact control proof transcript")
 	if err := fs.Parse(args); err != nil {
@@ -303,10 +303,13 @@ func resolveCLIPath(root string, provided string) string {
 	if provided != "" {
 		return provided
 	}
+	if fromEnv := os.Getenv("FROTH_CLI_BINARY"); fromEnv != "" {
+		return fromEnv
+	}
 	if fromEnv := os.Getenv("FROTHY_CLI_BINARY"); fromEnv != "" {
 		return fromEnv
 	}
-	return filepath.Join(root, "tools", "cli", "frothy-cli")
+	return filepath.Join(root, "tools", "cli", "froth-cli")
 }
 
 func runM10Flash(paths pathSet, cliPath string, board string, port string) error {
@@ -514,7 +517,7 @@ func espIDFExportPath() (string, error) {
 	}
 	path := filepath.Join(home, "sdk", "esp-idf", "export.sh")
 	if _, err := os.Stat(path); err != nil {
-		return "", fmt.Errorf("ESP-IDF not found (run `frothy setup esp-idf`)")
+		return "", fmt.Errorf("ESP-IDF not found (run `froth setup esp-idf`)")
 	}
 	return path, nil
 }

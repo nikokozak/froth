@@ -3,7 +3,7 @@ set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 BINARY="${FROTH_BINARY:-${FROTHY_BINARY:-$ROOT_DIR/build/froth}}"
-CLI_BIN="${FROTHY_CLI_BINARY:-$ROOT_DIR/tools/cli/frothy-cli}"
+CLI_BIN="${FROTH_CLI_BINARY:-${FROTHY_CLI_BINARY:-$ROOT_DIR/tools/cli/froth-cli}}"
 TEST_RUNNER_BIN=${FROTHY_TEST_RUNNER_BIN:-${FROTH_TEST_RUNNER_BIN:-}}
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/frothy-m10.XXXXXX")"
 HOST_ONLY=0
