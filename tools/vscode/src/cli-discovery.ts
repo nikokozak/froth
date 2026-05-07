@@ -2,12 +2,13 @@ import * as fs from "fs";
 import * as path from "path";
 
 export function cliCandidates(cwd: string): string[] {
-  // Prefer installed `froth` first, then repo-local checkout builds.
+  // Prefer checkout builds first so editor sessions match firmware built from
+  // the same workspace during workshop and release-prep validation.
   return dedupe([
+    ...repoLocalCandidates(cwd),
     "froth",
     "/opt/homebrew/bin/froth",
     "/usr/local/bin/froth",
-    ...repoLocalCandidates(cwd),
     "froth-cli",
   ]);
 }

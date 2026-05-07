@@ -226,7 +226,7 @@
         "froth.cliPath": {
           "type": "string",
           "default": "",
-          "description": "Absolute path to the installed `froth` CLI binary. Leave empty to auto-discover `froth` on PATH."
+          "description": "Absolute path to the `froth` CLI binary. Leave empty to auto-discover a workspace CLI first, then `froth` on PATH."
         },
         "froth.port": {
           "type": "string",

@@ -230,9 +230,13 @@ async function main() {
     await client.waitForExit(50);
   });
 
-  await test("CLI discovery prefers froth and keeps checkout fallback paths", async () => {
+  await test("CLI discovery prefers checkout CLI and keeps installed fallback paths", async () => {
     const cwd = path.resolve(__dirname, "..", "..");
     const candidates = cliCandidates(cwd);
+    assert(
+      candidates[0].endsWith(path.join("tools", "cli", "froth-cli")),
+      "repo-local froth-cli first",
+    );
     assert(candidates.includes("froth"), "froth candidate");
     assert(
       candidates.some((candidate) => candidate.endsWith(path.join("tools", "cli", "froth-cli"))),
@@ -245,7 +249,7 @@ async function main() {
     assert(!candidates.includes("frothy"), "no old command candidate");
   });
 
-  await test("CLI discovery picks PATH froth before repo-local fallback", async () => {
+  await test("CLI discovery picks repo-local CLI before PATH froth", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "froth-cli-discovery-"));
     const pathDir = fs.mkdtempSync(path.join(os.tmpdir(), "froth-cli-path-"));
 
@@ -270,7 +274,7 @@ async function main() {
         }
       }
 
-      assertEq(resolved, installedCli, "PATH froth wins before repo-local fallback");
+      assertEq(resolved, repoCli, "repo-local CLI wins before PATH froth");
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
       fs.rmSync(pathDir, { recursive: true, force: true });
