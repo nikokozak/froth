@@ -69,6 +69,52 @@ func TestExecutePrintsVersion(t *testing.T) {
 	}
 }
 
+func TestExecutePrintsUsageWithHelpFlag(t *testing.T) {
+	resetCommandGlobals(t)
+
+	oldArgs := os.Args
+	os.Args = []string{"froth", "--help"}
+	t.Cleanup(func() { os.Args = oldArgs })
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := Execute(); err != nil {
+			t.Fatalf("Execute: %v", err)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+	if !strings.Contains(stdout, "Usage: froth [flags] <command>") {
+		t.Fatalf("stdout = %q, want usage", stdout)
+	}
+}
+
+func TestExecutePrintsUsageForSubcommandHelp(t *testing.T) {
+	resetCommandGlobals(t)
+
+	projectDir := filepath.Join(t.TempDir(), "--help")
+	oldArgs := os.Args
+	os.Args = []string{"froth", "new", projectDir, "--help"}
+	t.Cleanup(func() { os.Args = oldArgs })
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := Execute(); err != nil {
+			t.Fatalf("Execute: %v", err)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+	if !strings.Contains(stdout, "Usage: froth [flags] <command>") {
+		t.Fatalf("stdout = %q, want usage", stdout)
+	}
+	if _, err := os.Stat(projectDir); !os.IsNotExist(err) {
+		t.Fatalf("project dir stat err = %v, want not exist", err)
+	}
+}
+
 func TestExecuteDispatchesSetup(t *testing.T) {
 	resetCommandGlobals(t)
 

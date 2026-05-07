@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 #
 # Fetch and install ESP-IDF for Froth development.
-# Installs to $FROTH_HOME/sdk/esp-idf/ when FROTH_HOME is set, falls back to
-# the transitional home override when present, and otherwise uses
-# ~/.froth/sdk/esp-idf/.
+# Installs to $FROTH_HOME/sdk/esp-idf/ when FROTH_HOME is set, and otherwise
+# uses ~/.froth/sdk/esp-idf/.
 #
 # Usage:
 #   ./tools/setup-esp-idf.sh           # install (skip if already present)
@@ -12,7 +11,7 @@
 set -eu
 
 ESP_IDF_VERSION="v5.5"
-FROTH_HOME_DIR="${FROTH_HOME:-${FROTHY_HOME:-$HOME/.froth}}"
+FROTH_HOME_DIR="${FROTH_HOME:-$HOME/.froth}"
 FROTH_SDK_DIR="$FROTH_HOME_DIR/sdk"
 IDF_INSTALL_DIR="$FROTH_SDK_DIR/esp-idf"
 IDF_READY_MARKER=".froth-install-complete"
