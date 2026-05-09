@@ -368,6 +368,9 @@ static uint8_t frothy_control_cobs_frame[FROTHY_CONTROL_FRAME_MAX_COBS];
 static uint8_t frothy_control_rx_frame[FROTHY_CONTROL_FRAME_MAX_COBS];
 static uint16_t frothy_control_rx_pos = 0;
 static bool frothy_control_rx_overflow = false;
+static bool frothy_control_session_active = false;
+
+bool frothy_control_active(void) { return frothy_control_session_active; }
 
 static froth_error_t frothy_control_send_frame(uint64_t session_id,
                                                uint8_t message_type,
@@ -1211,6 +1214,7 @@ froth_error_t frothy_control_run(void) {
 
   memset(&session, 0, sizeof(session));
   platform_clear_emit_hook();
+  frothy_control_session_active = true;
 
   while (1) {
     frothy_control_frame_header_t header;
@@ -1220,24 +1224,29 @@ froth_error_t frothy_control_run(void) {
 
     if (err == FROTH_ERROR_PROGRAM_INTERRUPTED) {
       platform_clear_emit_hook();
+      frothy_control_session_active = false;
       return FROTH_OK;
     }
     if (err == FROTH_ERROR_IO && platform_input_closed()) {
       platform_clear_emit_hook();
+      frothy_control_session_active = false;
       return FROTH_OK;
     }
     if (err != FROTH_OK) {
       platform_clear_emit_hook();
+      frothy_control_session_active = false;
       return err;
     }
 
     err = frothy_control_dispatch(&session, &header, payload, &action);
     if (err != FROTH_OK) {
       platform_clear_emit_hook();
+      frothy_control_session_active = false;
       return err;
     }
     if (action == FROTHY_CONTROL_ACTION_DETACH) {
       platform_clear_emit_hook();
+      frothy_control_session_active = false;
       return FROTH_OK;
     }
   }

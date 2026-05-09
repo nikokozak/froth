@@ -9,5 +9,7 @@
 #define FROTH_BOARD_CONSOLE_DEFAULT_BAUD 115200
 
 void froth_board_reset_runtime_state(void);
+bool froth_board_console_uart_route_busy(froth_cell_t port, froth_cell_t tx,
+                                         froth_cell_t rx);
 
 FROTHY_FFI_DECLARE(frothy_board_bindings);

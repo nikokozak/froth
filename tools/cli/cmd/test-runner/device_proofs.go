@@ -591,10 +591,19 @@ func runM10CellsProof(root string, manager *frothycontrol.Manager, log *proofLog
 }
 
 func runM10BoardSurfaceProof(manager *frothycontrol.Manager, log *proofLog) error {
+	if err := expectEvalExact(manager, "console info", "console.info:", "nil"); err != nil {
+		return err
+	}
+	if err := expectEvalControlError(manager, "console default busy", "console.default!:", 26); err != nil {
+		return err
+	}
 	for _, check := range []struct {
 		name    string
 		needles []string
 	}{
+		{"console.info", []string{"owner: target ffi", "effect: ( -- )"}},
+		{"console.default!", []string{"owner: target ffi", "effect: ( -- )"}},
+		{"console.uart!", []string{"owner: target ffi", "effect: ( port tx rx baud -- )"}},
 		{"millis", []string{"owner: board ffi", "effect: ( -- n )"}},
 		{"blink", []string{"owner: base image"}},
 		{"adc.percent", []string{"owner: base image"}},
@@ -687,6 +696,24 @@ func runM10BoardSurfaceProof(manager *frothycontrol.Manager, log *proofLog) erro
 	}
 	if !strings.Contains(output, "owner: base image") {
 		return fmt.Errorf("restored blink missing base image slot info")
+	}
+	return nil
+}
+
+func expectEvalControlError(manager *frothycontrol.Manager, label string,
+	source string, wantCode uint16) error {
+	_, _, err := evalDeviceForm(manager, source)
+	if err == nil {
+		return fmt.Errorf("%s expected control error %d, got nil", label, wantCode)
+	}
+
+	var controlErr *frothycontrol.ControlError
+	if !errors.As(err, &controlErr) {
+		return fmt.Errorf("%s expected control error %d, got %v", label, wantCode, err)
+	}
+	if controlErr.Code != wantCode {
+		return fmt.Errorf("%s expected control error %d, got %d (%s)",
+			label, wantCode, controlErr.Code, controlErr.Detail)
 	}
 	return nil
 }

@@ -17,8 +17,9 @@
 
 typedef enum {
   FROTHY_FFI_SOURCE_FOREIGN = 0,
-  FROTHY_FFI_SOURCE_BOARD = 1,
-  FROTHY_FFI_SOURCE_PROJECT = 2,
+  FROTHY_FFI_SOURCE_TARGET = 1,
+  FROTHY_FFI_SOURCE_BOARD = 2,
+  FROTHY_FFI_SOURCE_PROJECT = 3,
 } frothy_ffi_source_t;
 
 typedef enum {
@@ -64,6 +65,9 @@ typedef struct {
  * without forcing a definition on targets that do not supply them.
  */
 const frothy_ffi_entry_t frothy_board_bindings[] FROTHY_WEAK_DEF = {{0}};
+#ifndef FROTH_HAS_TARGET_FFI
+const frothy_ffi_entry_t frothy_target_bindings[] FROTHY_WEAK_DEF = {{0}};
+#endif
 #ifdef FROTH_HAS_PROJECT_FFI
 const frothy_ffi_entry_t froth_project_bindings[] FROTHY_WEAK_DEF = {{0}};
 const frothy_ffi_entry_t frothy_project_bindings[] FROTHY_WEAK_DEF = {{0}};
@@ -507,6 +511,15 @@ static froth_error_t frothy_ffi_dispatch_entry_board(frothy_runtime_t *runtime,
                                           out);
 }
 
+static froth_error_t frothy_ffi_dispatch_entry_target(frothy_runtime_t *runtime,
+                                                      const void *context,
+                                                      const frothy_value_t *args,
+                                                      size_t arg_count,
+                                                      frothy_value_t *out) {
+  return frothy_ffi_dispatch_entry_common(runtime, context, args, arg_count,
+                                          out);
+}
+
 static froth_error_t
 frothy_ffi_dispatch_entry_project(frothy_runtime_t *runtime, const void *context,
                                   const frothy_value_t *args, size_t arg_count,
@@ -519,6 +532,7 @@ bool frothy_ffi_native_is_foreign(frothy_native_fn_t fn, const void *context) {
   (void)context;
 
   return fn == frothy_ffi_dispatch_entry ||
+         fn == frothy_ffi_dispatch_entry_target ||
          fn == frothy_ffi_dispatch_entry_board ||
          fn == frothy_ffi_dispatch_entry_project;
 }
@@ -528,6 +542,9 @@ const char *frothy_ffi_native_owner(frothy_native_fn_t fn, const void *context) 
 
   if (fn == frothy_ffi_dispatch_entry_board) {
     return "board ffi";
+  }
+  if (fn == frothy_ffi_dispatch_entry_target) {
+    return "target ffi";
   }
   if (fn == frothy_ffi_dispatch_entry_project) {
     return "project ffi";
@@ -540,7 +557,9 @@ const char *frothy_ffi_native_owner(frothy_native_fn_t fn, const void *context) 
 }
 
 const char *frothy_ffi_native_effect(frothy_native_fn_t fn, const void *context) {
-  if (fn == frothy_ffi_dispatch_entry || fn == frothy_ffi_dispatch_entry_board ||
+  if (fn == frothy_ffi_dispatch_entry ||
+      fn == frothy_ffi_dispatch_entry_target ||
+      fn == frothy_ffi_dispatch_entry_board ||
       fn == frothy_ffi_dispatch_entry_project) {
     const frothy_ffi_entry_t *entry = (const frothy_ffi_entry_t *)context;
 
@@ -555,7 +574,9 @@ const char *frothy_ffi_native_effect(frothy_native_fn_t fn, const void *context)
 }
 
 const char *frothy_ffi_native_help(frothy_native_fn_t fn, const void *context) {
-  if (fn == frothy_ffi_dispatch_entry || fn == frothy_ffi_dispatch_entry_board ||
+  if (fn == frothy_ffi_dispatch_entry ||
+      fn == frothy_ffi_dispatch_entry_target ||
+      fn == frothy_ffi_dispatch_entry_board ||
       fn == frothy_ffi_dispatch_entry_project) {
     const frothy_ffi_entry_t *entry = (const frothy_ffi_entry_t *)context;
 
@@ -732,6 +753,8 @@ static froth_error_t frothy_ffi_rollback_pending_slot_impls(
 static frothy_native_fn_t
 frothy_ffi_dispatch_for_source(frothy_ffi_source_t source) {
   switch (source) {
+  case FROTHY_FFI_SOURCE_TARGET:
+    return frothy_ffi_dispatch_entry_target;
   case FROTHY_FFI_SOURCE_BOARD:
     return frothy_ffi_dispatch_entry_board;
   case FROTHY_FFI_SOURCE_PROJECT:
@@ -866,6 +889,22 @@ froth_error_t frothy_ffi_install_pin_table(const frothy_board_pin_t *pins) {
   return frothy_ffi_install_pin_table_entries(pins);
 }
 
+static froth_error_t frothy_ffi_install_target_bindings(void) {
+#ifdef FROTH_HAS_TARGET_FFI
+  extern const frothy_ffi_entry_t frothy_target_bindings[];
+  return frothy_ffi_install_table_for_source(frothy_target_bindings,
+                                             FROTHY_FFI_SOURCE_TARGET);
+#elif FROTHY_HAS_WEAK_SYMBOLS
+  if (frothy_ffi_table_present(frothy_target_bindings)) {
+    return frothy_ffi_install_table_for_source(frothy_target_bindings,
+                                               FROTHY_FFI_SOURCE_TARGET);
+  }
+  return FROTH_OK;
+#else
+  return FROTH_OK;
+#endif
+}
+
 static froth_error_t frothy_ffi_install_project_bindings(void) {
 #ifdef FROTH_HAS_PROJECT_FFI
 #if FROTHY_HAS_WEAK_SYMBOLS
@@ -896,6 +935,7 @@ froth_error_t frothy_ffi_install_board_base_slots(void) {
 #ifdef FROTHY_HAS_BOARD_PINS
   FROTH_TRY(frothy_ffi_install_pin_table_entries(frothy_generated_board_pins));
 #endif
+  FROTH_TRY(frothy_ffi_install_target_bindings());
 #if FROTHY_HAS_WEAK_SYMBOLS
   if (frothy_ffi_table_present(frothy_board_bindings)) {
     FROTH_TRY(frothy_ffi_install_table_for_source(frothy_board_bindings,

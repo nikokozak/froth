@@ -1,6 +1,7 @@
 #pragma once
 
 #include "froth_types.h"
+#include <stdbool.h>
 
 enum {
   FROTHY_CONTROL_HELLO_REQ = 0x01,
@@ -29,4 +30,5 @@ typedef enum {
   FROTHY_CONTROL_PHASE_INSPECT = 4,
 } frothy_control_phase_t;
 
+bool frothy_control_active(void);
 froth_error_t frothy_control_run(void);

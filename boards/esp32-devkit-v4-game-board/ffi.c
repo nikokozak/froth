@@ -306,6 +306,14 @@ void froth_board_reset_runtime_state(void) {
   board_init_runtime_state();
 }
 
+bool froth_board_console_uart_route_busy(froth_cell_t port, froth_cell_t tx,
+                                         froth_cell_t rx) {
+  (void)port;
+  (void)tx;
+  (void)rx;
+  return false;
+}
+
 static froth_error_t board_gpio_mode_cb(frothy_runtime_t *runtime,
                                         const void *context,
                                         const frothy_value_t *args,

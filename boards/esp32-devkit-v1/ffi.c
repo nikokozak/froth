@@ -884,8 +884,8 @@ static bool aux_uart_port_conflicts_console(int index) {
   return info.port == uart_ports[index];
 }
 
-static bool console_route_conflicts_aux(froth_cell_t port, froth_cell_t tx,
-                                        froth_cell_t rx) {
+bool froth_board_console_uart_route_busy(froth_cell_t port, froth_cell_t tx,
+                                         froth_cell_t rx) {
   for (int i = 0; i < UART_MAX_PORTS; i++) {
     if (!uart_in_use[i]) {
       continue;
@@ -996,70 +996,6 @@ static froth_error_t esp32_uart_init(frothy_runtime_t *runtime,
   }
 
   return FROTH_ERROR_BOUNDS;
-}
-
-static froth_error_t esp32_console_info(frothy_runtime_t *runtime,
-                                        const void *context,
-                                        const frothy_value_t *args,
-                                        size_t arg_count, frothy_value_t *out) {
-  platform_console_uart_info_t info;
-
-  ESP32_UNUSED_CALLBACK_CONTEXT();
-  (void)args;
-  FROTH_TRY(platform_console_uart_info(&info));
-
-  FROTH_TRY(frothy_ffi_emit_string("console uart"));
-  FROTH_TRY(frothy_ffi_emit_string(frothy_ffi_format_number(info.port)));
-  FROTH_TRY(frothy_ffi_emit_string(" tx="));
-  FROTH_TRY(frothy_ffi_emit_string(frothy_ffi_format_number(info.tx)));
-  FROTH_TRY(frothy_ffi_emit_string(" rx="));
-  FROTH_TRY(frothy_ffi_emit_string(frothy_ffi_format_number(info.rx)));
-  FROTH_TRY(frothy_ffi_emit_string(" baud="));
-  FROTH_TRY(frothy_ffi_emit_string(frothy_ffi_format_number(info.baud)));
-  FROTH_TRY(frothy_ffi_emit_string("\n"));
-  return frothy_ffi_return_nil(out);
-}
-
-static froth_error_t esp32_console_default(frothy_runtime_t *runtime,
-                                           const void *context,
-                                           const frothy_value_t *args,
-                                           size_t arg_count,
-                                           frothy_value_t *out) {
-  ESP32_UNUSED_CALLBACK_CONTEXT();
-  (void)args;
-
-  if (console_route_conflicts_aux(FROTH_BOARD_CONSOLE_DEFAULT_PORT,
-                                  FROTH_BOARD_CONSOLE_DEFAULT_TX_PIN,
-                                  FROTH_BOARD_CONSOLE_DEFAULT_RX_PIN)) {
-    return FROTH_ERROR_BUSY;
-  }
-
-  FROTH_TRY(platform_console_uart_default());
-  return frothy_ffi_return_nil(out);
-}
-
-static froth_error_t esp32_console_uart_bind(frothy_runtime_t *runtime,
-                                             const void *context,
-                                             const frothy_value_t *args,
-                                             size_t arg_count,
-                                             frothy_value_t *out) {
-  int32_t port = 0;
-  int32_t tx = 0;
-  int32_t rx = 0;
-  int32_t baud = 0;
-
-  ESP32_UNUSED_CALLBACK_CONTEXT();
-  FROTH_TRY(frothy_ffi_expect_int(args, 0, &port));
-  FROTH_TRY(frothy_ffi_expect_int(args, 1, &tx));
-  FROTH_TRY(frothy_ffi_expect_int(args, 2, &rx));
-  FROTH_TRY(frothy_ffi_expect_int(args, 3, &baud));
-
-  if (console_route_conflicts_aux(port, tx, rx)) {
-    return FROTH_ERROR_BUSY;
-  }
-
-  FROTH_TRY(platform_console_uart_bind(port, tx, rx, baud));
-  return frothy_ffi_return_nil(out);
 }
 
 static froth_error_t esp32_uart_write(frothy_runtime_t *runtime,
@@ -1269,13 +1205,6 @@ static const frothy_ffi_param_t esp32_i2c_read_reg_params[] = {
     FROTHY_FFI_PARAM_INT("reg"),
 };
 
-static const frothy_ffi_param_t esp32_console_uart_params[] = {
-    FROTHY_FFI_PARAM_INT("port"),
-    FROTHY_FFI_PARAM_INT("tx"),
-    FROTHY_FFI_PARAM_INT("rx"),
-    FROTHY_FFI_PARAM_INT("baud"),
-};
-
 static const frothy_ffi_param_t esp32_uart_init_params[] = {
     FROTHY_FFI_PARAM_INT("tx"),
     FROTHY_FFI_PARAM_INT("rx"),
@@ -1451,17 +1380,6 @@ const frothy_ffi_entry_t frothy_board_bindings[] = {
                 FROTHY_FFI_VALUE_INT,
                 "Read two bytes (big-endian) from a register on an I2C device.",
                 esp32_i2c_read_reg16, "( device reg -- word )"),
-    ESP32_ENTRY("console.info", NULL, 0, FROTHY_FFI_VALUE_NIL,
-                "Print the active console UART route.", esp32_console_info,
-                "( -- )"),
-    ESP32_ENTRY("console.default!", NULL, 0, FROTHY_FFI_VALUE_NIL,
-                "Restore the default console UART route.",
-                esp32_console_default, "( -- )"),
-    ESP32_ENTRY("console.uart!", esp32_console_uart_params,
-                FROTHY_FFI_PARAM_COUNT(esp32_console_uart_params),
-                FROTHY_FFI_VALUE_NIL,
-                "Rebind the active console to a UART route.",
-                esp32_console_uart_bind, "( port tx rx baud -- )"),
     ESP32_ENTRY("uart.init", esp32_uart_init_params,
                 FROTHY_FFI_PARAM_COUNT(esp32_uart_init_params),
                 FROTHY_FFI_VALUE_INT,

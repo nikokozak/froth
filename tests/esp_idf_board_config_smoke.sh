@@ -148,6 +148,10 @@ endfunction()
 
 expect_source("${SOURCE_DIR}/boards/${BOARD_UNDER_TEST}/ffi.c"
               "esp-idf target is missing board ffi source")
+expect_source("${SOURCE_DIR}/platforms/esp-idf/ffi.c"
+              "esp-idf target is missing target ffi source")
+expect_definition("FROTH_HAS_TARGET_FFI"
+                  "esp-idf target did not enable target ffi")
 
 set(TM1629_SOURCE "${SOURCE_DIR}/src/frothy_tm1629.c")
 set(TM1629_DECLARED OFF)

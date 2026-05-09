@@ -315,6 +315,10 @@ froth_error_t platform_console_uart_bind(froth_cell_t port, froth_cell_t tx,
     return FROTH_OK;
   }
 
+  if (froth_board_console_uart_route_busy(target.port, target.tx, target.rx)) {
+    return FROTH_ERROR_BUSY;
+  }
+
   if (target.port == old.port) {
     err = console_wait_tx_done(&old);
     if (err != ESP_OK) {
