@@ -161,6 +161,10 @@ static bool board_gpio_pin_valid(int32_t pin) {
   return pin >= 0 && GPIO_IS_VALID_GPIO((gpio_num_t)pin);
 }
 
+static bool board_gpio_pin_supports_internal_pullup(int32_t pin) {
+  return pin >= 0 && pin <= 33;
+}
+
 static bool board_adc_pin_valid(int32_t pin) {
   adc_channel_t channel;
 
@@ -346,6 +350,12 @@ static froth_error_t board_gpio_mode_cb(frothy_runtime_t *runtime,
       board_gpio_output_shadow_levels[pin] =
           gpio_get_level((gpio_num_t)pin) ? 1 : 0;
     } else {
+      if (board_gpio_pin_supports_internal_pullup(pin)) {
+        if (gpio_pulldown_dis((gpio_num_t)pin) != ESP_OK ||
+            gpio_pullup_en((gpio_num_t)pin) != ESP_OK) {
+          return FROTH_ERROR_IO;
+        }
+      }
       board_gpio_output_shadow_valid[pin] = 0;
     }
   }
